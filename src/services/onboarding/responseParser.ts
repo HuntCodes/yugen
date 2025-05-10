@@ -1,5 +1,5 @@
 import { CoachResponse, ConversationContext } from './types';
-import { normalizeProfileData } from './utils';
+import { normalizeProfileData } from './onboardingDataFormatter';
 import { requiredInformation } from '../../config/coachingGuidelines';
 
 /**

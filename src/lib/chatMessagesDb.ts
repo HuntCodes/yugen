@@ -1,4 +1,4 @@
-// Message handling utilities for coach-user chat
+// Message database operations for coach-user chat
 import { supabase } from './supabase';
 import { ChatMessage } from '../types/chat';
 

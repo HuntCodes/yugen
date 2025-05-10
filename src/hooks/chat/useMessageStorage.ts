@@ -1,5 +1,5 @@
 import { ChatMessage, SESSION_TIME_WINDOW } from './useMessageTypes';
-import { saveMessage } from '../../lib/messageUtils';
+import { saveMessage } from '../../lib/chatMessagesDb';
 import {
   createChatSummary,
   saveChatSummary,

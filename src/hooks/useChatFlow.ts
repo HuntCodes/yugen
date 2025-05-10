@@ -1,6 +1,6 @@
 import { useMessageHandling, ChatMessage } from './chat/useMessageHandling';
 import { useSupabaseChat } from './chat/useSupabaseChat';
-import { saveMessage as saveMessageToDb } from '../lib/messageUtils';
+import { saveMessage as saveMessageToDb } from '../lib/chatMessagesDb';
 import { processChat } from '../services/summary/chatSummaryService';
 
 export { ChatMessage };
@@ -48,7 +48,13 @@ export function useChatFlow() {
       }
       
       // Process the message using our message handling hook
-      const response = await handleMessage(message, userId, profile, trainingPlan, onMessageResponse);
+      const response = await handleMessage({
+        message,
+        userId,
+        profile,
+        trainingPlan,
+        onMessageResponse
+      });
       
       // After getting a response, create chat summaries occasionally
       // We'll do this every 5-10 messages to avoid too many API calls

@@ -1,6 +1,6 @@
 import { coachStyles, requiredInformation } from '../../config/coachingGuidelines';
 import { ConversationContext } from './types';
-import { formatField } from './utils';
+import { formatField } from './onboardingDataFormatter';
 
 /**
  * Builds the system prompt for coach conversation

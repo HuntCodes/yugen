@@ -89,29 +89,53 @@ Based on the code analysis, the largest files that need refactoring are:
 ### Phase 4: Code Structure Improvements
 
 #### Component Organization
-- [ ] Reorganize component structure for better reusability and consistency:
-  - [ ] Move screen-specific components that could be reused to the main components directory
-    - [ ] Move `src/screens/onboarding/components/TypeIndicator.tsx` to `src/components/chat/` (as it's similar to the one in main/components)
-    - [ ] Move `src/screens/onboarding/components/MessageBubble.tsx` to `src/components/chat/`
+- [x] Reorganize component structure for better reusability and consistency:
+  - [x] Move screen-specific components that could be reused to the main components directory
+    - [x] Move `src/screens/onboarding/components/TypeIndicator.tsx` to `src/components/chat/` (as it's similar to the one in main/components)
+    - [x] Move `src/screens/onboarding/components/MessageBubble.tsx` to `src/components/chat/`
     - [ ] Consider creating a dedicated `src/components/onboarding/` directory for onboarding-specific UI elements
 
-- [ ] Standardize component folder structure:
-  - [ ] Use a consistent pattern for component organization:
+- [x] Standardize component folder structure:
+  - [x] Use a consistent pattern for component organization:
     - `src/components/` - Reusable components shared across the app
     - `src/screens/[section]/components/` - Screen-specific components that are unlikely to be reused elsewhere
 
 #### Duplication Removal
-- [ ] Identify and consolidate duplicate components:
-  - [ ] Merge `src/screens/main/components/TypeIndicator.tsx`, `src/screens/onboarding/components/TypeIndicator.tsx`, and `src/components/chat/TypeIndicator.tsx` into a single reusable component
-  - [ ] Consolidate `MessageList.tsx` and `ChatMessageList.tsx` into a single component with customizable rendering options
+- [x] Identify and consolidate duplicate components:
+  - [x] Merge `src/screens/main/components/TypeIndicator.tsx`, `src/screens/onboarding/components/TypeIndicator.tsx`, and `src/components/chat/TypeIndicator.tsx` into a single reusable component
+  - [x] Consolidate `MessageList.tsx` and `ChatMessageList.tsx` into a single component with customizable rendering options
 
 #### Utils and Helpers Clean-up
-- [ ] Clean up utility directories:
-  - [ ] Consider moving `src/utils/` files to `src/lib/utils/` for consistency
-  - [ ] Clean up any orphaned or deprecated utils files
+- [x] Clean up utility directories:
+  - [x] Consider moving `src/utils/` files to `src/lib/utils/` for consistency
+    - [x] Files already duplicated in `src/lib/utils/`, need to remove old `src/utils/` directory
+    - [x] Need to update import in `src/lib/api/plan/planSuggestions.ts` to use `src/lib/utils/training` instead of `src/utils/training`
+  - [x] Clean up any orphaned or deprecated utils files
+    - [x] Remove `src/utils/dateUtils.ts`, `src/utils/trackingUtils.ts`, `src/utils/websocket.js` 
+    - [x] Remove `src/utils/index.js` after updating imports
 
 #### Documentation Improvements
-- [ ] Add or update README files in key directories explaining:
-  - [ ] The purpose of the directory
-  - [ ] When to add new files to that directory vs. elsewhere
-  - [ ] Patterns and conventions to follow
+- [x] Add or update README files in key directories explaining:
+  - [x] The purpose of the directory
+  - [x] When to add new files to that directory vs. elsewhere
+  - [x] Patterns and conventions to follow
+  - [x] Created/updated READMEs for:
+    - [x] src/lib/utils/
+    - [x] src/lib/utils/training/
+    - [x] src/hooks/chat/
+    - [x] src/hooks/training/
+    - [x] src/services/chat/
+    - [x] src/services/plan/
+    - [x] src/lib/api/
+    - [x] src/navigation/
+    - [x] src/context/
+
+#### File Naming Improvements
+- [x] Rename generic file names to more descriptive names:
+  - [x] Renamed `src/services/onboarding/utils.ts` to `onboardingDataFormatter.ts` to better reflect its purpose
+  - [x] Renamed `src/lib/messageUtils.ts` to `src/lib/chatMessagesDb.ts` to clarify its database-centric purpose
+  - [x] Removed duplicate `src/lib/utils/messageUtils.ts` to avoid confusion
+  - [x] Removed redundant components:
+    - [x] Removed `src/components/CoachTypingIndicator.tsx` (consolidated in `TypeIndicator.tsx`)
+    - [x] Removed `src/components/ChatBubble.tsx` (consolidated in `chat/ChatBubble.tsx`)
+  - [x] Updated all imports to use the new file names

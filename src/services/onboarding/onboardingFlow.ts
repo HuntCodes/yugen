@@ -2,8 +2,9 @@ import Constants from 'expo-constants';
 import { ConversationContext, ConversationResult, OnboardingResult } from './types';
 import { buildConversationPrompt, buildExtractionPrompt } from './coachPromptBuilder';
 import { extractJsonFromResponse } from './responseParser';
-import { normalizeProfileData } from './utils';
+import { normalizeProfileData } from './onboardingDataFormatter';
 import { OnboardingProfile } from '../../types/onboarding';
+import { supabase } from '../../lib/supabase';
 
 /**
  * Main conversation handler - focuses solely on the conversation experience

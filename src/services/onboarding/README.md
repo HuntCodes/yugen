@@ -17,7 +17,7 @@ The onboarding service manages the conversational interview process between the 
 - `onboardingFlow.ts` - Core conversation flow logic
 - `coachPromptBuilder.ts` - Creates prompts for the AI model
 - `responseParser.ts` - Parses and processes AI responses
-- `utils.ts` - Utility functions for data processing
+- `onboardingDataFormatter.ts` - Data formatting and normalization utilities
 - `types.ts` - TypeScript interfaces and types
 
 ## Usage

@@ -1,8 +1,24 @@
 // React Native compatible WebSocket implementation
 // Use this instead of 'ws' package when you need WebSocket functionality
 
+interface WebSocketClientListeners {
+  open: ((event: WebSocketEventMap['open']) => void)[];
+  message: ((event: WebSocketEventMap['message']) => void)[];
+  close: ((event: WebSocketEventMap['close']) => void)[];
+  error: ((event: WebSocketEventMap['error']) => void)[];
+}
+
+/**
+ * WebSocket client implementation compatible with React Native
+ */
 class WebSocketClient {
-  constructor(url, protocols = []) {
+  private url: string;
+  private protocols: string[];
+  private ws: WebSocket | null;
+  private isConnected: boolean;
+  private listeners: WebSocketClientListeners;
+
+  constructor(url: string, protocols: string[] = []) {
     this.url = url;
     this.protocols = protocols;
     this.ws = null;
@@ -15,7 +31,10 @@ class WebSocketClient {
     };
   }
 
-  connect() {
+  /**
+   * Connect to the WebSocket server
+   */
+  connect(): WebSocketClient {
     // Use the native WebSocket implementation
     this.ws = new WebSocket(this.url, this.protocols);
     
@@ -40,15 +59,21 @@ class WebSocketClient {
     return this;
   }
 
-  on(event, callback) {
+  /**
+   * Add an event listener for WebSocket events
+   */
+  on(event: keyof WebSocketClientListeners, callback: any): WebSocketClient {
     if (this.listeners[event]) {
       this.listeners[event].push(callback);
     }
     return this;
   }
 
-  send(data) {
-    if (!this.isConnected) {
+  /**
+   * Send data through the WebSocket connection
+   */
+  send(data: string | ArrayBufferLike | ArrayBufferView): WebSocketClient {
+    if (!this.isConnected || !this.ws) {
       throw new Error('WebSocket is not connected');
     }
     
@@ -60,7 +85,10 @@ class WebSocketClient {
     return this;
   }
 
-  close(code, reason) {
+  /**
+   * Close the WebSocket connection
+   */
+  close(code?: number, reason?: string): WebSocketClient {
     if (this.ws) {
       this.ws.close(code, reason);
     }

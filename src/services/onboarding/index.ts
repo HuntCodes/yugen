@@ -3,4 +3,4 @@ export * from './onboardingInterview';
 export * from './types';
 export * from './coachPromptBuilder';
 export * from './responseParser';
-export * from './utils'; 
+export * from './onboardingDataFormatter'; 
