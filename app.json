@@ -51,9 +51,12 @@
       "package": "com.hunt333.yugen"
     },
     "extra": {
+      "OPENAI_API_KEY": "${OPENAI_API_KEY}",
+      "supabaseUrl": "${SUPABASE_URL}",
+      "supabaseAnonKey": "${SUPABASE_ANON_KEY}",
       "router": {},
       "eas": {
-        "projectId": "0870ca75-399f-4763-8e77-2a60a7b7d812"
+        "projectId": "${EAS_PROJECT_ID}"
       }
     }
   }

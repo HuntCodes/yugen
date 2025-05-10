@@ -55,20 +55,14 @@ export function normalizeProfileData(
       case 'current_mileage':
         // Better handling for mileage values with or without units
         if (/^\d+$/.test(value)) {
-          // Just a number
+          // Just a number, add the current units
           const units = currentProfile.units || 'km';
           normalized[key] = `${value} ${units}`;
         } else if (/^\d+\s*(km|kms|kilometers|miles|mi)/.test(value.toLowerCase())) {
-          // Number with units included
-          // Extract just the number part
-          const numericPart = value.match(/^\d+/);
-          if (numericPart) {
-            // Preserve the user's specified units format
-            normalized[key] = value;
-          } else {
-            normalized[key] = value;
-          }
+          // Number with units included - keep as is
+          normalized[key] = value;
         } else {
+          // Any other format, keep as is
           normalized[key] = value;
         }
         break;

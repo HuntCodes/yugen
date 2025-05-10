@@ -150,7 +150,7 @@ export function OnboardingChat() {
   };
   
   // Determine keyboard offset - needed for proper keyboard avoidance
-  const keyboardOffset = Platform.OS === 'ios' ? 0 : 0;
+  const keyboardOffset = 0;
   
   return (
     <Screen keyboardVerticalOffset={keyboardOffset}>

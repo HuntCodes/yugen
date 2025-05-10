@@ -28,6 +28,9 @@ export const SessionList: React.FC<SessionListProps> = ({
   scrollViewRef,
   children
 }) => {
+  // Store refs for each session view dynamically - MOVED BEFORE early return
+  const sessionViewRefs = useRef<Record<string, React.RefObject<View | null>>>({});
+  
   if (!sessions || sessions.length === 0) {
     return (
       <View style={styles.emptyContainer}>
@@ -36,8 +39,7 @@ export const SessionList: React.FC<SessionListProps> = ({
     );
   }
 
-  // Store refs for each session view dynamically
-  const sessionViewRefs = useRef<Record<string, React.RefObject<View | null>>>({});
+  // Initialize refs for new sessions
   sessions.forEach(session => {
     if (!sessionViewRefs.current[session.id]) {
       // Ensure refs are created only once per session ID for the component's lifetime

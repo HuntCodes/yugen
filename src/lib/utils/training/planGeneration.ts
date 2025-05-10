@@ -559,28 +559,9 @@ function convertDayToNumber(dayName: string): number {
  */
 function normalizeDate(dateString: string): string {
   try {
-    // Handle different formats
-    let date: Date;
-    
-    if (dateString.includes('-')) {
-      // Format: YYYY-MM-DD or DD-MM-YYYY or MM-DD-YYYY
-      const parts = dateString.split('-');
-      if (parts[0].length === 4) {
-        // YYYY-MM-DD (already in ISO format)
-        date = new Date(dateString);
-      } else {
-        // Assuming DD-MM-YYYY or MM-DD-YYYY based on locale
-        // For simplicity, we'll assume MM-DD-YYYY for US users
-        date = new Date(dateString);
-      }
-    } else if (dateString.includes('/')) {
-      // Format: MM/DD/YYYY or DD/MM/YYYY
-      // For simplicity, we'll assume MM/DD/YYYY for US users
-      date = new Date(dateString);
-    } else {
-      // Unknown format, try native parsing
-      date = new Date(dateString);
-    }
+    // Parse the date directly - JavaScript's Date constructor can handle 
+    // most common formats like YYYY-MM-DD, MM/DD/YYYY, etc.
+    const date = new Date(dateString);
     
     // Check if date is valid
     if (isNaN(date.getTime())) {
