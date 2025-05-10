@@ -1,0 +1,36 @@
+{
+  "cesVersion": "2.16.0",
+  "projectName": "Yugen",
+  "packages": [
+    {
+      "name": "expo-router",
+      "type": "navigation",
+      "options": {
+        "type": "stack"
+      }
+    },
+    {
+      "name": "nativewind",
+      "type": "styling"
+    }
+  ],
+  "flags": {
+    "noGit": true,
+    "noInstall": false,
+    "overwrite": false,
+    "importAlias": true,
+    "packageManager": "npm",
+    "eas": false,
+    "publish": false
+  },
+  "packageManager": {
+    "type": "npm",
+    "version": "10.9.2"
+  },
+  "os": {
+    "type": "Darwin",
+    "platform": "darwin",
+    "arch": "x64",
+    "kernelVersion": "24.4.0"
+  }
+}
