@@ -1,7 +1,8 @@
 import React, { useRef, useEffect } from 'react';
-import { ScrollView, View, Text, Image } from 'react-native';
+import { ScrollView, View, Text } from 'react-native';
 import { ChatMessage } from '../../../types/chat';
-import { TypeIndicator } from './TypeIndicator';
+import { TypeIndicator } from '../../../components/chat/TypeIndicator';
+import { ChatBubble } from '../../../components/chat/ChatBubble';
 
 interface MessageListProps {
   messages: ChatMessage[];
@@ -34,29 +35,12 @@ export function MessageList({ messages, isTyping, coach, imageMap }: MessageList
       ) : (
         messages.map((msg, idx) => (
           <View key={idx} className="mb-4">
-            {msg.sender === 'coach' ? (
-              <View className="flex-row mb-1">
-                <Image
-                  source={coach?.id ? imageMap[coach.id] : undefined}
-                  className="w-9 h-9 rounded-full mr-3 bg-gray-100 border border-gray-200"
-                  resizeMode="cover"
-                />
-                <View className="flex-1">
-                  <Text className="text-xs text-gray-500 mb-1 font-medium">
-                    {coach?.name || 'Coach'}
-                  </Text>
-                  <View className="bg-gray-100 p-3 rounded-2xl rounded-tl-none max-w-[85%]">
-                    <Text className="text-black leading-5">{msg.message}</Text>
-                  </View>
-                </View>
-              </View>
-            ) : (
-              <View className="items-end mb-1">
-                <View className="bg-black p-3 rounded-2xl rounded-tr-none max-w-[85%]">
-                  <Text className="text-white leading-5">{msg.message}</Text>
-                </View>
-              </View>
-            )}
+            <ChatBubble 
+              message={msg} 
+              coach={coach} 
+              imageMap={imageMap}
+              style="default"
+            />
           </View>
         ))
       )}
@@ -64,7 +48,8 @@ export function MessageList({ messages, isTyping, coach, imageMap }: MessageList
         <TypeIndicator 
           coachName={coach?.name} 
           coachId={coach?.id} 
-          imageMap={imageMap} 
+          imageMap={imageMap}
+          style="withAvatar"
         />
       )}
       <View className="h-4" />

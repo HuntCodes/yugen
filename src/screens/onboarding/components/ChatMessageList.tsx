@@ -1,8 +1,8 @@
 import React, { useRef, useEffect } from 'react';
 import { ScrollView, View, Text, Keyboard, Platform } from 'react-native';
 import { ChatMessage } from '../../../types/chat';
-import { MessageBubble } from './MessageBubble';
-import { TypeIndicator } from './TypeIndicator';
+import { ChatBubble } from '../../../components/chat/ChatBubble';
+import { TypeIndicator } from '../../../components/chat/TypeIndicator';
 
 interface ChatMessageListProps {
   messages: ChatMessage[];
@@ -66,7 +66,7 @@ export function ChatMessageList({
     >
       {messages.map((msg, idx) => (
         <View key={idx} style={{ marginBottom: 16 }}>
-          <MessageBubble message={msg} coach={coach} imageMap={imageMap} />
+          <ChatBubble message={msg} coach={coach} imageMap={imageMap} />
         </View>
       ))}
       
@@ -75,7 +75,8 @@ export function ChatMessageList({
         <TypeIndicator 
           coachName={coach.name} 
           coachId={coach.id} 
-          imageMap={imageMap} 
+          imageMap={imageMap}
+          style="withAvatar"
         />
       )}
       

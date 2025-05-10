@@ -82,4 +82,36 @@ Based on the code analysis, the largest files that need refactoring are:
 
 - [ ] Refactor `SessionCard.tsx` (501 lines)
   - [ ] Extract `SessionHeader.tsx`
-  - [ ] Extract `
+  - [ ] Extract `SessionDetails.tsx`
+  - [ ] Extract `SessionControls.tsx`
+  - [ ] Create hook `useSessionCard.ts` for business logic
+
+### Phase 4: Code Structure Improvements
+
+#### Component Organization
+- [ ] Reorganize component structure for better reusability and consistency:
+  - [ ] Move screen-specific components that could be reused to the main components directory
+    - [ ] Move `src/screens/onboarding/components/TypeIndicator.tsx` to `src/components/chat/` (as it's similar to the one in main/components)
+    - [ ] Move `src/screens/onboarding/components/MessageBubble.tsx` to `src/components/chat/`
+    - [ ] Consider creating a dedicated `src/components/onboarding/` directory for onboarding-specific UI elements
+
+- [ ] Standardize component folder structure:
+  - [ ] Use a consistent pattern for component organization:
+    - `src/components/` - Reusable components shared across the app
+    - `src/screens/[section]/components/` - Screen-specific components that are unlikely to be reused elsewhere
+
+#### Duplication Removal
+- [ ] Identify and consolidate duplicate components:
+  - [ ] Merge `src/screens/main/components/TypeIndicator.tsx`, `src/screens/onboarding/components/TypeIndicator.tsx`, and `src/components/chat/TypeIndicator.tsx` into a single reusable component
+  - [ ] Consolidate `MessageList.tsx` and `ChatMessageList.tsx` into a single component with customizable rendering options
+
+#### Utils and Helpers Clean-up
+- [ ] Clean up utility directories:
+  - [ ] Consider moving `src/utils/` files to `src/lib/utils/` for consistency
+  - [ ] Clean up any orphaned or deprecated utils files
+
+#### Documentation Improvements
+- [ ] Add or update README files in key directories explaining:
+  - [ ] The purpose of the directory
+  - [ ] When to add new files to that directory vs. elsewhere
+  - [ ] Patterns and conventions to follow

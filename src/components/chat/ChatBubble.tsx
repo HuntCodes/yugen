@@ -1,45 +1,144 @@
 import React from 'react';
-import { View, Text, Image } from 'react-native';
-import { Coach } from '../../types/coach';
-
-// Updated path to point to src/assets
-const imageMap: Record<string, any> = {
-  craig: require('../../../src/assets/craig.jpg'),
-  thomas: require('../../../src/assets/thomas.jpg'),
-  dathan: require('../../../src/assets/dathan.jpg'),
-};
+import { View, Text, Image, StyleSheet } from 'react-native';
+import { ChatMessage } from '../../types/chat';
 
 interface ChatBubbleProps {
-  message: string;
-  sender: 'user' | 'coach';
-  coach?: Coach | null;
+  message: ChatMessage;
+  coach?: { id: string; name: string } | null;
+  imageMap?: Record<string, any>;
+  style?: 'default' | 'clean';
+  customStyles?: {
+    container?: any;
+    userBubble?: any;
+    coachBubble?: any;
+    userText?: any;
+    coachText?: any;
+    nameText?: any;
+    avatar?: any;
+  };
 }
 
-export function ChatBubble({ message, sender, coach }: ChatBubbleProps) {
-  if (sender === 'coach' && coach) {
+/**
+ * A reusable chat bubble component that displays messages from the coach or user.
+ * 
+ * @param message The message object to display
+ * @param coach Optional coach information (required when messages include coach sender)
+ * @param imageMap Optional map of coach IDs to avatar images
+ * @param style Style variant to use ('default' or 'clean')
+ * @param customStyles Optional custom styles to override defaults
+ */
+export function ChatBubble({
+  message,
+  coach,
+  imageMap,
+  style = 'default',
+  customStyles = {},
+}: ChatBubbleProps) {
+  // Helper to check if we have valid coach info for avatar
+  const hasCoachInfo = coach?.id && imageMap && imageMap[coach.id];
+
+  if (message.sender === 'coach') {
+    // COACH MESSAGE
     return (
-      <View className="mb-4 flex-row items-start">
-        <Image
-          source={coach.id ? imageMap[coach.id] : undefined}
-          className="w-10 h-10 rounded-full mr-3 bg-gray-200"
-          resizeMode="cover"
-        />
-        <View>
-          <Text className="text-xs text-gray-500 mb-1 font-semibold">{coach.name}</Text>
-          <View className="px-5 py-3 rounded-2xl bg-[#F3F4F6] shadow-sm max-w-[80%]">
-            <Text className="text-black text-base leading-relaxed">{message}</Text>
+      <View style={[
+        styles.coachContainer, 
+        customStyles.container
+      ]}>
+        {/* Only show avatar in default style with valid coach info */}
+        {style === 'default' && hasCoachInfo && (
+          <Image
+            source={imageMap[coach.id]}
+            style={[styles.avatar, customStyles.avatar]}
+            resizeMode="cover"
+          />
+        )}
+        
+        <View style={{ flex: 1 }}>
+          {/* Only show name in default style */}
+          {style === 'default' && (
+            <Text style={[styles.nameText, customStyles.nameText]}>
+              {coach?.name || 'Coach'}
+            </Text>
+          )}
+          
+          <View style={[styles.coachBubble, customStyles.coachBubble]}>
+            <Text style={[styles.coachText, customStyles.coachText]}>
+              {message.message}
+            </Text>
           </View>
         </View>
       </View>
     );
-  }
-  return (
-    <View className={`mb-2 ${sender === 'user' ? 'items-end' : 'items-start'}`}> 
-      <View className={`px-5 py-3 rounded-2xl max-w-[80%] shadow-sm ${
-        sender === 'user' ? 'bg-[#0074E8]' : 'bg-[#F3F4F6]'
-      }`}>
-        <Text className={sender === 'user' ? 'text-white text-base leading-relaxed' : 'text-black text-base leading-relaxed'}>{message}</Text>
+  } else {
+    // USER MESSAGE
+    return (
+      <View style={[
+        styles.userContainer, 
+        customStyles.container
+      ]}>
+        <View style={[
+          styles.userBubble, 
+          customStyles.userBubble
+        ]}>
+          <Text style={[
+            styles.userText, 
+            customStyles.userText
+          ]}>
+            {message.message}
+          </Text>
+        </View>
       </View>
-    </View>
-  );
-} 
+    );
+  }
+}
+
+const styles = StyleSheet.create({
+  // Coach message styles
+  coachContainer: {
+    flexDirection: 'row',
+    marginBottom: 4,
+  },
+  avatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    marginRight: 12,
+    backgroundColor: '#F5F5F5',
+    borderWidth: 1,
+    borderColor: '#E0E5EB',
+  },
+  nameText: {
+    fontSize: 13,
+    color: '#757575',
+    marginBottom: 4,
+    fontWeight: '500',
+  },
+  coachBubble: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 6,
+    maxWidth: '85%',
+  },
+  coachText: {
+    color: '#000000',
+    lineHeight: 20,
+  },
+  
+  // User message styles
+  userContainer: {
+    alignItems: 'flex-end',
+    marginBottom: 4,
+  },
+  userBubble: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#000000',
+    borderRadius: 6,
+    maxWidth: '85%',
+  },
+  userText: {
+    color: 'white',
+    lineHeight: 20,
+  },
+}); 
