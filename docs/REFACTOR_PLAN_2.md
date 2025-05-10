@@ -66,25 +66,25 @@ Based on the code analysis, the largest files that need refactoring are:
   - [x] Extract common types to `useMessageTypes.ts`
 
 ### Phase 3: Screen Component Refactoring
-- [ ] Refactor `TrainingPlanScreen.tsx` (539 lines)
-  - [ ] Extract `PlanHeader.tsx`
-  - [ ] Extract `WeekNavigation.tsx`
-  - [ ] Extract `PlanSummary.tsx`
-  - [ ] Extract `PlanActions.tsx`
-  - [ ] Create hook `useTrainingPlanScreen.ts` for business logic
+- [x] Refactor `TrainingPlanScreen.tsx` (539 lines)
+  - [x] Extract `PlanHeader.tsx`
+  - [x] Extract `WeekNavigation.tsx`
+  - [x] Extract `PlanSummary.tsx`
+  - [x] Extract `PlanActions.tsx`
+  - [x] Create hook `useTrainingPlanScreen.ts` for business logic
 
-- [ ] Refactor `ProfileScreen.tsx` (506 lines)
-  - [ ] Extract `ProfileHeader.tsx`
-  - [ ] Extract `ProfileStats.tsx`
-  - [ ] Extract `ProfileSettings.tsx`
-  - [ ] Extract `ProfileActions.tsx`
-  - [ ] Create hook `useProfileScreen.ts` for business logic
+- [x] Refactor `ProfileScreen.tsx` (506 lines)
+  - [x] Extract `ProfileHeader.tsx`
+  - [x] Extract `ProfileStats.tsx`
+  - [x] Extract `ProfileSettings.tsx`
+  - [x] Extract `ProfileActions.tsx`
+  - [x] Create hook `useProfileScreen.ts` for business logic
 
-- [ ] Refactor `SessionCard.tsx` (501 lines)
-  - [ ] Extract `SessionHeader.tsx`
-  - [ ] Extract `SessionDetails.tsx`
-  - [ ] Extract `SessionControls.tsx`
-  - [ ] Create hook `useSessionCard.ts` for business logic
+- [x] Refactor `SessionCard.tsx` (501 lines)
+  - [x] Extract `SessionHeader.tsx`
+  - [x] Extract `SessionDetails.tsx`
+  - [x] Extract `SessionControls.tsx`
+  - [x] Create hook `useSessionCard.ts` for business logic
 
 ### Phase 4: Code Structure Improvements
 
