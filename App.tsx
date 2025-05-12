@@ -1,4 +1,4 @@
-import React from 'react'; // Import React
+import React, { useEffect } from 'react'; // Import React and useEffect
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -13,6 +13,10 @@ import {
 } from '@expo-google-fonts/inter';
 import { View, Text } from 'react-native';
 import './global.css';
+import { debugEnvironment } from './src/debug-env'; // Import debug-env.js
+
+// Run debug environment setup immediately
+debugEnvironment();
 
 // Create a new inner component that uses the auth context
 function AppContent() {

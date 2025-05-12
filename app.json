@@ -51,7 +51,7 @@
       "package": "com.hunt333.yugen"
     },
     "extra": {
-      "OPENAI_API_KEY": "${OPENAI_API_KEY}",
+      "OPENAI_API_KEY": "${EXPO_PUBLIC_OPENAI_API_KEY}",
       "supabaseUrl": "${SUPABASE_URL}",
       "supabaseAnonKey": "${SUPABASE_ANON_KEY}",
       "router": {},

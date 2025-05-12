@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, TouchableOpacity, TextInput, StyleSheet, Alert, Modal } from 'react-native';
 import { Text } from '../../../../components/ui/StyledText';
 import { TrainingSession, SessionStatus } from './types';
-import { formatDate } from '../../../../utils/dateUtils';
+import { formatDate } from '../../../../lib/utils/dateUtils';
 import { Button } from '../../../../components/ui/Button';
 import { colors } from '../../../../styles/colors';
 import { processWorkoutNotes } from '../../../../services/summary/workoutNoteService';

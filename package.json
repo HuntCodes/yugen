@@ -4,7 +4,6 @@
   "main": "index.js",
   "scripts": {
     "android": "expo run:android",
-    "ios": "expo run:ios",
     "start": "expo start",
     "prebuild": "expo prebuild",
     "lint": "eslint \"**/*.{js,jsx,ts,tsx}\" && prettier -c \"**/*.{js,jsx,ts,tsx,json}\"",
@@ -27,6 +26,7 @@
     "expo": "^53.0.7",
     "expo-av": "^15.1.4",
     "expo-constants": "~17.1.4",
+    "expo-dev-client": "~5.1.8",
     "expo-linear-gradient": "^14.1.4",
     "expo-linking": "~7.1.4",
     "expo-permissions": "^14.4.0",
@@ -43,6 +43,7 @@
     "react-native-chart-kit": "^6.12.0",
     "react-native-gesture-handler": "~2.24.0",
     "react-native-get-random-values": "^1.11.0",
+    "react-native-incall-manager": "^4.2.1",
     "react-native-reanimated": "~3.17.4",
     "react-native-safe-area-context": "5.4.0",
     "react-native-screens": "~4.10.0",
@@ -51,8 +52,7 @@
     "react-native-web": "^0.20.0",
     "react-native-webrtc": "^124.0.5",
     "tailwind-merge": "^3.2.0",
-    "uuid": "^11.1.0",
-    "expo-dev-client": "~5.1.8"
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",

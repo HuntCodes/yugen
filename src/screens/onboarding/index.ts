@@ -1,2 +1,3 @@
+export { OnboardingChat } from './OnboardingChat';
 export { CoachSelect } from './CoachSelect';
-export { OnboardingChat } from './OnboardingChat'; 
+export { VoiceOnboarding } from './VoiceOnboarding'; 

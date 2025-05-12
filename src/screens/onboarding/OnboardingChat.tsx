@@ -171,16 +171,6 @@ export function OnboardingChat() {
       
       <View className="pb-0">
         <View className="flex-row items-center">
-          <TouchableOpacity 
-            className={`w-12 h-12 rounded-full justify-center items-center mr-2 ${
-              voiceChatAvailable ? 'bg-blue-500' : 'bg-gray-400'
-            }`}
-            onPress={toggleVoiceChat}
-            disabled={isProcessing || isComplete || !voiceChatAvailable}
-          >
-            <FontAwesome name="microphone" size={20} color="#fff" />
-          </TouchableOpacity>
-          
           <View className="flex-1">
             <OnboardingInput
               value={input}
@@ -215,7 +205,8 @@ export function OnboardingChat() {
         progress={getProgressValue()}
       />
       
-      {/* Voice Chat Modal */}
+      {/* Voice Chat Modal - hide from text chat flow */}
+      {false && (
       <VoiceChat
         isVisible={showVoiceChat}
         onClose={handleCloseVoiceChat}
@@ -225,6 +216,7 @@ export function OnboardingChat() {
         onboardingMode={true}
         onTranscriptComplete={handleVoiceTranscriptComplete}
       />
+      )}
     </Screen>
   );
 }

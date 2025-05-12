@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, Modal, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, Modal, TouchableOpacity, ActivityIndicator, Alert, Platform } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import Constants from 'expo-constants';
@@ -11,6 +11,17 @@ import {
   mediaDevices,
   MediaStream,
 } from 'react-native-webrtc';
+
+// Import InCallManager conditionally
+let InCallManager: any = null;
+try {
+  // Dynamic import to prevent crashes if module isn't available
+  InCallManager = require('react-native-incall-manager').default;
+  console.log('InCallManager loaded:', !!InCallManager);
+} catch (err) {
+  console.warn('Failed to load InCallManager:', err);
+}
+
 import { useAuth } from '../../hooks/useAuth';
 import { checkMicrophonePermission, processVoiceInput } from '../../lib/voice/voiceUtils';
 import { voiceSessionManager } from '../../lib/voice/voiceSessionManager';
@@ -49,14 +60,100 @@ const VoiceChat = ({ isVisible, onClose, coachId, apiKey, onError, onboardingMod
   const [peerConnection, setPeerConnection] = useState<RTCPeerConnection | null>(null);
   const [dataChannel, setDataChannel] = useState<any>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const [audioOutput, setAudioOutput] = useState<MediaStream | null>(null);
   const [fallbackMode, setFallbackMode] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [ephemeralKey, setEphemeralKey] = useState<string | null>(null);
   const [conversationComplete, setConversationComplete] = useState(false);
+  const [inCallManagerInitialized, setInCallManagerInitialized] = useState(false);
   
   const auth = useAuth();
   const userId = auth.session?.user?.id;
+
+  // Configure audio to use speaker
+  useEffect(() => {
+    const configureAudio = async () => {
+      try {
+        // Configure expo-av audio mode
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: true,
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: false,
+          interruptionModeIOS: 1, // Do not mix with other apps' audio
+          interruptionModeAndroid: 1, // Do not mix with other apps' audio
+          playThroughEarpieceAndroid: false, // Use speaker, not earpiece
+          shouldDuckAndroid: true,
+        });
+        
+        // Force audio through speaker using native methods if available
+        if (Platform.OS === 'android') {
+          // For Android, we can use the expo-av setting (already set above)
+          console.log('Using expo-av to force speaker on Android');
+        } else {
+          console.log('Trying alternative speaker methods for iOS');
+        }
+        
+        // If InCallManager is properly loaded, use it as a fallback
+        if (InCallManager && typeof InCallManager.start === 'function' && !inCallManagerInitialized) {
+          try {
+            console.log('Initializing InCallManager');
+            InCallManager.start({
+              media: 'audio', 
+              ringback: '', 
+              auto: true, 
+            });
+            
+            if (typeof InCallManager.setForceSpeakerphoneOn === 'function') {
+              InCallManager.setForceSpeakerphoneOn(true);
+              setInCallManagerInitialized(true);
+              console.log('Audio mode configured for speaker output with InCallManager');
+            } else {
+              console.warn('InCallManager.setForceSpeakerphoneOn is not a function');
+            }
+          } catch (inCallErr) {
+            console.error('Error with InCallManager methods:', inCallErr);
+          }
+        } else {
+          console.warn('InCallManager not properly loaded or initialized already');
+          console.log('InCallManager availability:', {
+            loaded: !!InCallManager,
+            hasStartMethod: InCallManager && typeof InCallManager.start === 'function',
+            alreadyInitialized: inCallManagerInitialized
+          });
+        }
+      } catch (err) {
+        console.error('Failed to configure audio mode:', err);
+      }
+    };
+
+    if (isVisible) {
+      configureAudio();
+    }
+
+    return () => {
+      // Reset audio mode when component unmounts
+      Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: false,
+        staysActiveInBackground: false,
+        interruptionModeIOS: 1, // Do not mix with other apps' audio
+        interruptionModeAndroid: 1, // Do not mix with other apps' audio
+        playThroughEarpieceAndroid: true, // Reset to default
+        shouldDuckAndroid: true,
+      }).catch(err => console.error('Failed to reset audio mode:', err));
+      
+      // Stop InCallManager with null check
+      try {
+        if (InCallManager && typeof InCallManager.stop === 'function' && inCallManagerInitialized) {
+          console.log('Stopping InCallManager');
+          InCallManager.stop();
+          setInCallManagerInitialized(false);
+        }
+      } catch (err) {
+        console.error('Error stopping InCallManager:', err);
+      }
+    };
+  }, [isVisible, inCallManagerInitialized]);
 
   // Update error state and notify parent component
   const setErrorWithNotification = (errorMessage: string) => {
@@ -96,43 +193,57 @@ const VoiceChat = ({ isVisible, onClose, coachId, apiKey, onError, onboardingMod
     try {
       setIsConnecting(true);
       
-      // Instead of calling OpenAI directly, use our Supabase Edge Function
-      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 
-                           Constants.expoConfig?.extra?.supabaseUrl;
+      // Use direct Supabase URL instead of environment variables
+      const supabaseUrl = "https://tdwtacijcmpfnwlovlxh.supabase.co";
+      
+      console.log('Using direct Supabase URL for ephemeral key request:', supabaseUrl);
       
       if (!supabaseUrl) {
         throw new Error('Supabase URL not configured');
       }
       
+      console.log('Requesting ephemeral key from edge function...');
+      
+      // Add timeout to the fetch for better error handling
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      
       const response = await fetch(`${supabaseUrl}/functions/v1/ephemeral-key`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
         },
         body: JSON.stringify({
           model: 'gpt-4o-mini-realtime-preview-2024-12-17',
           voice: 'verse' // Updated from alloy to verse
-        })
+        }),
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
       
       if (!response.ok) {
         throw new Error(`Failed to get ephemeral key: ${response.status}`);
       }
       
       const data = await response.json();
+      console.log('Received response:', data ? 'Got data' : 'No data');
+      
       const key = data.client_secret?.value;
       
       if (!key) {
         throw new Error('No ephemeral key received from OpenAI');
       }
       
+      console.log('Successfully obtained ephemeral key');
       setEphemeralKey(key);
       
       // Initialize WebRTC with the ephemeral key
       initializeWebRTC(key);
     } catch (err) {
       console.error('Error getting ephemeral key:', err);
-      setErrorWithNotification('Failed to initialize OpenAI voice session');
+      setErrorWithNotification(`Failed to initialize OpenAI voice session: ${err instanceof Error ? err.message : 'Unknown error'}`);
       setIsConnecting(false);
     }
   };
@@ -213,9 +324,16 @@ const VoiceChat = ({ isVisible, onClose, coachId, apiKey, onError, onboardingMod
       pc.ontrack = (event: any) => {
         console.log('Received track:', event.track.kind);
         if (event.track.kind === 'audio') {
-          // Set up audio playback
+          // Create a new MediaStream with the received audio track
           const audioStream = new MediaStream([event.track]);
-          // Handle audio playback here
+          setAudioOutput(audioStream);
+          
+          console.log('Audio output stream created');
+          
+          // On iOS and Android, this MediaStream is automatically routed to the
+          // phone's audio output. Due to WebRTC implementation in React Native,
+          // the audio will be played through the active audio output (speaker if we set the
+          // audio mode with playThroughEarpieceAndroid: false)
         }
       };
       
@@ -297,6 +415,8 @@ COMMUNICATION STYLE: ${coachStyle.communicationStyle.join(', ')}
 
 MODE: INFORMATION_GATHERING
 
+Start the conversation by warmly greeting the user and introducing yourself. Immediately ask your first question to get started.
+
 Conduct a natural, friendly conversation to collect the following information:
 - name
 - weekly mileage (km or miles)
@@ -313,12 +433,15 @@ Conduct a natural, friendly conversation to collect the following information:
 
 ASK ONE OR TWO QUESTIONS AT A TIME - do not overwhelm the user.
 Keep your responses concise and conversational.
-When you have collected ALL required information, end by saying "Perfect! I've got all the information I need."`;
+When you have collected ALL required information, end by saying "Perfect! I've got all the information I need."
+Your final message MUST include the exact phrase "Perfect! I've got all the information I need." for the system to recognize completion.`;
       } else {
         instructions = `You are ${coachStyle.name}, a running coach chatting with an athlete.
   
 PERSONALITY: ${coachStyle.personality.join(', ')}
 COMMUNICATION STYLE: ${coachStyle.communicationStyle.join(', ')}
+
+Start the conversation with a greeting and introduce yourself.
 
 Keep your responses concise and direct. Answer questions about running, training, and fitness.
 Provide specific, actionable advice tailored to the athlete's needs.`;
@@ -333,6 +456,29 @@ Provide specific, actionable advice tailored to the athlete's needs.`;
       
       dc.send(JSON.stringify(event));
       console.log('AI instructions configured');
+      
+      // Send an initial message to trigger the coach to start speaking first
+      setTimeout(() => {
+        if (dc.readyState === 'open') {
+          // Use the correct event type for creating a conversation item
+          const startEvent = {
+            type: 'conversation.item.create',
+            item: {
+              role: 'user',
+              type: 'message',
+              content: [
+                {
+                  type: 'input_text',
+                  text: 'START_CONVERSATION' // This is a hidden trigger, not shown to the user
+                }
+              ]
+            }
+          };
+          
+          dc.send(JSON.stringify(startEvent));
+          console.log('Sent initial message to trigger coach greeting');
+        }
+      }, 1000);
     } catch (err) {
       console.error('Error configuring AI instructions:', err);
     }
@@ -373,11 +519,24 @@ Provide specific, actionable advice tailored to the athlete's needs.`;
   // Handle complete messages from the assistant
   const handleMessage = (message: any) => {
     if (message.text) {
-      setResponseText(message.text);
+      // Filter out responses to the START_CONVERSATION trigger
+      // Check if the message is a direct response to our hidden trigger
+      if (message.text.includes('START_CONVERSATION')) {
+        console.log('Filtering out response to START_CONVERSATION trigger');
+        return; // Skip this message completely
+      }
+      
+      const messageText = message.text.trim();
+      
+      if (!messageText) {
+        return; // Skip empty messages
+      }
+
+      setResponseText(messageText);
       
       // Track coach response
       if (sessionId) {
-        voiceSessionManager.addTranscript(message.text, 'coach', true);
+        voiceSessionManager.addTranscript(messageText, 'coach', true);
       }
       
       // Save to Supabase
@@ -385,7 +544,7 @@ Provide specific, actionable advice tailored to the athlete's needs.`;
         const metadata = voiceSessionManager.getSessionMetadata();
         saveMessageToSupabase(
           "coach", 
-          message.text, 
+          messageText, 
           "voice", 
           userId, 
           metadata ? {
@@ -396,29 +555,41 @@ Provide specific, actionable advice tailored to the athlete's needs.`;
       }
       
       // Check if conversation is complete by looking for the completion phrase
-      const isComplete = message.text.includes("Perfect! I've got all the information I need");
+      const completionPhrase = "Perfect! I've got all the information I need";
+      const isComplete = messageText.includes(completionPhrase);
+      
       console.log('[VOICE_COMPLETION] Checking for completion phrase:', { 
         isComplete, 
-        messageTextSnippet: message.text.substring(0, 50) + '...' 
+        messageTextSnippet: messageText.substring(0, 50) + '...' 
       });
       
       if (isComplete && !conversationComplete) {
         console.log('[VOICE_COMPLETION] Conversation complete detected! Will trigger onboarding completion.');
         setConversationComplete(true);
         
-        // Display completion message briefly before closing
+        // Add a brief delay before closing to let the user hear the complete message
         setTimeout(() => {
+          // Stop microphone before closing modal
+          if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+          }
+          
           console.log('[VOICE_COMPLETION] Closing modal and notifying parent');
-          handleCloseModal();
           
           // If in onboarding mode, pass the transcript to the onboarding system
           if (onboardingMode && onTranscriptComplete && transcript) {
-            onTranscriptComplete(transcript, message.text, true);
+            onTranscriptComplete(transcript, messageText, true);
           }
-        }, 1500);
+          
+          // Close the modal after notifying parent component
+          handleCloseModal();
+        }, 2500);
       } else if (!isComplete && onboardingMode && onTranscriptComplete && transcript) {
         // Still pass intermediate messages for conversation history
-        onTranscriptComplete(transcript, message.text, false);
+        onTranscriptComplete(transcript, messageText, false);
+        
+        // Reset transcript after sending to parent
+        setTranscript('');
       }
     }
   };
@@ -437,6 +608,11 @@ Provide specific, actionable advice tailored to the athlete's needs.`;
       setStream(null);
     }
     
+    if (audioOutput) {
+      audioOutput.getTracks().forEach(track => track.stop());
+      setAudioOutput(null);
+    }
+    
     if (dataChannel) {
       dataChannel.close();
       setDataChannel(null);
@@ -447,21 +623,27 @@ Provide specific, actionable advice tailored to the athlete's needs.`;
       setPeerConnection(null);
     }
     
-    if (sound) {
-      sound.unloadAsync();
-      setSound(null);
-    }
-    
     if (sessionId) {
       voiceSessionManager.endSession();
       setSessionId(null);
+    }
+    
+    // Stop InCallManager when cleaning up with null check
+    try {
+      if (InCallManager && typeof InCallManager.stop === 'function' && inCallManagerInitialized) {
+        console.log('Stopping InCallManager in cleanup');
+        InCallManager.stop();
+        setInCallManagerInitialized(false);
+      }
+    } catch (err) {
+      console.error('Error stopping InCallManager in cleanup:', err);
     }
     
     // Reset state
     setTranscript('');
     setResponseText('');
     setConversationComplete(false);
-  }, [stream, dataChannel, peerConnection, sound, sessionId]);
+  }, [stream, audioOutput, dataChannel, peerConnection, sessionId, inCallManagerInitialized]);
 
   const handleCloseModal = useCallback(() => {
     console.log('Closing voice chat modal');

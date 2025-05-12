@@ -8,6 +8,7 @@ import { SignUpScreen } from '../screens/auth/SignUpScreen';
 import { ForgotPasswordScreen } from '../screens/auth/ForgotPasswordScreen';
 import { CoachSelect } from '../screens/onboarding/CoachSelect';
 import { OnboardingChat } from '../screens/onboarding/OnboardingChat';
+import { VoiceOnboarding } from '../screens/onboarding/VoiceOnboarding';
 import { TabNavigator } from './TabNavigator';
 import { supabase } from '../lib/supabase';
 import { ChatMessage } from '../types/chat';
@@ -20,6 +21,7 @@ export type RootStackParamList = {
   ForgotPassword: undefined;
   CoachSelect: undefined;
   Onboarding: { coachId?: string } | undefined;
+  VoiceOnboarding: { coachId?: string } | undefined;
   MainApp: { onboardingMessages?: ChatMessage[] } | undefined;
 };
 
@@ -128,7 +130,7 @@ export function AppNavigator({ authLoading, session }: AppNavigatorProps) {
     } else if (hasCoach === false) {
       initialRouteName = 'CoachSelect';
     } else if (onboardingComplete === false) { 
-      initialRouteName = 'Onboarding';
+      initialRouteName = 'VoiceOnboarding';
     } else if (onboardingComplete === true) {
       initialRouteName = 'MainApp';
     }
@@ -144,6 +146,7 @@ export function AppNavigator({ authLoading, session }: AppNavigatorProps) {
         <Stack.Screen name="SignUp" component={SignUpScreen} />
         <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
         <Stack.Screen name="CoachSelect" component={CoachSelect} />
+        <Stack.Screen name="VoiceOnboarding" component={VoiceOnboarding} />
         <Stack.Screen name="Onboarding" component={OnboardingChat} />
         <Stack.Screen name="MainApp" component={TabNavigator} />
       </Stack.Navigator>

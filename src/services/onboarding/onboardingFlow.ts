@@ -55,6 +55,7 @@ export async function handleOnboardingConversation(
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`,
+        'OpenAI-Project': 'proj_hKaI3BQl7GIX7cECLqFM538H'
       },
       body: JSON.stringify({
         model: 'gpt-3.5-turbo', 
@@ -120,6 +121,7 @@ export async function processOnboardingTranscript(
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`,
+        'OpenAI-Project': 'proj_hKaI3BQl7GIX7cECLqFM538H'
       },
       body: JSON.stringify({
         model: 'gpt-3.5-turbo-1106',
@@ -179,10 +181,20 @@ export async function processOnboardingTranscript(
  * Helper function to safely get the API key from Constants
  */
 function getApiKey(): string | undefined {
+  // First try the environment variable
+  const envApiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
+  
+  if (envApiKey) {
+    // Remove any surrounding quotes and whitespace that might be causing issues
+    return envApiKey.replace(/["']/g, '').trim();
+  }
+  
+  // Then fall back to Constants
   // TypeScript-safe way to access the API key
-  // @ts-ignore - Suppressing TS error since we know the key exists in app.json
-  return Constants.expoConfig?.extra?.openaiApiKey || 
-         Constants.expoConfig?.extra?.OPENAI_API_KEY ||
-         // @ts-ignore - This is a fallback for older Expo versions
-         Constants.manifest?.extra?.OPENAI_API_KEY;
+  const configKey = Constants.expoConfig?.extra?.openaiApiKey || 
+                    Constants.expoConfig?.extra?.OPENAI_API_KEY ||
+                    // @ts-ignore - This is a fallback for older Expo versions
+                    Constants.manifest?.extra?.OPENAI_API_KEY;
+  
+  return configKey ? configKey.replace(/["']/g, '').trim() : undefined;
 } 

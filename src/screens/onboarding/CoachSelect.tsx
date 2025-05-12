@@ -91,7 +91,7 @@ export function CoachSelect() {
       }
       
       console.log('Successfully saved coach_id:', selectedCoach);
-      navigation.navigate('Onboarding', { coachId: selectedCoach });
+      navigation.navigate('VoiceOnboarding', { coachId: selectedCoach });
     } catch (err: any) {
       console.error('Coach selection error:', err);
       setError(err.message || 'Failed to select coach. Please try again.');
