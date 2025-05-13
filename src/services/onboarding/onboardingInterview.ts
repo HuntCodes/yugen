@@ -51,14 +51,23 @@ async function makeExtractionCall(
   context: ConversationContext
 ): Promise<Record<string, string | null>> {
   try {
-    // Get only the last few messages (most recent context)
-    const recentMessages = context.conversationHistory.slice(-4);
+    console.log('[ONBOARDING_INTERVIEW] Starting extraction from conversation history');
+    console.log('[ONBOARDING_INTERVIEW] Full conversation history:', 
+      JSON.stringify(context.conversationHistory, null, 2));
+    
+    // Use the full conversation history for extraction
+    // This ensures we capture all information shared during the conversation
+    const conversationToUse = context.conversationHistory;
+    console.log('[ONBOARDING_INTERVIEW] Using conversation for extraction:', 
+      JSON.stringify(conversationToUse, null, 2));
     
     // Process onboarding transcript for structured information
     const onboardingResult = await processOnboardingTranscript(
-      recentMessages,
+      conversationToUse,
       context.coachId
     );
+    
+    console.log('[ONBOARDING_INTERVIEW] Extraction result:', onboardingResult);
     
     // Convert the extracted profile to a simple Record
     const extractedInfo: Record<string, string | null> = {};
@@ -69,9 +78,11 @@ async function makeExtractionCall(
       }
     });
     
+    console.log('[ONBOARDING_INTERVIEW] Extracted info:', extractedInfo);
+    
     return extractedInfo;
   } catch (error) {
-    console.error('Error in makeExtractionCall:', error);
+    console.error('[ONBOARDING_INTERVIEW] Error in makeExtractionCall:', error);
     return {};
   }
 }

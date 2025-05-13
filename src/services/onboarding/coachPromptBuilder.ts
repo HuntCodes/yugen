@@ -40,7 +40,7 @@ export function buildConversationPrompt(
   MODE: ${isInitialGreeting ? 'INITIAL_GREETING' : 'INFORMATION_GATHERING'}
   
   ${isInitialGreeting
-    ? `INITIAL_GREETING MODE: Welcome the athlete, ask for their name and whether they use miles or kilometers.`
+    ? `INITIAL_GREETING MODE: Welcome the athlete. Ask for their preferred name or nickname to call them by. Also ask if they prefer to use miles or kilometers for distances.`
     : `INFORMATION_GATHERING MODE:
   Known Information:
   ${Object.entries(userProfile)
@@ -68,34 +68,35 @@ export function buildExtractionPrompt(
   conversationHistory: {role: 'user' | 'coach'; content: string}[],
   coachId: string
 ): string {
-  // Get coach-specific data
-  const coachStyle = coachStyles[coachId];
-  
-  // Filter to just the user messages to focus on their responses
-  const userMessages = conversationHistory
-    .filter(msg => msg.role === 'user')
-    .map(msg => msg.content)
+  // Format the conversation to make it easier to extract from
+  const formattedConversation = conversationHistory
+    .map(msg => `${msg.role.toUpperCase()}: ${msg.content}`)
     .join('\n\n');
+  
+  return `You are an expert at extracting structured information from conversations. 
+Analyze the following onboarding conversation between a running coach and a client.
+Extract all relevant information the client has shared about their running profile and goals.
 
-  return `You are an AI assistant helping extract structured information from a conversation with a user about their running profile.
-  
-  The conversation is with ${coachStyle.name}, a running coach.
-  
-  Extract the following information in JSON format:
-  - name: The user's name
-  - units: Whether they use "km" or "miles"
-  - current_mileage: How much they currently run per week
-  - current_frequency: How many days per week they run
-  - goal: Their running goal
-  - experience_level: Their running experience (beginner, intermediate, advanced)
-  - schedule_constraints: Any constraints on their schedule
-  - race_distance: Target race distance (null if no race)
-  - race_date: Target race date (null if no race)
-  
-  USER CONVERSATION TRANSCRIPT:
-  ${userMessages}
-  
-  Format your response as a JSON object with the extracted fields.
-  If you cannot determine a value, use null.
-  If the user explicitly states they have no upcoming race, set both race_distance and race_date to null.`;
+Return the information in the following JSON format:
+{
+  "nickname": "client's name or nickname",
+  "units": "miles or km",
+  "current_mileage": <number>,
+  "current_frequency": <number>,
+  "goal_type": "general fitness, speed improvement, specific race, etc.",
+  "experience_level": "beginner, intermediate, or advanced",
+  "schedule_constraints": "any mentioned constraints",
+  "race_distance": "if mentioned",
+  "race_date": "YYYY-MM-DD format if mentioned",
+  "injury_history": "any relevant injuries",
+  "shoe_size": "if mentioned",
+  "clothing_size": "if mentioned"
+}
+
+If some information is not provided, use null for that field.
+If the client mentions a target race, include both the distance and date if available.
+Make sure to extract all the information, even if it's scattered throughout different parts of the conversation.
+
+CONVERSATION:
+${formattedConversation}`;
 } 

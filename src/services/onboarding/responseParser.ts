@@ -10,8 +10,14 @@ export function processCoachResponse(
   extractedInfo: Record<string, string | null>,
   context: ConversationContext
 ): CoachResponse {
+  console.log('[RESPONSE_PARSER] Processing coach response:', { 
+    responseText: responseText.substring(0, 100) + '...',
+    extractedInfoKeys: Object.keys(extractedInfo),
+  });
+
   // Validate the response
   if (!responseText || typeof responseText !== 'string') {
+    console.error('[RESPONSE_PARSER] Invalid response format');
     return {
       message: 'Sorry, I encountered an error. Let\'s try again.',
       extractedInfo: {},
@@ -26,6 +32,7 @@ export function processCoachResponse(
 
   // Normalize extracted data
   const normalizedData = normalizeProfileData(extractedInfo, context.userProfile);
+  console.log('[RESPONSE_PARSER] Normalized data:', normalizedData);
 
   // Calculate missing fields and completion status
   const allRequiredFields = Object.keys(requiredInformation).filter(
@@ -37,6 +44,8 @@ export function processCoachResponse(
     ...context.userProfile,
     ...normalizedData
   };
+  
+  console.log('[RESPONSE_PARSER] Merged profile:', mergedProfile);
   
   // Check for missing fields based on merged profile
   const missingFields = allRequiredFields.filter(key => {
@@ -50,6 +59,10 @@ export function processCoachResponse(
   });
   
   const isComplete = missingFields.length === 0;
+  console.log('[RESPONSE_PARSER] Completion check:', { 
+    missingFields, 
+    isComplete 
+  });
   
   // Check for completion
   const completionStatus = {
@@ -59,6 +72,7 @@ export function processCoachResponse(
   
   // Check for the specific "completion" phrase that signals the AI thinks we're done
   const completionPhraseDetected = responseText.includes("Perfect! I've got all the information I need");
+  console.log('[RESPONSE_PARSER] Completion phrase detected:', completionPhraseDetected);
   
   // Final response
   return {
@@ -74,18 +88,27 @@ export function processCoachResponse(
  * Extracts JSON from a GPT response text
  */
 export function extractJsonFromResponse(responseText: string): Record<string, string | null> {
+  console.log('[RESPONSE_PARSER] Extracting JSON from response:', { 
+    responseTextLength: responseText.length,
+    responseTextPreview: responseText.substring(0, 100) + '...' 
+  });
+  
   try {
     // Look for JSON object in the response
     const jsonMatch = responseText.match(/\{[\s\S]*\}/);
     
     if (jsonMatch) {
       const jsonString = jsonMatch[0];
-      return JSON.parse(jsonString);
+      console.log('[RESPONSE_PARSER] Found JSON string:', jsonString);
+      const parsedJson = JSON.parse(jsonString);
+      console.log('[RESPONSE_PARSER] Successfully parsed JSON with keys:', Object.keys(parsedJson));
+      return parsedJson;
     }
     
+    console.log('[RESPONSE_PARSER] No JSON found in response');
     return {};
   } catch (error) {
-    console.error('Error parsing JSON from response:', error);
+    console.error('[RESPONSE_PARSER] Error parsing JSON from response:', error);
     return {};
   }
 } 

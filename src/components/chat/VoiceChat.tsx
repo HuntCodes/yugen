@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, Modal, TouchableOpacity, ActivityIndicator, Alert, Platform, NativeModules, LogBox } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
@@ -23,23 +23,17 @@ import { coachStyles } from '../../config/coachingGuidelines';
 
 // Import the saveMessage function
 import { saveMessage } from '../../services/chat/chatService';
+import * as Animatable from 'react-native-animatable'; // Import Animatable
 
 // Create a Logger helper for debugging audio issues
 const AudioDebugLogger = {
   log: (message: string, data?: any) => {
-    const logMessage = `🔊 [AUDIO_DEBUG_JS] ${message}`;
-    if (data) {
-      console.log(logMessage, data);
-    } else {
-      console.log(logMessage);
-    }
+    // No-op: Disabled to reduce noise in logs
   },
   error: (message: string, error?: any) => {
-    const errorMessage = `❌ [AUDIO_DEBUG_JS] ${message}`;
-    if (error) {
-      console.error(errorMessage, error);
-    } else {
-      console.error(errorMessage);
+    // Only log critical errors
+    if (error instanceof Error && error.message.includes('critical')) {
+      console.error(`[VOICE_CHAT] Critical error: ${message}`);
     }
   }
 };
@@ -60,10 +54,12 @@ interface VoiceChatProps {
   apiKey: string;
   onError?: (error: string) => void;
   onboardingMode?: boolean;
-  onTranscriptComplete?: (userTranscript: string, coachResponse: string, isComplete: boolean) => void;
+  onTranscriptComplete?: (userTranscript: string, coachResponse: string, isComplete: boolean, conversationHistory: {role: 'user' | 'coach'; content: string}[]) => void;
+  onSpeakingStateChange?: (isSpeaking: boolean, speaker?: 'user' | 'coach') => void;
+  useModal?: boolean;
 }
 
-const VoiceChat = ({ isVisible, onClose, coachId, apiKey, onError, onboardingMode = false, onTranscriptComplete }: VoiceChatProps) => {
+const VoiceChat = ({ isVisible, onClose, coachId, apiKey, onError, onboardingMode = false, onTranscriptComplete, onSpeakingStateChange, useModal = true }: VoiceChatProps) => {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
@@ -78,9 +74,48 @@ const VoiceChat = ({ isVisible, onClose, coachId, apiKey, onError, onboardingMod
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [ephemeralKey, setEphemeralKey] = useState<string | null>(null);
   const [conversationComplete, setConversationComplete] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [userIsSpeaking, setUserIsSpeaking] = useState(false);
+  const [conversationHistory, setConversationHistory] = useState<{role: 'user' | 'coach'; content: string}[]>([]);
+  const [finalUserUtterance, setFinalUserUtterance] = useState<string | null>(null);
+  
+  const userSpeakingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   const auth = useAuth();
   const userId = auth.session?.user?.id;
+
+  // Add state to track complete coach sentences
+  const [isReceivingCoachMessage, setIsReceivingCoachMessage] = useState(false);
+  const [pendingTranscript, setPendingTranscript] = useState('');
+  const [userHasResponded, setUserHasResponded] = useState(false);
+  const responseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Add a function to stop listening and related activities
+  const stopListening = () => {
+    AudioDebugLogger.log('Stopping listening and audio streams');
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+      // setStream(null); // Optionally nullify, but tracks are stopped
+    }
+    // if (audioOutput) { // AudioOutput is for received audio, not sending
+    //   audioOutput.getTracks().forEach(track => track.stop());
+    // }
+    setIsListening(false);
+    setUserIsSpeaking(false);
+    setIsSpeaking(false); // Coach is also stopped
+    if (userSpeakingTimeoutRef.current) {
+      clearTimeout(userSpeakingTimeoutRef.current);
+      userSpeakingTimeoutRef.current = null;
+    }
+    if (responseTimeoutRef.current) {
+      clearTimeout(responseTimeoutRef.current);
+      responseTimeoutRef.current = null;
+    }
+    if (onSpeakingStateChange) {
+      onSpeakingStateChange(false); // General speaking state off
+    }
+    // Consider if dataChannel or peerConnection should be closed here or in main cleanup
+  };
 
   // Configure audio to use speaker and initialize InCallManager
   useEffect(() => {
@@ -281,16 +316,43 @@ const VoiceChat = ({ isVisible, onClose, coachId, apiKey, onError, onboardingMod
       dc.onmessage = (event: any) => {
         try {
           const message = JSON.parse(event.data);
-          AudioDebugLogger.log('Received data channel message:', message);
+          
+          // Global event logging for debugging
+          const relevantEventTypes = [
+            'transcript', // Old event, maybe keep for other uses or remove if fully replaced
+            'message', 
+            'response.content_part.added', 
+            'response.audio_transcript.delta', 
+            'response.audio_transcript.done',
+            'conversation.item.input_audio_transcription.completed', // New user transcript event
+            'error' // Always log errors
+          ];
+
+          if (relevantEventTypes.includes(message.type) || (message.type?.includes('response') && message.transcript)) {
+            console.log(`[VOICE_EVENT] Received: ${message.type}`, 
+                        message.transcript ? { transcriptPreview: String(message.transcript).substring(0,50) + '...' } : 
+                        message.delta ? { deltaPreview: String(message.delta).substring(0,50) + '...' } : 
+                        message.part ? { partPreview: String(message.part.transcript).substring(0,50) + '...' } : 
+                        message.error ? { error: message.error } : {});
+          }
           
           // Handle different types of messages
-          if (message.type === 'transcript') {
-            handleTranscript(message);
+          if (message.type === 'conversation.item.input_audio_transcription.completed') { // Updated event type for user transcript
+            handleUserTranscriptComplete(message); // New handler for this specific event
           } else if (message.type === 'message') {
             handleMessage(message);
+          } else if (message.type === 'response.content_part.added') {
+            handleContentPartAdded(message);
+          } else if (message.type === 'response.audio_transcript.delta') {
+            handleTranscriptDelta(message);
+          } else if (message.type === 'response.audio_transcript.done') {
+            handleTranscriptDone(message);
+          } else if (message.type === 'error') {
+            console.error('[VOICE_CHAT] OpenAI Realtime API Error:', message.error);
+            setErrorWithNotification(`OpenAI API Error: ${message.error?.message || 'Unknown error'}`);
           }
         } catch (err) {
-          AudioDebugLogger.error('Error parsing data channel message:', err);
+          console.error('Error parsing data channel message:', err);
         }
       };
       
@@ -311,6 +373,11 @@ const VoiceChat = ({ isVisible, onClose, coachId, apiKey, onError, onboardingMod
           setIsConnecting(false);
           setIsListening(true);
           
+          // Notify parent about speaking state as soon as connection is established
+          if (onSpeakingStateChange) {
+            onSpeakingStateChange(true, 'coach');
+          }
+          
           // Ensure speaker mode is on once connection is established
           AudioDebugLogger.log('Re-applying speaker mode when WebRTC connection is established');
           InCallManager.setForceSpeakerphoneOn(true);
@@ -319,6 +386,11 @@ const VoiceChat = ({ isVisible, onClose, coachId, apiKey, onError, onboardingMod
           setErrorWithNotification('Connection failed or disconnected');
           setIsConnecting(false);
           setIsListening(false);
+          
+          // Notify parent about speaking state ended
+          if (onSpeakingStateChange) {
+            onSpeakingStateChange(false);
+          }
         }
       };
       
@@ -432,6 +504,14 @@ const VoiceChat = ({ isVisible, onClose, coachId, apiKey, onError, onboardingMod
       // Get coach-specific data
       const coachStyle = coachStyles[coachId];
       
+      if (!coachStyle) {
+        console.error(`[VOICE_CHAT] Critical: Coach style not found for coachId: ${coachId}. Defaulting instructions.`);
+        // Fallback instructions or error handling might be needed here
+        // For now, log and proceed with potentially generic instructions
+      } else {
+        console.log(`[VOICE_CHAT] Configuring AI for coachId: ${coachId}, Name: ${coachStyle.name}`);
+      }
+      
       // Generate a prompt similar to what we use in onboardingInterview.ts
       let instructions = '';
       
@@ -459,8 +539,11 @@ Conduct a natural, friendly conversation to collect the following information:
 - upcoming race date (if any)
 - running goals
 
-ASK ONE OR TWO QUESTIONS AT A TIME - do not overwhelm the user.
-Keep your responses concise and conversational.
+IMPORTANT: Ask ONLY ONE question at a time and wait for the user to respond. 
+Acknowledge their answer before asking the next question.
+Make sure to always complete your full thought or question - don't stop mid-sentence.
+Keep your responses friendly and encouraging but concise.
+
 When you have collected ALL required information, end by saying "Perfect! I've got all the information I need."
 Your final message MUST include the exact phrase "Perfect! I've got all the information I need." for the system to recognize completion.`;
       } else {
@@ -478,33 +561,27 @@ Provide specific, actionable advice tailored to the athlete's needs.`;
       const event = {
         type: 'session.update',
         session: {
-          instructions: instructions
+          instructions: instructions,
+          input_audio_transcription: { // Enable user input transcription
+            model: 'whisper-1' 
+          }
         }
       };
       
       dc.send(JSON.stringify(event));
       console.log('AI instructions configured');
       
-      // Send an initial message to trigger the coach to start speaking first
+      // Send a response.create event to make the coach speak first
+      // This follows OpenAI's documented approach for making the assistant speak first
       setTimeout(() => {
         if (dc.readyState === 'open') {
-          // Use the correct event type for creating a conversation item
-          const startEvent = {
-            type: 'conversation.item.create',
-            item: {
-              role: 'user',
-              type: 'message',
-              content: [
-                {
-                  type: 'input_text',
-                  text: 'START_CONVERSATION' // This is a hidden trigger, not shown to the user
-                }
-              ]
-            }
+          const responseCreateEvent = {
+            type: 'response.create'
           };
           
-          dc.send(JSON.stringify(startEvent));
-          console.log('Sent initial message to trigger coach greeting');
+          dc.send(JSON.stringify(responseCreateEvent));
+          console.log('Sent response.create event to make coach speak first');
+          setIsReceivingCoachMessage(true);
         }
       }, 1000);
     } catch (err) {
@@ -546,103 +623,310 @@ Provide specific, actionable advice tailored to the athlete's needs.`;
     }
   };
 
-  // Handle transcript messages
-  const handleTranscript = (message: any) => {
-    if (message.text) {
-      const processedText = processVoiceInput(message.text);
-      setTranscript(processedText);
-      
-      // Track transcript in session
-      if (sessionId) {
-        voiceSessionManager.addTranscript(processedText, 'user', false);
+  // Handle transcript messages - Update to detect when user is speaking
+  // This function will now be SPECIFICALLY for USER'S completed transcript
+  const handleUserTranscriptComplete = (message: any) => {
+    if (message.transcript) {
+      const userText = processVoiceInput(String(message.transcript).trim());
+      console.log('[VOICE_CHAT] User transcript received (input_audio_transcription.completed):', userText);
+
+      if (!userText) return;
+
+      // User has spoken. Set their final utterance.
+      // The useEffect for finalUserUtterance will add it to history.
+      setFinalUserUtterance(userText);
+      setTranscript(userText); // Keep a copy for potential immediate use if needed, though history is primary
+
+      setUserIsSpeaking(false); // User has finished this utterance
+      if (onSpeakingStateChange && !isSpeaking) { // If coach isn't also speaking
+        onSpeakingStateChange(false);
       }
+      
+      // Trigger coach response if in onboarding mode and conditions met
+      if (onboardingMode && dataChannel && dataChannel.readyState === 'open' && !conversationComplete) {
+        // Delay slightly to allow state updates and simulate natural turn-taking
+        setTimeout(() => {
+          // Check if it's appropriate for the coach to respond
+          // isReceivingCoachMessage should be false
+          if (!isReceivingCoachMessage) { 
+            console.log('[VOICE_CHAT] User turn complete. Sending response.create for coach.');
+            const responseCreateEvent = {
+              type: 'response.create'
+            };
+            dataChannel.send(JSON.stringify(responseCreateEvent));
+            setIsReceivingCoachMessage(true); // Coach is about to speak
+            setUserHasResponded(false); // Reset for the next user turn (though setUserHasResponded might be redundant now)
+          }
+        }, 1000); // Adjust delay as needed
+      }
+    } else {
+      console.log('[VOICE_CHAT] Received conversation.item.input_audio_transcription.completed but no transcript content.', message);
     }
   };
 
-  // Handle complete messages from the assistant
+  // Handle message data - add check for connection initialization message
   const handleMessage = (message: any) => {
     if (message.text) {
-      // Filter out responses to the START_CONVERSATION trigger
-      // Check if the message is a direct response to our hidden trigger
-      if (message.text.includes('START_CONVERSATION')) {
-        console.log('Filtering out response to START_CONVERSATION trigger');
-        return; // Skip this message completely
-      }
-      
-      const messageText = message.text.trim();
-      
-      if (!messageText) {
-        return; // Skip empty messages
-      }
+      const messageText = String(message.text).trim();
+      if (!messageText) return;
 
-      setResponseText(messageText);
-      
-      // Track coach response
-      if (sessionId) {
-        voiceSessionManager.addTranscript(messageText, 'coach', true);
+      console.log('[VOICE_CHAT_EVENT] Received RAW MESSAGE event:', messageText);
+      setIsSpeaking(true);
+      if (onSpeakingStateChange) onSpeakingStateChange(true, 'coach');
+
+      // Accumulate message parts
+      setPendingTranscript(prev => (prev ? `${prev} ${messageText}` : messageText).trim());
+      setIsReceivingCoachMessage(true);
+
+      // Check if the current accumulated pendingTranscript ends with punctuation
+      // This is a more reliable way to detect a complete thought from the coach
+      if (pendingTranscript.match(/[.!?]$/)) {
+        console.log('[VOICE_CHAT_HISTORY_DEBUG] Coach message complete (punctuation). Pending transcript:', pendingTranscript);
+        const coachMessageEntry = { role: 'coach' as const, content: pendingTranscript };
+        
+        console.log('[VOICE_CHAT_HISTORY_DEBUG] Attempting to add COACH message (from handleMessage). Current history size:', conversationHistory.length);
+        setConversationHistory(prev => {
+          const newHistory = [...prev, coachMessageEntry];
+          console.log('[VOICE_CHAT_HISTORY_DEBUG] After adding COACH message (from handleMessage). New history size:', newHistory.length);
+          console.log('[VOICE_CHAT_HISTORY_DEBUG] COACH History (handleMessage) Details:', JSON.stringify(newHistory, null, 2));
+          return newHistory;
+        });
+        
+        setResponseText(pendingTranscript); // Update UI with complete message
+        setPendingTranscript(''); // Clear pending for next message
+        setIsReceivingCoachMessage(false);
+        setIsSpeaking(false); // Coach has finished this turn
+        if (onSpeakingStateChange) onSpeakingStateChange(false); // Notify parent
+
+        // Reset user response tracking
+        setUserHasResponded(false);
+        if (responseTimeoutRef.current) clearTimeout(responseTimeoutRef.current);
+        responseTimeoutRef.current = setTimeout(() => {
+          if (!userHasResponded) {
+            console.log('[VOICE_CHAT] No user response detected after coach message timeout');
+          }
+        }, 5000);
       }
+      // Fallback timeout if punctuation is missed but there's a pause
+      if (responseTimeoutRef.current) clearTimeout(responseTimeoutRef.current);
+      responseTimeoutRef.current = setTimeout(() => {
+        if (isReceivingCoachMessage && pendingTranscript) { // If still receiving and there's content
+            console.log('[VOICE_CHAT_HISTORY_DEBUG] Coach message complete (timeout). Pending transcript:', pendingTranscript);
+            const coachMessageEntry = { role: 'coach' as const, content: pendingTranscript };
+            
+            console.log('[VOICE_CHAT_HISTORY_DEBUG] Attempting to add COACH message (timeout in handleMessage). Current history size:', conversationHistory.length);
+            setConversationHistory(prev => {
+              const newHistory = [...prev, coachMessageEntry];
+              console.log('[VOICE_CHAT_HISTORY_DEBUG] After adding COACH message (timeout in handleMessage). New history size:', newHistory.length);
+              console.log('[VOICE_CHAT_HISTORY_DEBUG] COACH History (timeout in handleMessage) Details:', JSON.stringify(newHistory, null, 2));
+              return newHistory;
+            });
+
+            setResponseText(pendingTranscript);
+            setPendingTranscript('');
+            setIsReceivingCoachMessage(false);
+            setIsSpeaking(false); // Coach has finished this turn
+            if (onSpeakingStateChange) onSpeakingStateChange(false); // Notify parent
+        }
+      }, 1200); // Consider message complete after 1.2s of no new parts
+
+    }
+  };
+
+  // Handle completed transcript (typically from audio_transcript.done)
+  const handleTranscriptDone = (message: any) => {
+    if (message.transcript) {
+      const transcriptText = String(message.transcript).trim();
+      if (!transcriptText) return;
+
+      console.log('[VOICE_CHAT_EVENT] Received TRANSCRIPT.DONE event:', transcriptText);
+
+      // If there was a pending message (from handleMessage), that should be considered the full message.
+      // transcript.done might sometimes be partial or just the last segment.
+      const finalCoachMessage = pendingTranscript ? pendingTranscript : transcriptText;
+      setPendingTranscript(''); // Clear pending as we are finalizing
+      // setIsReceivingCoachMessage(false); // Moved down
+
+      const coachMessageEntry = { role: 'coach' as const, content: finalCoachMessage };
+      console.log('[VOICE_CHAT_HISTORY_DEBUG] Attempting to add COACH message (from transcript.done). Current history size:', conversationHistory.length);
       
-      // Save to Supabase
-      if (userId) {
-        const metadata = voiceSessionManager.getSessionMetadata();
-        saveMessageToSupabase(
-          "coach", 
-          messageText, 
-          "voice", 
-          userId, 
-          metadata ? {
-            sessionId: metadata.sessionId,
-            transcriptTimestamp: Date.now()
-          } : undefined
-        );
-      }
-      
-      // Check if conversation is complete by looking for the completion phrase
-      const completionPhrase = "Perfect! I've got all the information I need";
-      const isComplete = messageText.includes(completionPhrase);
-      
-      console.log('[VOICE_COMPLETION] Checking for completion phrase:', { 
-        isComplete, 
-        messageTextSnippet: messageText.substring(0, 50) + '...' 
+      // This will be the setConversationHistory that calls onTranscriptComplete
+      let historyForCallback: {role: 'user' | 'coach'; content: string}[] = [];
+
+      setConversationHistory(prev => {
+        // Avoid duplicates if handleMessage already added this exact message via timeout/punctuation
+        if (prev.length > 0 && prev[prev.length - 1].role === 'coach' && prev[prev.length - 1].content === finalCoachMessage) {
+          console.log('[VOICE_CHAT_HISTORY_DEBUG] COACH message (transcript.done) is a duplicate of last message. Skipping add.');
+          historyForCallback = prev;
+          return prev;
+        }
+        const newHistory = [...prev, coachMessageEntry];
+        console.log('[VOICE_CHAT_HISTORY_DEBUG] After adding COACH message (from transcript.done). New history size:', newHistory.length);
+        console.log('[VOICE_CHAT_HISTORY_DEBUG] COACH History (transcript.done) Details:', JSON.stringify(newHistory, null, 2));
+        historyForCallback = newHistory;
+        return newHistory;
       });
-      
-      if (isComplete && !conversationComplete) {
-        console.log('[VOICE_COMPLETION] Conversation complete detected! Will trigger onboarding completion.');
-        setConversationComplete(true);
+      setResponseText(finalCoachMessage);
+
+      const completionPhrases = [
+        "i've got everything i need",
+        "i've got all the information i need",
+        "got all the information i need"
+      ];
+      const lowerTranscript = finalCoachMessage.toLowerCase();
+      const matchedPhrase = completionPhrases.find(phrase => lowerTranscript.includes(phrase));
+
+      if (matchedPhrase) {
+        console.log('[VOICE_COMPLETION] ✅ Completion phrase in transcript.done message:', finalCoachMessage);
+        setConversationComplete(true); // Mark as complete
         
-        // Add a brief delay before closing to let the user hear the complete message
+        // Use a timeout to ensure state updates flush before calling stopListening and onTranscriptComplete
         setTimeout(() => {
-          // Stop microphone before closing modal
-          if (stream) {
-            stream.getTracks().forEach(track => track.stop());
+          // Access the latest history via the variable populated by setConversationHistory's callback
+          console.log('[VOICE_COMPLETION] FINAL HISTORY (transcript.done):', JSON.stringify(historyForCallback, null, 2));
+          if (onTranscriptComplete) {
+            const lastUserTranscript = transcript || ''; // `transcript` state holds the last user utterance
+            onTranscriptComplete(lastUserTranscript, finalCoachMessage, true, historyForCallback);
           }
-          
-          console.log('[VOICE_COMPLETION] Closing modal and notifying parent');
-          
-          // If in onboarding mode, pass the transcript to the onboarding system
-          if (onboardingMode && onTranscriptComplete && transcript) {
-            onTranscriptComplete(transcript, messageText, true);
-          }
-          
-          // Close the modal after notifying parent component
-          handleCloseModal();
-        }, 2500);
-      } else if (!isComplete && onboardingMode && onTranscriptComplete && transcript) {
-        // Still pass intermediate messages for conversation history
-        onTranscriptComplete(transcript, messageText, false);
-        
-        // Reset transcript after sending to parent
-        setTranscript('');
+          stopListening(); // This will set isSpeaking to false and clean up
+          setIsReceivingCoachMessage(false); 
+        }, 100); // Short delay
+      } else {
+        // If not a completion phrase, coach's turn is still over
+        setIsReceivingCoachMessage(false);
+        setIsSpeaking(false);
+        if (onSpeakingStateChange) onSpeakingStateChange(false);
       }
     }
   };
+
+  // Handle content part added from OpenAI's streaming API
+  const handleContentPartAdded = (message: any) => {
+    if (message.part && message.part.transcript) {
+      const contentPart = String(message.part.transcript).trim();
+      if (!contentPart) return;
+
+      console.log('[VOICE_CHAT_EVENT] Received CONTENT_PART.ADDED event:', contentPart);
+      
+      // Append to pending transcript
+      setPendingTranscript(prev => (prev ? `${prev} ${contentPart}` : contentPart).trim());
+      setIsReceivingCoachMessage(true);
+
+      // No history addition here; wait for handleMessage logic (punctuation/timeout) or handleTranscriptDone
+      // However, we can check for completion phrase in the accumulating pendingTranscript
+
+      const currentAccumulated = pendingTranscript + contentPart; // Approx current full message being built
+      const completionPhrases = [
+        "i've got everything i need",
+        "i've got all the information i need",
+        "got all the information i need"
+      ];
+      const lowerAccumulated = currentAccumulated.toLowerCase();
+      const matchedPhrase = completionPhrases.find(phrase => lowerAccumulated.includes(phrase));
+
+      if (matchedPhrase && !conversationComplete) { // Check !conversationComplete to avoid multiple triggers
+        const finalMessageForCompletion = currentAccumulated.trim();
+        console.log('[VOICE_COMPLETION] ✅ Completion phrase in content_part.added (accumulated):', finalMessageForCompletion);
+        
+        // Debounce or ensure this logic runs only once if parts arrive rapidly
+        // Setting conversationComplete to true helps here
+        setConversationComplete(true); 
+
+        setTimeout(() => {
+          if (dataChannel) {
+            const coachFinalMessageEntry = { role: 'coach' as const, content: finalMessageForCompletion };
+            setConversationHistory(prevHistory => {
+              if (prevHistory.length > 0 && prevHistory[prevHistory.length - 1].role === 'coach' && prevHistory[prevHistory.length - 1].content === finalMessageForCompletion) {
+                 console.log('[VOICE_CHAT_HISTORY_DEBUG] COACH message (content_part) is a duplicate. Skipping add.');
+                 return prevHistory;
+              }
+              const newHistory = [...prevHistory, coachFinalMessageEntry];
+              console.log('[VOICE_COMPLETION] FINAL HISTORY (content_part.added):', JSON.stringify(newHistory, null, 2));
+              if (onTranscriptComplete) {
+                const lastUserTranscript = transcript || '';
+                onTranscriptComplete(lastUserTranscript, finalMessageForCompletion, true, newHistory);
+              }
+              stopListening();
+              setPendingTranscript('');
+              setIsReceivingCoachMessage(false);
+              return newHistory;
+            });
+          }
+        }, 1500);
+      }
+    }
+  };
+  
+  // Handle transcript delta events - use these to track completion phrase
+  const handleTranscriptDelta = (message: any) => {
+    if (message.delta) {
+      const delta = message.delta;
+      
+      // Only log deltas that might be part of our completion phrase for cleaner logs
+      if (delta.toLowerCase().includes("got") || 
+          delta.toLowerCase().includes("need") || 
+          delta.toLowerCase().includes("information") ||
+          delta.toLowerCase().includes("everything") || 
+          delta.toLowerCase().includes("perfect")) {
+            
+        console.log('[VOICE_COMPLETION] Interesting transcript delta:', { 
+          delta,
+          fullDelta: message
+        });
+      }
+    }
+  };
+
+  // useEffect to add final user utterance to history
+  useEffect(() => {
+    if (finalUserUtterance) { // Simplified condition: if there's a final user utterance, add it.
+      const userMessageEntry = { role: 'user' as const, content: finalUserUtterance };
+      console.log('[VOICE_CHAT_HISTORY_DEBUG] Attempting to add USER message (from finalUserUtterance effect). Content:', finalUserUtterance);
+      setConversationHistory(prev => {
+        // Prevent adding empty or duplicate consecutive user messages if any race condition led to that
+        if (finalUserUtterance.trim() && 
+            (prev.length === 0 || 
+             prev[prev.length -1].role !== 'user' || 
+             prev[prev.length -1].content !== finalUserUtterance)) {
+          const newHistory = [...prev, userMessageEntry];
+          console.log('[VOICE_CHAT_HISTORY_DEBUG] After adding USER message (from finalUserUtterance effect). New history size:', newHistory.length);
+          console.log('[VOICE_CHAT_HISTORY_DEBUG] USER History (from finalUserUtterance effect) Details:', JSON.stringify(newHistory, null, 2));
+          return newHistory;
+        }
+        console.log('[VOICE_CHAT_HISTORY_DEBUG] Skipping add USER message (empty or duplicate).');
+        return prev;
+      });
+      setTranscript(''); // Clear live transcript state after adding to history
+      setFinalUserUtterance(null); // Reset for next utterance
+    }
+  }, [finalUserUtterance]); // Removed isSpeaking from dependencies
 
   // Clean up when component unmounts or modal closes
   useEffect(() => {
     return () => {
+      // Clear any pending timeout
+      if (userSpeakingTimeoutRef.current) {
+        clearTimeout(userSpeakingTimeoutRef.current);
+        userSpeakingTimeoutRef.current = null;
+      }
+      
+      // Clear response timeout
+      if (responseTimeoutRef.current) {
+        clearTimeout(responseTimeoutRef.current);
+        responseTimeoutRef.current = null;
+      }
+      
+      // Reset speaking state when component unmounts
+      if (isSpeaking || userIsSpeaking) {
+        setIsSpeaking(false);
+        setUserIsSpeaking(false);
+        if (onSpeakingStateChange) {
+          onSpeakingStateChange(false);
+        }
+      }
       cleanupResources();
     };
-  }, []);
+  }, [isSpeaking, userIsSpeaking, onSpeakingStateChange]);
 
   const cleanupResources = useCallback(() => {
     AudioDebugLogger.log('Cleaning up voice chat resources');
@@ -684,19 +968,39 @@ Provide specific, actionable advice tailored to the athlete's needs.`;
     InCallManager.setForceSpeakerphoneOn(false);
     InCallManager.stop();
     
+    // Clear any pending timeouts
+    if (userSpeakingTimeoutRef.current) {
+      clearTimeout(userSpeakingTimeoutRef.current);
+      userSpeakingTimeoutRef.current = null;
+    }
+    
+    if (responseTimeoutRef.current) {
+      clearTimeout(responseTimeoutRef.current);
+      responseTimeoutRef.current = null;
+    }
+    
     // Reset state
     setTranscript('');
     setResponseText('');
+    setPendingTranscript('');
     setConversationComplete(false);
+    setIsReceivingCoachMessage(false);
+    setUserHasResponded(false);
     
     AudioDebugLogger.log('All resources cleaned up');
   }, [stream, audioOutput, dataChannel, peerConnection, sessionId]);
 
   const handleCloseModal = useCallback(() => {
     console.log('Closing voice chat modal');
+    
+    // Notify parent that speaking state has ended
+    if (onSpeakingStateChange) {
+      onSpeakingStateChange(false);
+    }
+    
     cleanupResources();
     onClose();
-  }, [cleanupResources, onClose]);
+  }, [cleanupResources, onClose, onSpeakingStateChange]);
   
   const reconnect = () => {
     cleanupResources();
@@ -719,28 +1023,16 @@ Provide specific, actionable advice tailored to the athlete's needs.`;
     }
   }, [conversationComplete, onboardingMode]);
 
+  // Extract the inner content of the component
+  const renderContent = () => {
   return (
-    <Modal
-      visible={isVisible}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={handleCloseModal}
-    >
-      <View className="flex-1 justify-center items-center bg-black bg-opacity-50">
-        <View className="w-4/5 bg-white rounded-xl p-6">
-          <View className="flex-row justify-between items-center mb-4">
-            <Text className="text-xl font-bold">Voice Coach</Text>
-            <TouchableOpacity onPress={handleCloseModal}>
-              <FontAwesome name="close" size={24} color="#000" />
-            </TouchableOpacity>
-          </View>
-
+      <>
           {error ? (
             <View className="items-center justify-center py-4">
               <Text className="text-red-500 mb-3">{error}</Text>
               <View className="flex-row">
                 <TouchableOpacity 
-                  className="bg-blue-500 px-4 py-2 rounded-lg mr-2" 
+                className="bg-purple-500 px-4 py-2 rounded-lg mr-2" 
                   onPress={fallbackMode ? handleFallbackToText : onClose}
                 >
                   <Text className="text-white font-semibold">
@@ -760,48 +1052,76 @@ Provide specific, actionable advice tailored to the athlete's needs.`;
             </View>
           ) : (
             <>
-              <View className="items-center justify-center my-4">
+            <View className="items-center justify-center my-2">
                 {isConnecting ? (
                   <>
-                    <ActivityIndicator size="large" color="#3b82f6" />
-                    <Text className="mt-2 text-gray-600">Connecting to voice service...</Text>
+                  <ActivityIndicator size="large" color="#8B5CF6" />
+                  <Text className="mt-2 text-gray-600">Connecting to your coach...</Text>
                   </>
                 ) : isListening ? (
                   <>
-                    <View className="w-20 h-20 rounded-full bg-blue-500 justify-center items-center">
+                  {useModal && (
+                    <View className="w-20 h-20 rounded-full bg-purple-500 justify-center items-center">
                       <FontAwesome name="microphone" size={40} color="#fff" />
                     </View>
-                    <Text className="mt-4 text-center text-gray-700">
-                      {transcript ? "I'm listening..." : "Speak to your coach"}
-                    </Text>
-                    {conversationComplete && (
-                      <Text className="mt-2 text-green-600 font-bold">
-                        Onboarding complete!
-                      </Text>
-                    )}
+                  )}
                   </>
                 ) : null}
               </View>
 
-              {transcript ? (
-                <View className="my-2 p-3 bg-gray-100 rounded-lg">
-                  <Text className="font-bold mb-1">You said:</Text>
-                  <Text>{transcript}</Text>
-                </View>
-              ) : null}
-
-              {responseText ? (
-                <View className="my-2 p-3 bg-blue-100 rounded-lg">
-                  <Text className="font-bold mb-1">Coach:</Text>
-                  <Text>{responseText}</Text>
-                </View>
-              ) : null}
+            {/* Remove ALL message displays - both user and coach */}
             </>
           )}
+      </>
+    );
+  };
+
+  // Only render the component when it's visible
+  if (!isVisible) {
+    return null;
+  }
+
+  // Render with or without modal based on the useModal prop
+  if (useModal) {
+    return (
+      <Modal
+        visible={isVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={handleCloseModal}
+      >
+        <View className="flex-1 justify-center items-center bg-black bg-opacity-50">
+          <View className="w-4/5 bg-white rounded-xl p-6">
+            <View className="flex-row justify-between items-center mb-4">
+              <Text className="text-xl font-bold">Voice Coach</Text>
+              <TouchableOpacity onPress={handleCloseModal}>
+                <FontAwesome name="close" size={24} color="#000" />
+              </TouchableOpacity>
+            </View>
+
+            {renderContent()}
         </View>
       </View>
     </Modal>
   );
+  } else {
+    // Render inline without modal - with improved styling
+    return (
+      <View className="bg-transparent w-full">
+        {/* Close button for inline mode */}
+        <View className="items-end mb-2">
+          <TouchableOpacity 
+            onPress={handleCloseModal}
+            className="bg-gray-200 rounded-full w-8 h-8 items-center justify-center"
+          >
+            <FontAwesome name="close" size={16} color="#000" />
+          </TouchableOpacity>
+        </View>
+        
+        {renderContent()}
+      </View>
+    );
+  }
 };
 
 export default VoiceChat; 

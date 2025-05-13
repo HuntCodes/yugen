@@ -37,6 +37,7 @@ export function AppNavigator({ authLoading, session }: AppNavigatorProps) {
   const [profileLoading, setProfileLoading] = useState(!!session);
   const [hasCoach, setHasCoach] = useState<null | boolean>(null);
   const [onboardingComplete, setOnboardingComplete] = useState<boolean | null>(null);
+  const [currentCoachId, setCurrentCoachId] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -44,6 +45,7 @@ export function AppNavigator({ authLoading, session }: AppNavigatorProps) {
       if (session && session.user) {
         console.log('AppNavigator Effect: Fetching profile...');
         setProfileLoading(true);
+        setCurrentCoachId(undefined);
         
         try {
           // First, check if a profile exists (using get method to avoid error)
@@ -56,6 +58,7 @@ export function AppNavigator({ authLoading, session }: AppNavigatorProps) {
             console.error('Error in profile query:', error.message);
             setHasCoach(false);
             setOnboardingComplete(null);
+            setCurrentCoachId(undefined);
           } else if (!data || data.length === 0) {
             // No profile exists, create one
             console.log('Profile does not exist, creating...');
@@ -79,10 +82,12 @@ export function AppNavigator({ authLoading, session }: AppNavigatorProps) {
               // Set default values
               setHasCoach(false);
               setOnboardingComplete(null);
+              setCurrentCoachId(undefined);
             } catch (createErr: any) {
               console.error('Exception creating profile:', createErr.message);
               setHasCoach(false);
               setOnboardingComplete(null);
+              setCurrentCoachId(undefined);
             }
           } else {
             // Profile exists, use the first result (since we're not using maybeSingle)
@@ -90,11 +95,13 @@ export function AppNavigator({ authLoading, session }: AppNavigatorProps) {
             console.log('Profile found:', profile);
             setHasCoach(!!profile?.coach_id);
             setOnboardingComplete(!!profile?.onboarding_completed);
+            setCurrentCoachId(profile?.coach_id);
           }
         } catch (e: any) {
           console.error('Exception in profile fetch/create:', e.message);
           setHasCoach(false);
           setOnboardingComplete(null);
+          setCurrentCoachId(undefined);
         } finally {
           setProfileLoading(false);
           console.log('AppNavigator Effect: Profile fetched/created, profileLoading=false');
@@ -103,6 +110,7 @@ export function AppNavigator({ authLoading, session }: AppNavigatorProps) {
         console.log('AppNavigator Effect: No session, resetting state...');
         setHasCoach(null);
         setOnboardingComplete(null);
+        setCurrentCoachId(undefined);
         setProfileLoading(false); 
         console.log('AppNavigator Effect: State reset, profileLoading=false');
       }
@@ -122,15 +130,23 @@ export function AppNavigator({ authLoading, session }: AppNavigatorProps) {
     );
   }
 
-  console.log(`AppNavigator Render: Loading false, determining initial route... session=${session}, hasCoach=${hasCoach}, onboardingComplete=${onboardingComplete}`);
+  console.log(`AppNavigator Render: Loading false, determining initial route... session=${session}, hasCoach=${hasCoach}, onboardingComplete=${onboardingComplete}, currentCoachId=${currentCoachId}`);
 
   let initialRouteName: keyof RootStackParamList = 'Entry';
+  let routeInitialParams: any = undefined;
+
   if (session) {
     if (hasCoach === null) {
     } else if (hasCoach === false) {
       initialRouteName = 'CoachSelect';
     } else if (onboardingComplete === false) { 
       initialRouteName = 'VoiceOnboarding';
+      if (currentCoachId) {
+        routeInitialParams = { coachId: currentCoachId };
+        console.log(`AppNavigator Render: Setting VoiceOnboarding with coachId: ${currentCoachId}`);
+      } else {
+        console.warn('AppNavigator Render: hasCoach is true but currentCoachId is not set for VoiceOnboarding. Defaulting in VoiceOnboarding might occur.');
+      }
     } else if (onboardingComplete === true) {
       initialRouteName = 'MainApp';
     }
@@ -146,7 +162,11 @@ export function AppNavigator({ authLoading, session }: AppNavigatorProps) {
         <Stack.Screen name="SignUp" component={SignUpScreen} />
         <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
         <Stack.Screen name="CoachSelect" component={CoachSelect} />
-        <Stack.Screen name="VoiceOnboarding" component={VoiceOnboarding} />
+        <Stack.Screen 
+          name="VoiceOnboarding" 
+          component={VoiceOnboarding} 
+          initialParams={routeInitialParams}
+        />
         <Stack.Screen name="Onboarding" component={OnboardingChat} />
         <Stack.Screen name="MainApp" component={TabNavigator} />
       </Stack.Navigator>

@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, SafeAreaView } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { View, Text, Image, TouchableOpacity, StyleSheet, SafeAreaView, Platform, ActivityIndicator } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 import { COACHES } from '../../lib/constants/coaches';
@@ -11,6 +12,19 @@ import { useOnboardingConversation } from '../../hooks/useOnboardingConversation
 import { FontAwesome } from '@expo/vector-icons';
 import { LoadingOverlay } from '../../components/ui/LoadingOverlay';
 import { debugEnvironment } from '../../debug-env.js';
+import * as Animatable from 'react-native-animatable';
+import { useAuth } from '../../hooks/useAuth';
+import { coachStyles } from '../../config/coachingGuidelines';
+
+// Define delay function at module scope
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Define a bolder glow animation
+const glowAnimation = {
+  0: { opacity: 0.3, borderWidth: 2 },
+  0.5: { opacity: 1, borderWidth: 5 },
+  1: { opacity: 0.3, borderWidth: 2 },
+};
 
 // Image mapping for coaches
 const imageMap: Record<string, any> = {
@@ -19,139 +33,161 @@ const imageMap: Record<string, any> = {
   dathan: require('../../assets/dathan.jpg'),
 };
 
-// Use 'Onboarding' as the navigation type since 'VoiceOnboarding' isn't in RootStackParamList
-type VoiceOnboardingNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Onboarding'>;
+// Correctly type the navigation and route props using the imported RootStackParamList
+// 'VoiceOnboarding' is a valid key in the imported RootStackParamList
+type VoiceOnboardingNavigationProp = NativeStackNavigationProp<RootStackParamList, 'VoiceOnboarding'>;
+type VoiceOnboardingRouteProp = RouteProp<RootStackParamList, 'VoiceOnboarding'>;
 
 export function VoiceOnboarding() {
-  const [showVoiceChat, setShowVoiceChat] = useState(false);
+  const [voiceChatUIVisible, setVoiceChatUIVisible] = useState(false);
   const [voiceChatError, setVoiceChatError] = useState<string | null>(null);
   const [showTextChat, setShowTextChat] = useState(false);
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
   const [reconnectAttempts, setReconnectAttempts] = useState(0);
   const [isReconnecting, setIsReconnecting] = useState(false);
+  const [isCoachSpeaking, setIsCoachSpeaking] = useState(false);
+  const [voiceChatManuallyClosed, setVoiceChatManuallyClosed] = useState(false);
+  const [voiceChatActiveForAnimation, setVoiceChatActiveForAnimation] = useState(false);
+  const [voiceConversationActuallyCompleted, setVoiceConversationActuallyCompleted] = useState(false);
+  const [showContinueButtonStage, setShowContinueButtonStage] = useState(false);
+  const [finalVoiceHistory, setFinalVoiceHistory] = useState<{role: 'user' | 'coach'; content: string}[]>([]);
   
-  const route = useRoute();
+  const route = useRoute<VoiceOnboardingRouteProp>();
   const navigation = useNavigation<VoiceOnboardingNavigationProp>();
+  const { session } = useAuth();
   
-  // Get coachId from route params or use default
-  const coachId = (route.params as any)?.coachId || 'dathan';
+  const initialCoachId = route.params?.coachId || 'dathan';
+  const [currentCoachId, setCurrentCoachId] = useState(initialCoachId);
   
-  // Find coach data
-  const coach = COACHES.find(c => c.id === coachId) || { id: coachId, name: 'Coach' };
+  // Corrected coach object creation
+  const coachDataFromStyles = coachStyles[currentCoachId];
+  const coachDataFromConstants = COACHES.find(c => c.id === currentCoachId);
+
+  const coachName = coachDataFromStyles?.name || coachDataFromConstants?.name || 'Coach';
+  // Ensure avatar is always sourced from imageMap for require() compatibility
+  const coachAvatar = imageMap[currentCoachId] || imageMap['dathan']; 
+
+  const coach = {
+    id: currentCoachId,
+    name: coachName,
+    avatar: coachAvatar, // This is now consistently from imageMap
+  };
   
-  // Use voice chat hook for availability check
   const { 
     isVoiceChatAvailable, 
     checkVoiceChatAvailability 
   } = useVoiceChat();
   
-  // Use our custom hook to manage the conversation
   const {
-    isTyping,
     isProcessing,
-    isComplete,
+    isComplete: isHookProcessingComplete,
     processingStep,
     processingMessage,
-    markOnboardingComplete,
     completeConversation
-  } = useOnboardingConversation(coachId);
+  } = useOnboardingConversation(currentCoachId);
   
-  // Check if voice chat is available on component mount
+  useEffect(() => {
+    if (voiceChatUIVisible) {
+      setVoiceChatActiveForAnimation(true);
+    } else {
+      setVoiceChatActiveForAnimation(false);
+    }
+    console.log('[VOICE_ONBOARDING] Voice chat active:', voiceChatUIVisible);
+  }, [voiceChatUIVisible]);
+  
+  const handleSpeakingStateChange = useCallback((speaking: boolean, speaker?: 'user' | 'coach') => {
+    console.log('[VOICE_ONBOARDING] Speaking state changed to:', speaking, 'Speaker:', speaker || 'unknown');
+    setIsCoachSpeaking(speaking);
+  }, []);
+  
   useEffect(() => {
     const setup = async () => {
-      // Debug environment variables
       debugEnvironment();
-      
       await checkVoiceChatAvailability();
       setInitialLoadComplete(true);
     };
-    
     setup();
   }, [checkVoiceChatAvailability]);
   
-  // Start voice chat automatically once loaded
   useEffect(() => {
-    if (initialLoadComplete && isVoiceChatAvailable && !showVoiceChat && !showTextChat && !isComplete) {
-      console.log('[VOICE ONBOARDING] Auto-starting voice chat');
-      setShowVoiceChat(true);
+    if (initialLoadComplete && isVoiceChatAvailable && !voiceChatUIVisible && !showTextChat && !isHookProcessingComplete && !voiceChatManuallyClosed) {
+      // Auto-start logic is intentionally kept commented or removed
     }
-  }, [initialLoadComplete, isVoiceChatAvailable, showVoiceChat, showTextChat, isComplete]);
+  }, [initialLoadComplete, isVoiceChatAvailable, voiceChatUIVisible, showTextChat, isHookProcessingComplete, voiceChatManuallyClosed]);
   
-  // Handle voice chat close
   const handleCloseVoiceChat = useCallback(() => {
     console.log('[VOICE ONBOARDING] Voice chat closed');
-    setShowVoiceChat(false);
+    setVoiceChatUIVisible(false);
     setIsReconnecting(false);
+    setVoiceChatManuallyClosed(true); 
+    setVoiceChatActiveForAnimation(false);
+    setIsCoachSpeaking(false);
   }, []);
   
-  // Handle voice chat error with reconnect logic
   const handleVoiceChatError = useCallback((error: string) => {
     console.log('[VOICE ONBOARDING] Voice chat error:', error);
     setVoiceChatError(error);
-    
-    // Only try to reconnect if it's a connection error and we haven't tried too many times
-    if (error.includes('Connection failed') && reconnectAttempts < 2 && !isComplete) {
+    if (error.includes('Connection failed') && reconnectAttempts < 2 && !isHookProcessingComplete) {
       console.log(`[VOICE ONBOARDING] Attempting reconnect (${reconnectAttempts + 1}/3)...`);
       setIsReconnecting(true);
-      setShowVoiceChat(false);
-      
-      // Wait a moment before reconnecting
+      setVoiceChatUIVisible(false);
+      setVoiceChatActiveForAnimation(false);
       setTimeout(() => {
-        if (!isComplete) {
-          setShowVoiceChat(true);
+        if (!isHookProcessingComplete) {
+          setVoiceChatUIVisible(true);
           setReconnectAttempts(prev => prev + 1);
+          setVoiceChatActiveForAnimation(true);
         }
       }, 2000);
     } else {
-      // If we've tried reconnecting too many times or it's another type of error,
-      // offer the text chat option
-      if (!showTextChat && !isComplete) {
+      if (!showTextChat && !isHookProcessingComplete) {
         console.log('[VOICE ONBOARDING] Too many reconnect attempts or non-connection error. Suggesting text chat.');
-        setShowVoiceChat(false);
+        setVoiceChatUIVisible(false);
         setIsReconnecting(false);
+        setVoiceChatActiveForAnimation(false);
       }
     }
-  }, [reconnectAttempts, showTextChat, isComplete]);
+  }, [reconnectAttempts, showTextChat, isHookProcessingComplete]);
   
-  // Handle voice chat transcript completion
-  const handleVoiceTranscriptComplete = useCallback((
-    userTranscript: string, 
-    coachResponse: string, 
-    isComplete: boolean
+  const handleVoiceTranscriptComplete = useCallback(async (
+    _userTranscript: string, // Mark as unused if not needed directly here
+    _coachResponse: string, // Mark as unused
+    isVoiceChatDone: boolean,
+    fullVoiceChatHistory: {role: 'user' | 'coach'; content: string}[]
   ) => {
-    console.log('[VOICE ONBOARDING] Voice transcript received:', { 
-      transcriptLength: userTranscript.length,
-      isComplete
-    });
+    console.log('[VOICE_ONBOARDING] Transcript received from VoiceChat:', { isVoiceChatDone });
     
-    // If the conversation is complete, start the completion process
-    if (isComplete) {
-      console.log('[VOICE ONBOARDING] Voice conversation is COMPLETE - starting completion process');
-      // Turn off voice chat first
-      setShowVoiceChat(false);
-      // Then mark as complete to show the continue button
-      markOnboardingComplete();
-      // Reset reconnect attempts
-      setReconnectAttempts(0);
-      setIsReconnecting(false);
+    setVoiceChatActiveForAnimation(false); 
+    setVoiceChatUIVisible(false); 
+
+    if (isVoiceChatDone) {
+      console.log('[VOICE_ONBOARDING] Full Voice Chat History (at completion point):', JSON.stringify(fullVoiceChatHistory, null, 2));
+      setFinalVoiceHistory(fullVoiceChatHistory);
+      setVoiceConversationActuallyCompleted(true);
+      await delay(1000); // Wait 1 second for TTS to likely finish
+      setShowContinueButtonStage(true); // Then show the continue button
     }
-  }, [markOnboardingComplete]);
+  }, []); // Dependencies are correct
   
-  // Switch to text-based chat
   const handleSwitchToTextChat = () => {
     setShowTextChat(true);
-    setShowVoiceChat(false);
+    setVoiceChatUIVisible(false);
     setIsReconnecting(false);
-    navigation.navigate('Onboarding', { coachId });
+    setVoiceChatActiveForAnimation(false);
+    setIsCoachSpeaking(false);
+    // Navigation to 'Onboarding' (which is OnboardingChat) is fine as it's in RootStackParamList
+    navigation.navigate('Onboarding', { coachId: currentCoachId });
   };
   
-  // Start voice chat
   const handleStartVoiceChat = () => {
-    setShowVoiceChat(true);
+    setVoiceChatUIVisible(true);
+    setVoiceChatManuallyClosed(false); 
     setReconnectAttempts(0);
+    setVoiceChatActiveForAnimation(true);
+    setShowContinueButtonStage(false); // Reset this stage
+    setVoiceConversationActuallyCompleted(false); // Reset completion state
   };
   
-  // Calculate progress based on processing step
   const getProgressValue = () => {
     switch (processingStep) {
       case 'extracting': return 0.33;
@@ -162,53 +198,171 @@ export function VoiceOnboarding() {
     }
   };
   
+  const handleContinueAfterVoice = async () => {
+    setShowContinueButtonStage(false); // Hide the continue button
+    console.log('[VOICE_ONBOARDING] Continue button clicked. Processing voice conversation...');
+    if (finalVoiceHistory && finalVoiceHistory.length > 0) {
+      await completeConversation(finalVoiceHistory);
+    } else {
+      console.warn('[VOICE_ONBOARDING] Attempted to continue without voice history. Using hook default history or failing if none.');
+      await completeConversation(); // Allow hook to use its internally managed history if finalVoiceHistory is empty for some reason
+    }
+  };
+  
+  useEffect(() => {
+    if (route.params?.coachId && route.params.coachId !== currentCoachId) {
+      console.log(`[VOICE_ONBOARDING] coachId in route params (${route.params.coachId}) differs from current state (${currentCoachId}). Updating.`);
+      setCurrentCoachId(route.params.coachId);
+    }
+  }, [route.params?.coachId, currentCoachId]); // Added currentCoachId to dep array
+  
+  // API Key Check
+  const apiKey = environment.openAIApiKey;
+  useEffect(() => {
+    if (!apiKey) {
+        console.error("CRITICAL: OpenAI API Key (EXPO_PUBLIC_OPENAI_API_KEY from environment) is not configured. Voice chat will not function.");
+        // Potentially set an error state here to inform the user on the UI
+    }
+  }, [apiKey]);
+
+  // Automatic navigation on full completion
+  useEffect(() => {
+    if (isHookProcessingComplete && processingStep === 'complete') {
+      console.log('[VOICE_ONBOARDING] Full onboarding process complete. Navigating to MainApp/TrainingPlan...');
+      // Reset stack to MainApp, initial screen TrainingPlan if TabNavigator is configured for that
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'MainApp', params: { screen: 'TrainingPlan' } }], 
+      });
+      // Or if MainApp directly shows tabs and TrainingPlan is a tab name:
+      // navigation.navigate('MainApp', { screen: 'TrainingPlan' }); 
+    }
+  }, [isHookProcessingComplete, processingStep, navigation]);
+
+  if (!coach || !coach.avatar) { // Added check for coach.avatar just in case imageMap lookup fails
+    return (
+      <SafeAreaView style={styles.errorContainer}>
+        <Text style={styles.errorText}>Coach data or avatar not found for ID: {currentCoachId}.</Text>
+        <TouchableOpacity onPress={() => navigation.navigate('CoachSelect')} style={styles.button}>
+          <Text style={styles.buttonText}>Select Coach</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
+      <View style={styles.contentCentered}>
         <View style={styles.coachImageContainer}>
-          <Image
-            source={imageMap[coach.id]}
-            style={styles.coachImage}
-          />
+          <View
+            style={[
+              styles.coachImageWrapper,
+              voiceChatActiveForAnimation && styles.coachImageWrapperActive
+            ]}
+          >
+            <Animatable.Image
+              source={coach.avatar} // This should now be safe
+              animation={voiceChatActiveForAnimation ? "pulse" : undefined}
+              iterationCount="infinite"
+              duration={1000}
+              easing="ease-in-out"
+              style={styles.coachImage}
+            />
+            
+            {voiceChatActiveForAnimation && (
+              <Animatable.View 
+                animation="pulse" 
+                iterationCount="infinite" 
+                duration={1500}
+                style={styles.animatedBorder}
+              />
+            )}
+            
+            {voiceChatActiveForAnimation && (
+              <Animatable.View 
+                animation={glowAnimation} 
+                iterationCount="infinite" 
+                duration={1200}
+                style={styles.glowOverlay}
+              />
+            )}
+            
+            {voiceChatActiveForAnimation && (
+              <View style={styles.speakingIndicator}>
+                <Animatable.View 
+                  animation="pulse" 
+                  iterationCount="infinite" 
+                  duration={1000}
+                  style={styles.speakingDot}
+                />
+              </View>
+            )}
+          </View>
           <View style={styles.coachNameContainer}>
             <Text style={styles.coachName}>Coach {coach.name}</Text>
           </View>
         </View>
         
+        {voiceChatUIVisible && apiKey && (
+          <View style={styles.voiceChatContainer}>
+            <VoiceChat
+              isVisible={true} // voiceChatUIVisible controls this block
+              onClose={handleCloseVoiceChat}
+              coachId={currentCoachId}
+              apiKey={apiKey} // Pass the checked apiKey
+              onError={handleVoiceChatError}
+              onboardingMode={true}
+              onTranscriptComplete={handleVoiceTranscriptComplete}
+              onSpeakingStateChange={handleSpeakingStateChange}
+              useModal={false} // Render inline as per existing logic
+            />
+          </View>
+        )}
+        {/* Inform user if API key is missing and trying to show voice chat */}
+        {voiceChatUIVisible && !apiKey && (
+            <View style={styles.errorContainer}>
+                <Text style={styles.errorText}>OpenAI API Key not configured. Voice chat cannot start.</Text>
+            </View>
+        )}
+        
         <View style={styles.actionContainer}>
-          {!showVoiceChat && !isComplete && !isReconnecting && (
-            <TouchableOpacity 
-              style={styles.talkButton}
-              onPress={handleStartVoiceChat}
-              disabled={!isVoiceChatAvailable || isProcessing}
-            >
-              <FontAwesome name="microphone" size={24} color="#fff" style={styles.micIcon} />
-              <Text style={styles.talkButtonText}>Talk to your coach</Text>
-            </TouchableOpacity>
+          {/* Show "Talk to coach" button when voice chat is NOT visible, hook is NOT complete, and NOT reconnecting */}
+          {!voiceChatUIVisible && !isHookProcessingComplete && !isReconnecting && !showContinueButtonStage && (
+            <>
+              <Animatable.View animation="pulse" iterationCount={3} duration={1000}>
+                <TouchableOpacity 
+                  style={[styles.talkButton, (!isVoiceChatAvailable || isProcessing) && styles.talkButtonDisabled]}
+                  onPress={handleStartVoiceChat}
+                  disabled={!isVoiceChatAvailable || isProcessing}
+                  activeOpacity={0.7}
+                >
+                  <FontAwesome name="microphone" size={24} color="#fff" style={styles.micIcon} />
+                  <Text style={styles.talkButtonText}>Talk to your coach</Text>
+                </TouchableOpacity>
+              </Animatable.View>
+              {(voiceChatManuallyClosed || (!isVoiceChatAvailable && initialLoadComplete)) && (
+                <TouchableOpacity style={styles.textChatButton} onPress={handleSwitchToTextChat}>
+                  <Text style={styles.textChatButtonText}>Message your coach instead</Text>
+                </TouchableOpacity>
+              )}
+            </>
           )}
           
           {isReconnecting && (
             <View style={styles.reconnectingContainer}>
-              <Text style={styles.reconnectingText}>Reconnecting to voice service...</Text>
+              <Text style={styles.reconnectingText}>Reconnecting to your coach...</Text>
             </View>
           )}
           
-          {!showVoiceChat && !isComplete && (
-            <TouchableOpacity 
-              style={styles.textChatButton}
-              onPress={handleSwitchToTextChat}
-            >
-              <Text style={styles.textChatButtonText}>or use chat messaging instead</Text>
-            </TouchableOpacity>
-          )}
-          
-          {isComplete && !isProcessing && (
-            <TouchableOpacity
-              style={styles.continueButton}
-              onPress={completeConversation}
-            >
-              <Text style={styles.continueButtonText}>Continue</Text>
-            </TouchableOpacity>
+          {/* Show "Continue" button at the new stage */}
+          {showContinueButtonStage && !isProcessing && !isHookProcessingComplete && (
+            <View style={styles.continueContainer}>
+              <Text style={styles.title}>Ready to Proceed?</Text>
+              <Text style={styles.subtitle}>Your voice chat with {coach.name} is complete.</Text>
+              <TouchableOpacity onPress={handleContinueAfterVoice} style={styles.talkButton}>
+                <Text style={styles.talkButtonText}>Continue</Text>
+              </TouchableOpacity>
+            </View>
           )}
           
           {voiceChatError && !isReconnecting && (
@@ -220,21 +374,12 @@ export function VoiceOnboarding() {
       </View>
       
       <LoadingOverlay 
-        visible={isProcessing}
+        visible={isProcessing} // Correct prop name is 'visible'
         message={processingMessage}
         progress={getProgressValue()}
       />
       
-      {/* Voice Chat */}
-      <VoiceChat
-        isVisible={showVoiceChat}
-        onClose={handleCloseVoiceChat}
-        coachId={coachId}
-        apiKey={environment.openAIApiKey}
-        onError={handleVoiceChatError}
-        onboardingMode={true}
-        onTranscriptComplete={handleVoiceTranscriptComplete}
-      />
+      <StatusBar style="dark" />
     </SafeAreaView>
   );
 }
@@ -244,21 +389,95 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'white',
   },
-  content: {
+  contentCentered: {
     flex: 1,
     padding: 20,
-    justifyContent: 'space-between',
+    justifyContent: 'center', // Center vertically
   },
   coachImageContainer: {
     alignItems: 'center',
-    marginTop: 40,
+    marginBottom: 40,
+  },
+  coachImageWrapper: {
+    position: 'relative',
+    borderRadius: 85,
+    padding: 3,
+    borderWidth: 2,
+    borderColor: '#F5F5F5',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.2,
+        shadowRadius: 2,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  coachImageWrapperActive: {
+    borderWidth: 4,
+    borderColor: '#8B5CF6',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#8B5CF6',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.7,
+        shadowRadius: 20,
+      },
+      android: {
+        elevation: 10,
+        borderColor: '#8B5CF6',
+      },
+    }),
+  },
+  animatedBorder: {
+    position: 'absolute',
+    top: -5,
+    left: -5,
+    right: -5,
+    bottom: -5,
+    borderRadius: 100,
+    borderWidth: 3,
+    borderColor: '#8B5CF6',
   },
   coachImage: {
     width: 160,
     height: 160,
     borderRadius: 80,
-    borderWidth: 2,
-    borderColor: '#F5F5F5',
+  },
+  glowOverlay: {
+    position: 'absolute',
+    top: -8,
+    left: -8,
+    right: -8,
+    bottom: -8,
+    borderRadius: 100,
+    backgroundColor: 'transparent',
+    borderWidth: 5,
+    borderColor: 'rgba(139, 92, 246, 0.5)',
+  },
+  speakingIndicator: {
+    position: 'absolute',
+    bottom: 5,
+    right: 5,
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 3,
+    borderWidth: 1,
+    borderColor: '#8B5CF6',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 3,
+  },
+  speakingDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#4CAF50',
   },
   coachNameContainer: {
     marginTop: 16,
@@ -268,17 +487,36 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#000000',
   },
+  voiceChatContainer: {
+    marginTop: 30,
+    marginBottom: 20,
+    width: '100%',
+    paddingHorizontal: 5,
+  },
   actionContainer: {
     marginBottom: 40,
+    // Added to ensure it doesn't overlap other elements if content is too tall
+    // alignItems: 'center', // if you want buttons centered
   },
   talkButton: {
     backgroundColor: '#000000',
     borderRadius: 12,
     paddingVertical: 16,
+    paddingHorizontal: 30,
+    minWidth: 250,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  talkButtonDisabled: {
+    backgroundColor: '#888888',
+    opacity: 0.7,
   },
   micIcon: {
     marginRight: 10,
@@ -295,13 +533,20 @@ const styles = StyleSheet.create({
   textChatButtonText: {
     color: '#757575',
     fontSize: 16,
+    textDecorationLine: 'underline',
   },
   continueButton: {
-    backgroundColor: '#000000',
+    backgroundColor: '#000000', // Kept black as per original style for this button
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    marginTop: 20, // Added margin for spacing
   },
   continueButtonText: {
     color: 'white',
@@ -313,6 +558,8 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 6,
     backgroundColor: '#FFEBEE',
+    width: '100%', // Ensure it takes full width for better visibility if error occurs in main flow
+    alignItems: 'center', // Center text
   },
   errorText: {
     color: '#D32F2F',
@@ -324,7 +571,65 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   reconnectingText: {
-    color: '#2196F3',
+    color: '#8B5CF6',
     fontSize: 16,
+  },
+  continueContainer: {
+    // flex: 1, // This might make it take full screen, adjust as needed
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+    marginTop: 20, // Add some margin if not taking full flex
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    textAlign: 'center',
+    color: '#333',
+  },
+  subtitle: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 30,
+    color: '#555',
+    paddingHorizontal: 20,
+  },
+  voiceButton: {
+    backgroundColor: '#7C3AED', // Purple from original styles
+    paddingVertical: 15,
+    paddingHorizontal: 30,
+    borderRadius: 30,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    marginBottom: 20,
+    alignItems: 'center', // Ensure text is centered if not already
+  },
+  voiceButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  completionContainer: {
+    // flex: 1, // Adjust as needed
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+    marginTop: 20, // Add some margin
+  },
+  button: { // General button style, e.g., for error screen
+    backgroundColor: '#7C3AED',
+    padding: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
   },
 }); 
