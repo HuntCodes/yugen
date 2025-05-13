@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, Modal, TouchableOpacity, ActivityIndicator, Alert, Platform } from 'react-native';
+import { View, Text, Modal, TouchableOpacity, ActivityIndicator, Alert, Platform, NativeModules, LogBox } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import Constants from 'expo-constants';
@@ -12,15 +12,8 @@ import {
   MediaStream,
 } from 'react-native-webrtc';
 
-// Import InCallManager conditionally
-let InCallManager: any = null;
-try {
-  // Dynamic import to prevent crashes if module isn't available
-  InCallManager = require('react-native-incall-manager').default;
-  console.log('InCallManager loaded:', !!InCallManager);
-} catch (err) {
-  console.warn('Failed to load InCallManager:', err);
-}
+// Import InCallManager for speaker control
+import InCallManager from 'react-native-incall-manager';
 
 import { useAuth } from '../../hooks/useAuth';
 import { checkMicrophonePermission, processVoiceInput } from '../../lib/voice/voiceUtils';
@@ -30,6 +23,26 @@ import { coachStyles } from '../../config/coachingGuidelines';
 
 // Import the saveMessage function
 import { saveMessage } from '../../services/chat/chatService';
+
+// Create a Logger helper for debugging audio issues
+const AudioDebugLogger = {
+  log: (message: string, data?: any) => {
+    const logMessage = `🔊 [AUDIO_DEBUG_JS] ${message}`;
+    if (data) {
+      console.log(logMessage, data);
+    } else {
+      console.log(logMessage);
+    }
+  },
+  error: (message: string, error?: any) => {
+    const errorMessage = `❌ [AUDIO_DEBUG_JS] ${message}`;
+    if (error) {
+      console.error(errorMessage, error);
+    } else {
+      console.error(errorMessage);
+    }
+  }
+};
 
 // Define types for data received from WebRTC
 interface TranscriptData {
@@ -65,64 +78,47 @@ const VoiceChat = ({ isVisible, onClose, coachId, apiKey, onError, onboardingMod
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [ephemeralKey, setEphemeralKey] = useState<string | null>(null);
   const [conversationComplete, setConversationComplete] = useState(false);
-  const [inCallManagerInitialized, setInCallManagerInitialized] = useState(false);
   
   const auth = useAuth();
   const userId = auth.session?.user?.id;
 
-  // Configure audio to use speaker
+  // Configure audio to use speaker and initialize InCallManager
   useEffect(() => {
     const configureAudio = async () => {
       try {
+        AudioDebugLogger.log(`Starting audio configuration. Platform: ${Platform.OS}`);
+        
+        // Initialize InCallManager
+        AudioDebugLogger.log('Initializing InCallManager...');
+        InCallManager.start({media: 'audio'});
+        
+        // Force speaker mode on
+        AudioDebugLogger.log('Forcing speaker mode ON with InCallManager');
+        InCallManager.setForceSpeakerphoneOn(true);
+        
         // Configure expo-av audio mode
+        AudioDebugLogger.log('Setting audio mode with expo-av...');
         await Audio.setAudioModeAsync({
           allowsRecordingIOS: true,
           playsInSilentModeIOS: true,
-          staysActiveInBackground: false,
+          staysActiveInBackground: true, // Keep audio session active in background
           interruptionModeIOS: 1, // Do not mix with other apps' audio
           interruptionModeAndroid: 1, // Do not mix with other apps' audio
           playThroughEarpieceAndroid: false, // Use speaker, not earpiece
           shouldDuckAndroid: true,
         });
         
-        // Force audio through speaker using native methods if available
-        if (Platform.OS === 'android') {
-          // For Android, we can use the expo-av setting (already set above)
-          console.log('Using expo-av to force speaker on Android');
-        } else {
-          console.log('Trying alternative speaker methods for iOS');
+        // Log permission status for debugging
+        try {
+          const permissionStatus = await Audio.getPermissionsAsync();
+          AudioDebugLogger.log('Audio permission status:', permissionStatus);
+        } catch (routeErr) {
+          AudioDebugLogger.error('Failed to get permission status', routeErr);
         }
         
-        // If InCallManager is properly loaded, use it as a fallback
-        if (InCallManager && typeof InCallManager.start === 'function' && !inCallManagerInitialized) {
-          try {
-            console.log('Initializing InCallManager');
-            InCallManager.start({
-              media: 'audio', 
-              ringback: '', 
-              auto: true, 
-            });
-            
-            if (typeof InCallManager.setForceSpeakerphoneOn === 'function') {
-              InCallManager.setForceSpeakerphoneOn(true);
-              setInCallManagerInitialized(true);
-              console.log('Audio mode configured for speaker output with InCallManager');
-            } else {
-              console.warn('InCallManager.setForceSpeakerphoneOn is not a function');
-            }
-          } catch (inCallErr) {
-            console.error('Error with InCallManager methods:', inCallErr);
-          }
-        } else {
-          console.warn('InCallManager not properly loaded or initialized already');
-          console.log('InCallManager availability:', {
-            loaded: !!InCallManager,
-            hasStartMethod: InCallManager && typeof InCallManager.start === 'function',
-            alreadyInitialized: inCallManagerInitialized
-          });
-        }
+        AudioDebugLogger.log('Audio mode configured for speaker output');
       } catch (err) {
-        console.error('Failed to configure audio mode:', err);
+        AudioDebugLogger.error('Failed to configure audio mode:', err);
       }
     };
 
@@ -132,6 +128,13 @@ const VoiceChat = ({ isVisible, onClose, coachId, apiKey, onError, onboardingMod
 
     return () => {
       // Reset audio mode when component unmounts
+      AudioDebugLogger.log('Stopping InCallManager and resetting audio mode...');
+      
+      // Disable speaker mode and stop InCallManager
+      InCallManager.setForceSpeakerphoneOn(false);
+      InCallManager.stop();
+      
+      // Reset expo-av audio mode
       Audio.setAudioModeAsync({
         allowsRecordingIOS: false,
         playsInSilentModeIOS: false,
@@ -140,20 +143,11 @@ const VoiceChat = ({ isVisible, onClose, coachId, apiKey, onError, onboardingMod
         interruptionModeAndroid: 1, // Do not mix with other apps' audio
         playThroughEarpieceAndroid: true, // Reset to default
         shouldDuckAndroid: true,
-      }).catch(err => console.error('Failed to reset audio mode:', err));
+      }).catch(err => AudioDebugLogger.error('Failed to reset audio mode:', err));
       
-      // Stop InCallManager with null check
-      try {
-        if (InCallManager && typeof InCallManager.stop === 'function' && inCallManagerInitialized) {
-          console.log('Stopping InCallManager');
-          InCallManager.stop();
-          setInCallManagerInitialized(false);
-        }
-      } catch (err) {
-        console.error('Error stopping InCallManager:', err);
-      }
+      AudioDebugLogger.log('Audio mode reset');
     };
-  }, [isVisible, inCallManagerInitialized]);
+  }, [isVisible]);
 
   // Update error state and notify parent component
   const setErrorWithNotification = (errorMessage: string) => {
@@ -256,15 +250,18 @@ const VoiceChat = ({ isVisible, onClose, coachId, apiKey, onError, onboardingMod
       setSessionId(newSessionId);
       
       // Set up WebRTC connection
+      AudioDebugLogger.log('Creating RTCPeerConnection...');
       const configuration = { 
         iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
       };
       
       // Create peer connection
       const pc = new RTCPeerConnection(configuration);
+      AudioDebugLogger.log('RTCPeerConnection created');
       setPeerConnection(pc);
       
       // Create data channel for sending/receiving events
+      AudioDebugLogger.log('Creating data channel...');
       const dc = pc.createDataChannel('oai-events');
       setDataChannel(dc);
       
@@ -272,7 +269,7 @@ const VoiceChat = ({ isVisible, onClose, coachId, apiKey, onError, onboardingMod
       // Use direct property assignment for event handlers
       // @ts-ignore - WebRTC TypeScript definitions don't match exactly
       dc.onopen = () => {
-        console.log('Data channel opened');
+        AudioDebugLogger.log('Data channel opened');
         
         // Update the session with instructions once connected
         if (dc.readyState === 'open') {
@@ -284,7 +281,7 @@ const VoiceChat = ({ isVisible, onClose, coachId, apiKey, onError, onboardingMod
       dc.onmessage = (event: any) => {
         try {
           const message = JSON.parse(event.data);
-          console.log('Received data channel message:', message);
+          AudioDebugLogger.log('Received data channel message:', message);
           
           // Handle different types of messages
           if (message.type === 'transcript') {
@@ -293,7 +290,7 @@ const VoiceChat = ({ isVisible, onClose, coachId, apiKey, onError, onboardingMod
             handleMessage(message);
           }
         } catch (err) {
-          console.error('Error parsing data channel message:', err);
+          AudioDebugLogger.error('Error parsing data channel message:', err);
         }
       };
       
@@ -301,18 +298,24 @@ const VoiceChat = ({ isVisible, onClose, coachId, apiKey, onError, onboardingMod
       // @ts-ignore - WebRTC TypeScript definitions don't match exactly
       pc.onicecandidate = (event: any) => {
         if (event.candidate) {
-          console.log('ICE candidate:', event.candidate);
+          AudioDebugLogger.log('ICE candidate:', event.candidate);
         }
       };
       
       // Handle connection state changes
       // @ts-ignore - WebRTC TypeScript definitions don't match exactly
       pc.onconnectionstatechange = () => {
-        console.log('Connection state:', pc.connectionState);
+        AudioDebugLogger.log('Connection state changed:', pc.connectionState);
         if (pc.connectionState === 'connected') {
+          AudioDebugLogger.log('WebRTC connection established successfully');
           setIsConnecting(false);
           setIsListening(true);
+          
+          // Ensure speaker mode is on once connection is established
+          AudioDebugLogger.log('Re-applying speaker mode when WebRTC connection is established');
+          InCallManager.setForceSpeakerphoneOn(true);
         } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+          AudioDebugLogger.error('WebRTC connection failed or disconnected');
           setErrorWithNotification('Connection failed or disconnected');
           setIsConnecting(false);
           setIsListening(false);
@@ -322,39 +325,62 @@ const VoiceChat = ({ isVisible, onClose, coachId, apiKey, onError, onboardingMod
       // Handle incoming audio tracks
       // @ts-ignore - WebRTC TypeScript definitions don't match exactly
       pc.ontrack = (event: any) => {
-        console.log('Received track:', event.track.kind);
+        AudioDebugLogger.log('Received track:', event.track.kind);
         if (event.track.kind === 'audio') {
+          // Check if track is enabled and active
+          AudioDebugLogger.log('Audio track enabled:', event.track.enabled);
+          AudioDebugLogger.log('Audio track readyState:', event.track.readyState);
+          
           // Create a new MediaStream with the received audio track
           const audioStream = new MediaStream([event.track]);
           setAudioOutput(audioStream);
           
-          console.log('Audio output stream created');
+          AudioDebugLogger.log('Audio output stream created');
           
-          // On iOS and Android, this MediaStream is automatically routed to the
-          // phone's audio output. Due to WebRTC implementation in React Native,
-          // the audio will be played through the active audio output (speaker if we set the
-          // audio mode with playThroughEarpieceAndroid: false)
+          // Critical timing: Force speaker mode when audio track is received
+          AudioDebugLogger.log('Forcing speaker mode ON immediately after receiving audio track');
+          InCallManager.setForceSpeakerphoneOn(true);
+          
+          // Set a timeout to force speaker mode again after a short delay
+          // This helps address timing issues where WebRTC might override our settings
+          setTimeout(() => {
+            AudioDebugLogger.log('Re-applying speaker mode after delay');
+            InCallManager.setForceSpeakerphoneOn(true);
+          }, 500);
         }
       };
       
       // Get access to the microphone
+      AudioDebugLogger.log('Requesting user media for microphone...');
       const userMedia = await mediaDevices.getUserMedia({
         audio: true,
         video: false
       });
       
+      AudioDebugLogger.log('Microphone access granted');
       setStream(userMedia);
       
+      // Check if streams are active
+      const audioTracks = userMedia.getAudioTracks();
+      for (const track of audioTracks) {
+        AudioDebugLogger.log(`Audio track "${track.label}" enabled:`, track.enabled);
+        AudioDebugLogger.log(`Audio track "${track.label}" readyState:`, track.readyState);
+      }
+      
       // Add local audio track to the peer connection
+      AudioDebugLogger.log('Adding local audio tracks to peer connection...');
       userMedia.getTracks().forEach(track => {
         pc.addTrack(track, userMedia);
       });
       
       // Create and set local description (offer)
+      AudioDebugLogger.log('Creating offer...');
       const offer = await pc.createOffer({});
+      AudioDebugLogger.log('Setting local description...');
       await pc.setLocalDescription(offer);
       
       // Send the offer to OpenAI's realtime API
+      AudioDebugLogger.log('Sending SDP offer to OpenAI...');
       const sdpResponse = await fetch(`https://api.openai.com/v1/realtime?model=gpt-4o-mini-realtime-preview-2024-12-17`, {
         method: 'POST',
         headers: {
@@ -369,9 +395,11 @@ const VoiceChat = ({ isVisible, onClose, coachId, apiKey, onError, onboardingMod
       }
       
       // Get the answer SDP from OpenAI
+      AudioDebugLogger.log('Received SDP answer from OpenAI');
       const answerSdp = await sdpResponse.text();
       
       // Set the remote description with the answer from OpenAI
+      AudioDebugLogger.log('Setting remote description...');
       const answer = new RTCSessionDescription({
         type: 'answer',
         sdp: answerSdp
@@ -379,12 +407,12 @@ const VoiceChat = ({ isVisible, onClose, coachId, apiKey, onError, onboardingMod
       
       await pc.setRemoteDescription(answer);
       
-      console.log('WebRTC connection established');
+      AudioDebugLogger.log('WebRTC setup complete');
       setIsConnecting(false);
       setIsListening(true);
       
     } catch (err) {
-      console.error('WebRTC setup error:', err);
+      AudioDebugLogger.error('WebRTC setup error:', err);
       setErrorWithNotification(`Failed to set up voice chat: ${err instanceof Error ? err.message : 'Unknown error'}`);
       setIsConnecting(false);
       
@@ -483,6 +511,21 @@ Provide specific, actionable advice tailored to the athlete's needs.`;
       console.error('Error configuring AI instructions:', err);
     }
   };
+
+  // Add a periodic check to ensure speaker mode stays on
+  useEffect(() => {
+    if (!isListening) return;
+    
+    // Set up a periodic check to ensure speaker is still active
+    const interval = setInterval(() => {
+      if (isListening) {
+        AudioDebugLogger.log('Periodic check: Re-applying speaker mode with InCallManager');
+        InCallManager.setForceSpeakerphoneOn(true);
+      }
+    }, 1000); // Check every second
+    
+    return () => clearInterval(interval);
+  }, [isListening]);
 
   // Helper function to save messages to Supabase
   const saveMessageToSupabase = async (
@@ -602,23 +645,31 @@ Provide specific, actionable advice tailored to the athlete's needs.`;
   }, []);
 
   const cleanupResources = useCallback(() => {
-    console.log('Cleaning up voice chat resources');
+    AudioDebugLogger.log('Cleaning up voice chat resources');
     if (stream) {
-      stream.getTracks().forEach(track => track.stop());
+      stream.getTracks().forEach(track => {
+        AudioDebugLogger.log(`Stopping track: ${track.kind}`);
+        track.stop();
+      });
       setStream(null);
     }
     
     if (audioOutput) {
-      audioOutput.getTracks().forEach(track => track.stop());
+      audioOutput.getTracks().forEach(track => {
+        AudioDebugLogger.log(`Stopping audio output track: ${track.kind}`);
+        track.stop();
+      });
       setAudioOutput(null);
     }
     
     if (dataChannel) {
+      AudioDebugLogger.log('Closing data channel');
       dataChannel.close();
       setDataChannel(null);
     }
     
     if (peerConnection) {
+      AudioDebugLogger.log('Closing peer connection');
       peerConnection.close();
       setPeerConnection(null);
     }
@@ -628,22 +679,18 @@ Provide specific, actionable advice tailored to the athlete's needs.`;
       setSessionId(null);
     }
     
-    // Stop InCallManager when cleaning up with null check
-    try {
-      if (InCallManager && typeof InCallManager.stop === 'function' && inCallManagerInitialized) {
-        console.log('Stopping InCallManager in cleanup');
-        InCallManager.stop();
-        setInCallManagerInitialized(false);
-      }
-    } catch (err) {
-      console.error('Error stopping InCallManager in cleanup:', err);
-    }
+    // Stop InCallManager
+    AudioDebugLogger.log('Stopping InCallManager');
+    InCallManager.setForceSpeakerphoneOn(false);
+    InCallManager.stop();
     
     // Reset state
     setTranscript('');
     setResponseText('');
     setConversationComplete(false);
-  }, [stream, audioOutput, dataChannel, peerConnection, sessionId, inCallManagerInitialized]);
+    
+    AudioDebugLogger.log('All resources cleaned up');
+  }, [stream, audioOutput, dataChannel, peerConnection, sessionId]);
 
   const handleCloseModal = useCallback(() => {
     console.log('Closing voice chat modal');

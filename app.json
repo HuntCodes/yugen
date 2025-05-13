@@ -31,7 +31,12 @@
     "ios": {
       "supportsTablet": true,
       "bitcode": false,
-      "bundleIdentifier": "com.hunt333.yugen"
+      "bundleIdentifier": "com.hunt333.yugen",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "This app needs access to your microphone for the voice chat feature.",
+        "NSCameraUsageDescription": "This app needs access to your camera.",
+        "UIBackgroundModes": ["audio"]
+      }
     },
     "android": {
       "adaptiveIcon": {
