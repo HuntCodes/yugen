@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, ScrollView, SafeAreaView, Image, Alert, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { View, ScrollView, SafeAreaView, Image, Alert, ActivityIndicator, TouchableOpacity, StyleSheet } from 'react-native';
 import { Text } from '../../components/ui/StyledText';
 import { useNavigation, useScrollToTop } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
@@ -18,6 +18,10 @@ import { useMileageData } from '../../hooks/training/useMileageData';
 import { fetchTrainingPlan, applyPlanUpdate } from '../../services/plan/planService';
 import { fetchChatHistory } from '../../services/chat/chatService';
 import { PlanUpdate } from '../../types/planUpdate';
+import { Feather } from '@expo/vector-icons';
+
+// Import the actual DailyVoiceChat component
+import DailyVoiceChat from '../../components/chat/DailyVoiceChat';
 
 // Map of coach IDs to images
 const coachImages = {
@@ -63,6 +67,7 @@ export function HomeScreen() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [waitingForResponse, setWaitingForResponse] = useState(false);
   const [joinDate, setJoinDate] = useState<Date | null>(null);
+  const [isDailyVoiceModeActive, setIsDailyVoiceModeActive] = useState(false);
   
   const { isTyping, error: chatError, processUserMessage } = useChatFlow();
   const weeklyMileage = useMileageData(upcomingSessions);
@@ -263,6 +268,24 @@ export function HomeScreen() {
     setWaitingForResponse(false);
   };
 
+  const handleDailyVoiceSessionComplete = useCallback((conversationHistory: ChatMessage[], confirmedPlanUpdate?: PlanUpdate) => {
+    console.log('Daily voice session complete. History:', conversationHistory);
+    if (confirmedPlanUpdate) {
+      console.log('Plan update confirmed:', confirmedPlanUpdate);
+    }
+    setIsDailyVoiceModeActive(false); 
+  }, []);
+
+  const handleDailyVoiceError = useCallback((errorMessage: string) => {
+    console.error('Daily voice chat error:', errorMessage);
+    Alert.alert("Voice Chat Error", errorMessage || "An unexpected error occurred in voice chat.");
+    setIsDailyVoiceModeActive(false); 
+  }, []);
+
+  const handleDailyVoiceClose = useCallback(() => {
+    setIsDailyVoiceModeActive(false);
+  }, []);
+
   if (loading) {
     return (
       <SafeAreaView className="flex-1 bg-[#FBF7F6] px-6 justify-center items-center">
@@ -280,40 +303,87 @@ export function HomeScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-[#FBF7F6]">
-      <ScrollView ref={scrollRef} className="flex-1">
-        <View className="px-6 pt-4 pb-2">
-          <View className="flex-row items-center mb-1">
-            <View className="w-16 h-16 rounded-full bg-purple-500 items-center justify-center mr-4">
-              <Text className="text-white text-3xl font-bold">
-                {profile?.nickname?.charAt(0) || profile?.email?.charAt(0) || 'J'}
-              </Text>
-            </View>
-            <View className="flex-1">
-              <Text className="text-2xl font-bold text-purple-500">
-                {getGreeting()}, {profile?.nickname || profile?.email?.split('@')[0] || 'Runner'}
-              </Text>
-              <Text className="text-gray-500">On member since {formatJoinYear(joinDate)}</Text>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#F3F4F6' }}>
+      <ScrollView ref={scrollRef} contentContainerStyle={{ paddingBottom: 20 }}>
+        <View style={{ marginBottom: 32, marginTop: 16 }}>
+          <View className="px-6 pt-4 pb-2">
+            <View className="flex-row items-center mb-1">
+              <View className="w-16 h-16 rounded-full bg-purple-500 items-center justify-center mr-4">
+                <Text className="text-white text-3xl font-bold">
+                  {profile?.nickname?.charAt(0) || profile?.email?.charAt(0) || 'J'}
+                </Text>
+              </View>
+              <View className="flex-1">
+                <Text className="text-2xl font-bold text-purple-500">
+                  {getGreeting()}, {profile?.nickname || profile?.email?.split('@')[0] || 'Runner'}
+                </Text>
+                <Text className="text-gray-500">On member since {formatJoinYear(joinDate)}</Text>
+              </View>
             </View>
           </View>
         </View>
         
-        <TrainingCardMini 
-          sessions={upcomingSessions}
-          onSessionUpdate={handleSessionUpdate}
-          navigation={navigation}
-        />
-        
-        <View className="mx-6 mt-2 mb-4">
-          <Text className="font-bold text-xl mb-3">Chat with Coach</Text>
-          <ChatMini
-            coachName={coach.name}
-            coachId={coach.id}
-            imageMap={coachImages}
-            onMessageSend={handleSendMessage}
-            isTyping={isTyping || waitingForResponse}
-            messages={chatMessages}
+        <View style={{ marginBottom: 32 }}>
+          <TrainingCardMini 
+            sessions={upcomingSessions}
+            onSessionUpdate={handleSessionUpdate}
+            navigation={navigation}
           />
+        </View>
+        
+        <View style={{ ...styles.chatSectionContainer, marginBottom: 32, marginTop: 0 /* Resetting marginTop as marginBottom is now used */ }}> 
+          {isDailyVoiceModeActive ? (
+            <DailyVoiceChat
+              coachId={coach.id}
+              coachName={coach.name}
+              coachAvatar={coachImages[coach.id as keyof typeof coachImages] || require('../../assets/placeholder.png')}
+              coachVibe={coach.vibe}
+              coachPhilosophy={coach.philosophy}
+              coachPersonalityBlurb={coach.personalityBlurb}
+              userId={session?.user?.id || ''}
+              profile={profile}
+              currentTrainingPlan={upcomingSessions}
+              onSessionComplete={handleDailyVoiceSessionComplete}
+              onError={handleDailyVoiceError}
+              onClose={handleDailyVoiceClose}
+              isVisible={isDailyVoiceModeActive}
+              // onSpeakingStateChange={(isSpeaking, speaker) => console.log('Speaker:', speaker, 'isSpeaking:', isSpeaking)}
+            />
+          ) : (
+            <View>
+              <View style={styles.voiceModeToggleContainer}>
+                {coach && coachImages[coach.id as keyof typeof coachImages] && (
+                  <View className="relative mb-2">
+                    <Image source={coachImages[coach.id as keyof typeof coachImages]} style={styles.coachAvatarSmall} />
+                    <View 
+                      className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white"
+                    />
+                  </View>
+                )}
+                <TouchableOpacity 
+                  className="flex-row items-center bg-purple-500 py-3 px-5 rounded-full shadow-md mb-2.5" 
+                  onPress={() => setIsDailyVoiceModeActive(true)}
+                >
+                  <Feather name="mic" size={24} color="white" />
+                  <Text className="text-white ml-2 text-base font-bold font-inter">Check in with your coach</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => {/* This will switch to text chat, which is the default when isDailyVoiceModeActive is false */ setIsDailyVoiceModeActive(false);}}>
+                   {/* Text chat is the default, so this button might not be needed if voice is overlay or separate section */}
+                </TouchableOpacity>
+              </View>
+               <ChatMini 
+                coachName={coach.name}
+                coachId={coach.id}
+                imageMap={coachImages as Record<string, any>}
+                onMessageSend={handleSendMessage}
+                isTyping={isTyping || waitingForResponse} 
+                messages={chatMessages}
+              />
+              {/* <TouchableOpacity onPress={() => setIsDailyVoiceModeActive(true)} style={styles.switchToVoiceMessageButton}> 
+                  <Text style={styles.switchToVoiceMessageText}>Or, talk to your coach instead</Text>
+              </TouchableOpacity> */}
+            </View>
+          )}
         </View>
         
         <View className="px-6 pt-2 pb-4">
@@ -330,4 +400,90 @@ export function HomeScreen() {
       </ScrollView>
     </SafeAreaView>
   );
-} 
+}
+
+// Add styles for the new elements
+const styles = StyleSheet.create({
+  chatSectionContainer: {
+    marginHorizontal: 16,
+    // marginTop: 24, // Will be controlled by inline style
+    // backgroundColor: 'white', // ChatMini might have its own background
+    // borderRadius: 12,
+    // padding: 16,
+    // shadowColor: '#000',
+    // shadowOffset: { width: 0, height: 1 },
+    // shadowOpacity: 0.05,
+    // shadowRadius: 2,
+    // elevation: 2,
+  },
+  voiceModeToggleContainer: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    marginBottom: 32,
+    padding: 12,
+    backgroundColor: 'white',
+    borderRadius: 12,
+  },
+  coachAvatarSmall: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    // marginBottom: 8, // Removed as wrapper will handle margin
+    borderWidth: 2,
+    borderColor: 'white',
+  },
+  /* voiceButton: { // No longer needed, Tailwind classes used directly
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#5D3FD3', 
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 25,
+    elevation: 3, 
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    marginBottom: 10, 
+  },
+  voiceButtonText: { // No longer needed, Tailwind classes used directly
+    color: 'white',
+    marginLeft: 10,
+    fontSize: 16,
+    fontWeight: 'bold',
+  }, */
+  switchToVoiceMessageButton: {
+    alignItems: 'center',
+    marginTop: 12,
+    paddingVertical: 8, 
+  },
+  switchToVoiceMessageText: {
+    color: '#5D3FD3', 
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  dailyVoiceChatContainer: {
+    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 450, // Same as ChatMini for consistency during placeholder phase
+    backgroundColor: '#f0f0f0',
+    borderRadius: 12,
+  },
+  placeholderText: {
+    fontSize: 16,
+    color: '#555',
+    marginBottom: 20,
+  },
+  endVoiceChatButton: {
+    backgroundColor: '#FF6347', // Tomato color for end button
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    borderRadius: 20,
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+}); 

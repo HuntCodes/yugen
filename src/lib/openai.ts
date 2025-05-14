@@ -1,5 +1,5 @@
 import Constants from 'expo-constants';
-import { getTrainingPhase, updateSessionDatesToCurrentYear, generateFallbackPlan, extractTrainingFrequency, parseTextPlanToSessions } from './utils/training';
+import { getTrainingPhase, generateFallbackPlan, extractTrainingFrequency, parseTextPlanToSessions } from './utils/training';
 import { TrainingSession, OnboardingData } from '../types/training';
 
 // this is the file where the INITAL training plan is generated
@@ -10,18 +10,34 @@ export { TrainingSession, OnboardingData };
 export async function generateTrainingPlan(onboarding: OnboardingData): Promise<TrainingSession[]> {
   console.log('Starting training plan generation with data:', onboarding);
   
-  // Ensure API key exists in multiple formats
-  const apiKey = Constants.expoConfig?.extra?.openaiApiKey || 
-                 Constants.expoConfig?.extra?.OPENAI_API_KEY ||
-                 (Constants.manifest as any)?.extra?.OPENAI_API_KEY;
+  // More robust API key retrieval
+  let apiKey: string | undefined = undefined;
+  const envApiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
+
+  if (envApiKey) {
+    apiKey = envApiKey.replace(/["']/g, '').trim();
+  } else {
+    const configKey = Constants.expoConfig?.extra?.openaiApiKey || 
+                   Constants.expoConfig?.extra?.OPENAI_API_KEY ||
+                   // @ts-ignore - This is a fallback for older Expo versions
+                   (Constants.manifest as any)?.extra?.OPENAI_API_KEY;
+    if (configKey) {
+      apiKey = String(configKey).replace(/["']/g, '').trim();
+    }
+  }
                  
   if (!apiKey) {
-    console.error('OpenAI API key not found in any format');
+    console.error('OpenAI API key not found in process.env or Expo constants');
     throw new Error('OpenAI API key not found');
   }
 
   // Calculate current week dates for context
-  const today = new Date();
+  // Use userStartDate from onboarding data if available, otherwise default to server's current date
+  const today = onboarding.userStartDate ? new Date(onboarding.userStartDate) : new Date();
+  // Ensure time is set to beginning of day for consistency if using userStartDate string
+  if (onboarding.userStartDate) {
+    today.setUTCHours(0, 0, 0, 0); // Use UTC to avoid timezone shifts from string conversion
+  }
   
   // Calculate the next Sunday
   const nextSunday = new Date(today);
@@ -157,8 +173,8 @@ Fill out the training sessions for each day in the date range specified above. F
         })) as TrainingSession[];
       }
       
-      // Fix any outdated dates by updating them to current year
-      sessions = updateSessionDatesToCurrentYear(sessions, true) as TrainingSession[];
+      // updateSessionDatesToCurrentYear call removed as dates should be correct from generation
+      // sessions = updateSessionDatesToCurrentYear(sessions, true) as TrainingSession[];
       
       console.log('Successfully parsed training plan with sessions:', sessions.length);
       return sessions;
@@ -176,8 +192,9 @@ Fill out the training sessions for each day in the date range specified above. F
         id: session.id || crypto.randomUUID() // Ensure ID is set
       })) as TrainingSession[];
       
-      // Fix any outdated dates by updating them to current year
-      return updateSessionDatesToCurrentYear(sessions, true) as TrainingSession[];
+      // updateSessionDatesToCurrentYear call removed
+      // return updateSessionDatesToCurrentYear(sessions, true) as TrainingSession[];
+      return sessions; // Return the sessions directly
     }
   } catch (err) {
     console.error('Error in generateTrainingPlan:', err);

@@ -7,7 +7,9 @@ import { OnboardingInput } from './components/OnboardingInput';
 import { ContinueButton } from './components/ContinueButton';
 import { LoadingOverlay } from '../../components/ui/LoadingOverlay';
 import { useOnboardingConversation } from '../../hooks/useOnboardingConversation';
-import { useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../../navigation/AppNavigator';
 import { ChatMessage } from '../../types/chat';
 import { COACHES } from '../../lib/constants/coaches';
 import { VoiceChat } from '../../components/chat';
@@ -29,6 +31,7 @@ export function OnboardingChat() {
   const [voiceChatAvailable, setVoiceChatAvailable] = useState<boolean | null>(null);
   
   const route = useRoute();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   
   // Get coachId from route params or use default
   const coachId = (route.params as any)?.coachId || 'dathan';
@@ -57,7 +60,7 @@ export function OnboardingChat() {
     conversationHistory,
     isTyping,
     isProcessing,
-    isComplete,
+    isComplete: isHookProcessingComplete,
     message,
     processingStep,
     processingMessage,
@@ -74,7 +77,7 @@ export function OnboardingChat() {
   
   // Handle sending a message
   const handleSend = () => {
-    if (!input.trim() || isTyping || isProcessing || isComplete) return;
+    if (!input.trim() || isTyping || isProcessing || isHookProcessingComplete) return;
     
     const userMessage = input.trim();
     setInput('');
@@ -111,7 +114,7 @@ export function OnboardingChat() {
     });
     
     // Don't process if already complete or processing
-    if (isComplete || isProcessing) {
+    if (isHookProcessingComplete || isProcessing) {
       console.log('[ONBOARDING] Ignoring transcript - already complete or processing');
       return;
     }
@@ -130,7 +133,7 @@ export function OnboardingChat() {
         completeConversation();
       }, 500);
     }
-  }, [isComplete, isProcessing, sendMessage, markOnboardingComplete, completeConversation]);
+  }, [isHookProcessingComplete, isProcessing, sendMessage, markOnboardingComplete, completeConversation]);
   
   // Calculate progress based on processing step
   const getProgressValue = () => {
@@ -151,6 +154,17 @@ export function OnboardingChat() {
   
   // Determine keyboard offset - needed for proper keyboard avoidance
   const keyboardOffset = 0;
+  
+  // Automatic navigation on full completion
+  useEffect(() => {
+    if (isHookProcessingComplete && processingStep === 'complete') {
+      console.log('[ONBOARDING_CHAT] Full onboarding process complete. Navigating to MainApp/HomeScreen...');
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'MainApp', params: { screen: 'HomeScreen' } }], 
+      });
+    }
+  }, [isHookProcessingComplete, processingStep, navigation]);
   
   return (
     <Screen keyboardVerticalOffset={keyboardOffset}>
@@ -176,7 +190,7 @@ export function OnboardingChat() {
               value={input}
               onChangeText={setInput}
               onSend={handleSend}
-              disabled={isTyping || isProcessing || isComplete}
+              disabled={isTyping || isProcessing || isHookProcessingComplete}
               isTyping={isTyping}
               planLoading={isProcessing}
             />
@@ -189,7 +203,7 @@ export function OnboardingChat() {
           </View>
         )}
         
-        {isComplete && !isProcessing && (
+        {isHookProcessingComplete && !isProcessing && (
           <View className="mt-4 px-4">
             <ContinueButton 
               onContinue={handleContinue}
@@ -206,7 +220,7 @@ export function OnboardingChat() {
       />
       
       {/* Voice Chat Modal - hide from text chat flow */}
-      {false && (
+      {false && showVoiceChat && environment.openAIApiKey && (
       <VoiceChat
         isVisible={showVoiceChat}
         onClose={handleCloseVoiceChat}

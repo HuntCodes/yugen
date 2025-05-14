@@ -228,14 +228,14 @@ export function VoiceOnboarding() {
   // Automatic navigation on full completion
   useEffect(() => {
     if (isHookProcessingComplete && processingStep === 'complete') {
-      console.log('[VOICE_ONBOARDING] Full onboarding process complete. Navigating to MainApp/TrainingPlan...');
-      // Reset stack to MainApp, initial screen TrainingPlan if TabNavigator is configured for that
+      console.log('[VOICE_ONBOARDING] Full onboarding process complete. Navigating to MainApp/HomeScreen...');
+      // Reset stack to MainApp, initial screen HomeScreen if TabNavigator is configured for that
       navigation.reset({
         index: 0,
-        routes: [{ name: 'MainApp', params: { screen: 'TrainingPlan' } }], 
+        routes: [{ name: 'MainApp', params: { screen: 'HomeScreen' } }], 
       });
-      // Or if MainApp directly shows tabs and TrainingPlan is a tab name:
-      // navigation.navigate('MainApp', { screen: 'TrainingPlan' }); 
+      // Or if MainApp directly shows tabs and HomeScreen is a tab name:
+      // navigation.navigate('MainApp', { screen: 'HomeScreen' }); 
     }
   }, [isHookProcessingComplete, processingStep, navigation]);
 
@@ -340,11 +340,10 @@ export function VoiceOnboarding() {
                   <Text style={styles.talkButtonText}>Talk to your coach</Text>
                 </TouchableOpacity>
               </Animatable.View>
-              {(voiceChatManuallyClosed || (!isVoiceChatAvailable && initialLoadComplete)) && (
-                <TouchableOpacity style={styles.textChatButton} onPress={handleSwitchToTextChat}>
-                  <Text style={styles.textChatButtonText}>Message your coach instead</Text>
-                </TouchableOpacity>
-              )}
+              {/* Ensure this button is shown if the parent conditional block is active */}
+              <TouchableOpacity style={styles.textChatButton} onPress={handleSwitchToTextChat}>
+                <Text style={styles.textChatButtonText}>Message your coach instead</Text>
+              </TouchableOpacity>
             </>
           )}
           

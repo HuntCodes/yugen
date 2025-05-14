@@ -204,6 +204,9 @@ export function useOnboardingConversation(initialCoachId: string) {
       console.log('[ONBOARDING_CONVERSATION] Generating training plan...');
       setProcessingStep('generating_plan');
       
+      // Determine user's current date in YYYY-MM-DD format
+      const userCurrentDate = new Date().toISOString().split('T')[0];
+
       // Construct OnboardingData from profileToSave. This might need adjustment based on OnboardingData definition.
       // For now, assume profileToSave is compatible or contains enough info.
       // Critical: Ensure all fields required by `OnboardingData` are present in `profileToSave` or mapped correctly.
@@ -221,6 +224,7 @@ export function useOnboardingConversation(initialCoachId: string) {
         injury_history: profileToSave.injury_history || 'none',
         shoe_size: profileToSave.shoe_size || undefined,
         clothing_size: profileToSave.clothing_size || undefined,
+        userStartDate: userCurrentDate, // Add user's current date
       };
 
       try {

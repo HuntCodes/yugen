@@ -83,7 +83,14 @@ export async function handleOnboardingConversation(
     conversationHistory.push({ role: 'coach', content: coachMessage });
 
     // Check if onboarding is complete (determined by the presence of a specific phrase)
-    const isComplete = coachMessage.includes("Perfect! I've got all the information I need");
+    const lowerCoachMessage = coachMessage.toLowerCase();
+    const completionPhrases = [
+      "i've got everything i need",
+      "i've got all the information i need",
+      "got all the information i need",
+      "perfect! i've got all the information i need" // Added the original prompted phrase in lowercase
+    ];
+    const isComplete = completionPhrases.some(phrase => lowerCoachMessage.includes(phrase));
 
     return {
       message: coachMessage,

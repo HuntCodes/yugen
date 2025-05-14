@@ -23,18 +23,19 @@ export interface TrainingSession {
 
 export interface OnboardingData {
   goalType: string;
-  raceDate?: string;
-  raceDistance?: string;
-  experienceLevel: string;
-  trainingFrequency: string;
-  trainingPreferences?: string;
-  nickname?: string;
-  current_mileage?: string;
+  raceDistance?: string; // e.g., "5k", "10k", "half_marathon", "marathon", "ultra"
+  raceDate?: string; // YYYY-MM-DD
+  experienceLevel: string; // e.g., "beginner", "intermediate", "advanced"
+  current_mileage: string; // Store as string, e.g. "20"
+  trainingFrequency: string; // e.g., "3 days per week"
+  units: 'km' | 'miles';
+  nickname: string;
+  trainingPreferences?: string; // Free text for user preferences
   injury_history?: string;
+  schedule_constraints?: string;
   shoe_size?: string;
   clothing_size?: string;
-  schedule_constraints?: string;
-  units?: string;
+  userStartDate?: string; // YYYY-MM-DD, user's local date at time of onboarding
 }
 
 export interface PlanUpdate {

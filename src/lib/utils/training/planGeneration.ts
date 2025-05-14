@@ -295,220 +295,113 @@ export function generateWeeklyFallbackPlan(daysPerWeek: number = 3, weeklyVolume
  */
 export function parseTextPlanToSessions(planText: string, defaultUnits: string = 'km'): TrainingSession[] {
   console.log('Parsing text plan with default units:', defaultUnits);
-  
-  // Variables to track current day being processed
-  let currentWeekNumber = 1;
-  let currentDayOfWeek: number | null = null;
-  let currentDate: string | null = null;
-  let currentType: string | null = null;
-  let currentDistance = 0;
-  let currentTime = 0;
-  let currentNotes = '';
-  let currentPhase = 'Base';
-  
+
   const sessions: TrainingSession[] = [];
-  
-  // Track if we're currently parsing a day's content
-  let processingDay = false;
-  
-  // Lines of the plan text (remove any HTML and normalize line breaks)
+  let currentWeekNumber = 0;
+  let currentPhase = 'Base'; // Default phase
+  let columnOrder: string[] = [];
+
   const lines = planText
     .replace(/<[^>]*>/g, '') // Remove HTML tags
-    .replace(/\r\n/g, '\n') // Normalize line breaks
+    .replace(/\r\n|\r/g, '\n') // Normalize all line breaks to \n
     .split('\n')
     .map(line => line.trim())
-    .filter(line => line.length > 0); // Remove empty lines
-  
-  // Reset day variables when we start a new day
-  const resetDayVariables = () => {
-    currentDayOfWeek = null;
-    currentDate = null;
-    currentType = null;
-    currentDistance = 0;
-    currentTime = 0;
-    currentNotes = '';
-  };
-  
-  // Add the current session to our list if valid
-  const addCurrentSession = () => {
-    if (currentDate && currentType && currentType.toLowerCase() !== 'rest' && currentType.toLowerCase() !== 'rest day') {
-      // Parse date into a proper date object
-      try {
-        const dateObj = new Date(currentDate);
-        
-        // Determine day of week if not already set
-        if (!currentDayOfWeek) {
-          const day = dateObj.getDay(); // 0 = Sunday, 1 = Monday, etc.
-          currentDayOfWeek = day === 0 ? 7 : day; // Convert 0 to 7 (Sunday)
-        }
-        
-        // Create session object
-        sessions.push(createTrainingSession(
-          currentWeekNumber,
-          currentDate,
-          currentType,
-          currentDistance,
-          currentTime,
-          currentNotes,
-          currentDayOfWeek,
-          currentPhase
-        ));
-      } catch (err) {
-        console.error('Error parsing date:', currentDate, err);
-      }
-    }
-    resetDayVariables();
-  };
-  
-  // Look for week markers and date markers to track where we are in the plan
+    .filter(line => line.length > 0);
+
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
+    const line = lines[i];
     const lowerLine = line.toLowerCase();
-    
-    // Check for week markers
-    if (lowerLine.includes('week') && !lowerLine.includes('weekly') && (lowerLine.includes('week 1') || lowerLine.includes('week 2'))) {
-      // If we were processing a day, complete it before moving to a new week
-      if (processingDay) {
-        addCurrentSession();
-        processingDay = false;
-      }
-      
-      // Extract week number
-      const weekMatch = lowerLine.match(/week\s+(\d+)/i);
-      if (weekMatch && weekMatch[1]) {
-        currentWeekNumber = parseInt(weekMatch[1], 10);
-      }
-      
-      // Look for phase information
-      if (lowerLine.includes('phase')) {
-        const phaseMatch = line.match(/phase:?\s*([^,)]+)/i);
+
+    // Detect WEEK block (allows for markdown headers like ### WEEK 1)
+    const weekMatch = lowerLine.match(/(?:^#*\s*)?week\s*(\d+)/i);
+    if (weekMatch && weekMatch[1]) {
+      currentWeekNumber = parseInt(weekMatch[1], 10);
+      columnOrder = []; // Reset column order for new week/table
+      currentPhase = 'Base'; // Reset to default phase for a new week block
+
+      // Attempt to find Phase on the same line or next few lines
+      let phaseFound = false;
+      for (let j = 0; j <= 3 && (i + j) < lines.length; j++) {
+        const searchLine = lines[i+j];
+        // Regex for Phase: case-insensitive, handles optional bolding, extracts phase name before parentheses or commas
+        const phaseMatch = searchLine.match(/(?:\*\*)?Phase:(?:\*\*)?\s*([^\(\[\n,]+)/i);
         if (phaseMatch && phaseMatch[1]) {
           currentPhase = phaseMatch[1].trim();
+          phaseFound = true;
+          // If phase is found on a different line than week, advance i to avoid re-processing phase line as something else
+          if (j > 0) i = i + j;
+          break;
         }
       }
-      
-      continue;
+      if(phaseFound) console.log(`Detected Week: ${currentWeekNumber}, Phase: ${currentPhase}`);
+      else console.log(`Detected Week: ${currentWeekNumber}, Phase: ${currentPhase} (default)`);
+      continue; // Move to next line after processing week/phase info
     }
     
-    // Check for dates (YYYY-MM-DD format or other common formats)
-    const dateMatch = line.match(/\b(\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}\/\d{2,4}|\d{1,2}-\d{1,2}-\d{2,4})\b/);
-    if (dateMatch) {
-      // If we were processing a day, complete it before starting a new one
-      if (processingDay) {
-        addCurrentSession();
-      }
-      
-      currentDate = normalizeDate(dateMatch[1]);
-      processingDay = true;
-      
-      // Look for day of week
-      const dayOfWeekMatch = line.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun)\b/i);
-      if (dayOfWeekMatch) {
-        currentDayOfWeek = convertDayToNumber(dayOfWeekMatch[1]);
-      }
-      
+    // Skip lines that are just "---", decorative, or section summaries that aren't table data
+    if (line.match(/^---+$/) || lowerLine.startsWith('total volume for week') || lowerLine.startsWith('summary:')) {
+        continue;
+    }
+
+    // Detect Markdown table header row (e.g., | Date | Type | ... |)
+    // And then the separator (e.g., |---|---|...|)
+    if (line.startsWith('|') && line.endsWith('|') && lines[i+1] && lines[i+1].startsWith('|') && lines[i+1].includes('---')) {
+      columnOrder = line.split('|').map(header => header.trim().toLowerCase()).filter(h => h);
+      // console.log('Detected table headers:', columnOrder);
+      i++; // Skip the separator line for the next iteration
       continue;
     }
-    
-    // Check for day names without dates
-    const dayNameMatch = line.match(/^(monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun)[:\s]/i);
-    if (dayNameMatch && !processingDay) {
-      // If we were processing a day, complete it before starting a new one
-      if (processingDay) {
-        addCurrentSession();
-      }
-      
-      currentDayOfWeek = convertDayToNumber(dayNameMatch[1]);
-      processingDay = true;
-      
-      // Try to infer date from week number and day of week
-      if (currentWeekNumber && currentDayOfWeek) {
-        // Assume week 1 starts on current week's Monday
-        const today = new Date();
-        const daysSinceMonday = (today.getDay() || 7) - 1;
-        const thisMonday = new Date(today);
-        thisMonday.setDate(today.getDate() - daysSinceMonday);
+
+    // Process Markdown table data row
+    if (line.startsWith('|') && line.endsWith('|') && columnOrder.length > 0 && currentWeekNumber > 0) {
+      const cells = line.split('|').map(cell => cell.trim()).slice(1, -1); // Get content cells, remove first/last empty from split
+
+      if (cells.length === columnOrder.length) {
+        let sessionData: any = { phase: currentPhase, week: currentWeekNumber };
         
-        // Calculate the date for this session
-        const sessionDate = new Date(thisMonday);
-        sessionDate.setDate(thisMonday.getDate() + (currentWeekNumber - 1) * 7 + (currentDayOfWeek - 1));
-        
-        currentDate = sessionDate.toISOString().split('T')[0];
-      }
-      
-      continue;
-    }
-    
-    // If we're processing a day, look for workout details
-    if (processingDay) {
-      // Type
-      if (lowerLine.includes('type:') || lowerLine.startsWith('type ') || lowerLine.startsWith('session type')) {
-        currentType = extractValue(line);
-        continue;
-      }
-      
-      // Distance
-      if (lowerLine.includes('distance:') || lowerLine.startsWith('distance ')) {
-        const distanceText = extractValue(line);
-        currentDistance = parseDistance(distanceText, defaultUnits);
-        continue;
-      }
-      
-      // Time
-      if (lowerLine.includes('time:') || lowerLine.startsWith('time ') || lowerLine.includes('duration:')) {
-        const timeText = extractValue(line);
-        currentTime = parseTime(timeText);
-        continue;
-      }
-      
-      // Notes
-      if (lowerLine.includes('notes:') || lowerLine.startsWith('notes ')) {
-        currentNotes = extractValue(line);
-        continue;
-      }
-      
-      // Check if this might be a shorthand format line with type/distance/notes together
-      if (!currentType && (
-        lowerLine.includes('run') || 
-        lowerLine.includes('workout') || 
-        lowerLine.includes('rest') || 
-        lowerLine.includes('cross') || 
-        lowerLine.includes('training')
-      )) {
-        // This might be a combined line like "Easy Run: 5 km, 30 minutes"
-        const typeParts = line.split(':');
-        if (typeParts.length > 0) {
-          currentType = typeParts[0].trim();
-          
-          // If there's more after the type, try to extract distance and notes
-          if (typeParts.length > 1) {
-            const detailsPart = typeParts.slice(1).join(':').trim();
+        columnOrder.forEach((colName, idx) => {
+          const cellValue = cells[idx];
+          if (colName.includes('date')) sessionData.date = normalizeDate(cellValue);
+          else if (colName.includes('type')) sessionData.type = cellValue;
+          // Ensure distance and time text are captured even if they are just numbers
+          else if (colName.includes('distance')) sessionData.distanceText = cellValue; 
+          else if (colName.includes('time')) sessionData.timeText = cellValue; 
+          else if (colName.includes('notes')) sessionData.notes = cellValue;
+        });
+
+        if (sessionData.date && sessionData.type && sessionData.type.toLowerCase() !== 'rest' && sessionData.type.toLowerCase() !== 'rest day' && !sessionData.type.toLowerCase().includes('total volume')) {
+          try {
+            const dateObj = new Date(sessionData.date);
+            const dayOfWeek = dateObj.getDay() === 0 ? 7 : dateObj.getDay(); // Sunday is 7
+
+            const distance = sessionData.distanceText ? parseDistance(sessionData.distanceText, defaultUnits) : 0;
+            const time = sessionData.timeText ? parseTime(sessionData.timeText) : 0;
             
-            // Try to extract distance
-            const distanceMatches = detailsPart.match(/(\d+(?:\.\d+)?)\s*(km|mi|mile|miles)/i);
-            if (distanceMatches) {
-              currentDistance = parseDistance(distanceMatches[0], defaultUnits);
+            // Only add session if essential data is present (e.g. type is not empty)
+            if(sessionData.type && sessionData.type.trim() !== '' ){
+              sessions.push(createTrainingSession(
+                currentWeekNumber,
+                sessionData.date,
+                sessionData.type,
+                distance,
+                time,
+                sessionData.notes || '',
+                dayOfWeek,
+                currentPhase
+              ));
+            } else {
+              // console.log('Skipping row due to empty type:', cells);
             }
-            
-            // Try to extract time
-            const timeMatches = detailsPart.match(/(\d+(?::\d+)?)\s*(min|minutes|hrs|hours)/i);
-            if (timeMatches) {
-              currentTime = parseTime(timeMatches[0]);
-            }
-            
-            // Use the rest as notes
-            currentNotes = detailsPart;
+          } catch (err) {
+            console.error('Error creating session from Markdown row:', sessionData, err);
           }
         }
+      } else {
+        // console.log('Cell count mismatch. Expected:', columnOrder.length, 'Got:', cells.length, 'Row:', line);
       }
     }
   }
-  
-  // Add the final session if we were processing one
-  if (processingDay) {
-    addCurrentSession();
-  }
-  
+
   console.log('Parsed sessions:', sessions.length);
   return sessions;
 }

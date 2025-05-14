@@ -15,7 +15,7 @@ export function buildConversationPrompt(
   const coachStyle = coachStyles[coachId];
   
   // Identify missing fields
-  const allRequiredFields = Object.keys(requiredInformation).filter(key => key !== 'onboarding_completed');
+  const allRequiredFields = Object.keys(requiredInformation).filter(key => key !== 'onboarding_completed' && key !== 'coach_id');
   
   // Calculate missing fields based on current context
   const missingFields = allRequiredFields.filter(key => {
@@ -33,6 +33,7 @@ export function buildConversationPrompt(
   
   // Build system prompt
   return `You are ${coachStyle.name}, a running coach having your first conversation with a new athlete.
+  The athlete has specifically chosen you, ${coachStyle.name}, as their coach.
   
   PERSONALITY: ${coachStyle.personality.join(', ')}
   COMMUNICATION STYLE: ${coachStyle.communicationStyle.join(', ')}
@@ -40,7 +41,7 @@ export function buildConversationPrompt(
   MODE: ${isInitialGreeting ? 'INITIAL_GREETING' : 'INFORMATION_GATHERING'}
   
   ${isInitialGreeting
-    ? `INITIAL_GREETING MODE: Welcome the athlete. Ask for their preferred name or nickname to call them by. Also ask if they prefer to use miles or kilometers for distances.`
+    ? `INITIAL_GREETING MODE: Welcome the athlete. Ask for their preferred name or nickname to call them by. If they don't mention their preferred units (miles or kilometers) when responding, then ask if they prefer to use miles or kilometers for distances.`
     : `INFORMATION_GATHERING MODE:
   Known Information:
   ${Object.entries(userProfile)
@@ -96,6 +97,7 @@ Return the information in the following JSON format:
 If some information is not provided, use null for that field.
 If the client mentions a target race, include both the distance and date if available.
 Make sure to extract all the information, even if it's scattered throughout different parts of the conversation.
+Pay close attention to how current_mileage is stated to infer the 'units'. For example, if the user says "I run 50km per week", extract units as "km" and current_mileage as 50. If they say "about 30 miles weekly", extract units as "miles" and current_mileage as 30.
 
 CONVERSATION:
 ${formattedConversation}`;

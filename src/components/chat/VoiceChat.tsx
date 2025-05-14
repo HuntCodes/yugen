@@ -564,6 +564,12 @@ Provide specific, actionable advice tailored to the athlete's needs.`;
           instructions: instructions,
           input_audio_transcription: { // Enable user input transcription
             model: 'whisper-1' 
+          },
+          turn_detection: { // Added turn_detection configuration
+            type: "semantic_vad",
+            eagerness: "medium",
+            create_response: false,
+            interrupt_response: true // Assuming this should also be true, consistent with DailyVoiceChat
           }
         }
       };
@@ -656,7 +662,7 @@ Provide specific, actionable advice tailored to the athlete's needs.`;
             dataChannel.send(JSON.stringify(responseCreateEvent));
             setIsReceivingCoachMessage(true); // Coach is about to speak
             setUserHasResponded(false); // Reset for the next user turn (though setUserHasResponded might be redundant now)
-          }
+      }
         }, 1000); // Adjust delay as needed
       }
     } else {
@@ -704,7 +710,7 @@ Provide specific, actionable advice tailored to the athlete's needs.`;
         responseTimeoutRef.current = setTimeout(() => {
           if (!userHasResponded) {
             console.log('[VOICE_CHAT] No user response detected after coach message timeout');
-          }
+      }
         }, 5000);
       }
       // Fallback timeout if punctuation is missed but there's a pause
@@ -845,7 +851,7 @@ Provide specific, actionable advice tailored to the athlete's needs.`;
               if (onTranscriptComplete) {
                 const lastUserTranscript = transcript || '';
                 onTranscriptComplete(lastUserTranscript, finalMessageForCompletion, true, newHistory);
-              }
+          }
               stopListening();
               setPendingTranscript('');
               setIsReceivingCoachMessage(false);
@@ -898,7 +904,7 @@ Provide specific, actionable advice tailored to the athlete's needs.`;
       });
       setTranscript(''); // Clear live transcript state after adding to history
       setFinalUserUtterance(null); // Reset for next utterance
-    }
+      }
   }, [finalUserUtterance]); // Removed isSpeaking from dependencies
 
   // Clean up when component unmounts or modal closes
@@ -1064,7 +1070,7 @@ Provide specific, actionable advice tailored to the athlete's needs.`;
                     <View className="w-20 h-20 rounded-full bg-purple-500 justify-center items-center">
                       <FontAwesome name="microphone" size={40} color="#fff" />
                     </View>
-                  )}
+                    )}
                   </>
                 ) : null}
               </View>

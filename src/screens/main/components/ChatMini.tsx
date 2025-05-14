@@ -41,10 +41,15 @@ export function ChatMini({ coachName, coachId, imageMap, onMessageSend, isTyping
   return (
     <View className="bg-white rounded-xl p-4 h-[450px]">
       <View className="flex-row items-center mb-4">
-        <Image 
-          source={imageMap[coachId]} 
-          className="w-10 h-10 rounded-full mr-3"
-        />
+        <View className="relative mr-3">
+          <Image 
+            source={imageMap[coachId]} 
+            className="w-10 h-10 rounded-full"
+          />
+          <View 
+            className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"
+          />
+        </View>
         <Text className="font-semibold text-black">{coachName}</Text>
       </View>
       
