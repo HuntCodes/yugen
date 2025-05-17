@@ -565,11 +565,16 @@ Provide specific, actionable advice tailored to the athlete's needs.`;
           input_audio_transcription: { // Enable user input transcription
             model: 'whisper-1' 
           },
-          turn_detection: { // Added turn_detection configuration
-            type: "semantic_vad",
-            eagerness: "medium",
-            create_response: false,
-            interrupt_response: true // Assuming this should also be true, consistent with DailyVoiceChat
+          input_audio_noise_reduction: {
+            "type": "near_field"
+          },
+          turn_detection: {
+            "type": "server_vad",
+            "threshold": 0.8,
+            "prefix_padding_ms": 500,
+            "silence_duration_ms": 500,
+            "create_response": true,
+            "interrupt_response": true
           }
         }
       };

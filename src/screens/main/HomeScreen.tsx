@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, ScrollView, SafeAreaView, Image, Alert, ActivityIndicator, TouchableOpacity, StyleSheet } from 'react-native';
 import { Text } from '../../components/ui/StyledText';
-import { useNavigation, useScrollToTop } from '@react-navigation/native';
+import { useNavigation, useScrollToTop, useFocusEffect } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { TabParamList } from '../../navigation/TabNavigator';
 import { supabase } from '../../lib/supabase';
@@ -19,6 +19,10 @@ import { fetchTrainingPlan, applyPlanUpdate } from '../../services/plan/planServ
 import { fetchChatHistory } from '../../services/chat/chatService';
 import { PlanUpdate } from '../../types/planUpdate';
 import { Feather } from '@expo/vector-icons';
+
+// Import js-joda for robust local date handling
+import { LocalDate, DayOfWeek, TemporalAdjusters, ZoneId } from '@js-joda/core';
+import '@js-joda/timezone'; // Required for ZoneId.systemDefault() and other timezone operations
 
 // Import the actual DailyVoiceChat component
 import DailyVoiceChat from '../../components/chat/DailyVoiceChat';
@@ -72,6 +76,15 @@ export function HomeScreen() {
   const { isTyping, error: chatError, processUserMessage } = useChatFlow();
   const weeklyMileage = useMileageData(upcomingSessions);
 
+  // State for managing the plan update process
+  const [planUpdateStatus, setPlanUpdateStatus] = useState({
+    needsUpdate: false,
+    isLoading: false,
+    message: '',
+    targetDateForGeneration: null as string | null, // ADDED: Date string (YYYY-MM-DD) for the Monday of the week to generate
+  });
+  const [lastPlanCheckTimestamp, setLastPlanCheckTimestamp] = useState<number | null>(null);
+
   // Function to determine the greeting based on time of day
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -108,7 +121,7 @@ export function HomeScreen() {
     }
   };
 
-  const fetchUserData = async () => {
+  const fetchUserData = useCallback(async () => {
     if (!session?.user) {
       console.log('fetchUserData: No user session found.');
       setLoading(false);
@@ -117,6 +130,7 @@ export function HomeScreen() {
       setUpcomingSessions([]);
       setChatMessages([]);
       setJoinDate(null);
+      setPlanUpdateStatus({ needsUpdate: false, isLoading: false, message: '', targetDateForGeneration: null }); // Reset plan status
       return;
     }
 
@@ -176,7 +190,190 @@ export function HomeScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [session, setLoading, setProfile, setCoach, setUpcomingSessions, setChatMessages, setJoinDate, setPlanUpdateStatus, getSuggestedShoe]);
+
+  // New useEffect to check for plan updates when upcomingSessions are loaded or profile changes
+  useEffect(() => {
+    if (profile && upcomingSessions.length > 0) { // Check only when we have some plan data
+      checkIfPlanUpdateNeeded();
+    }
+  }, [profile, upcomingSessions]);
+
+  const checkIfPlanUpdateNeeded = useCallback(async () => {
+    if (!session?.user || !profile) return;
+    if (planUpdateStatus.isLoading) return;
+
+    const now = Date.now();
+    // Adjust debounce logic slightly: if needsUpdate is already true, allow re-check more readily
+    // or if an error message is shown.
+    if (lastPlanCheckTimestamp && (now - lastPlanCheckTimestamp < 60000) && !planUpdateStatus.needsUpdate && !planUpdateStatus.message.toLowerCase().includes('error')) {
+      return;
+    }
+    setLastPlanCheckTimestamp(now);
+
+    try {
+      const systemZone = ZoneId.systemDefault();
+      const userLocalToday = LocalDate.now(systemZone);
+      const dayOfWeek = userLocalToday.dayOfWeek();
+
+      const currentWeekMonday = userLocalToday.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+      const currentWeekSunday = currentWeekMonday.plusDays(6);
+      const currentWeekMondayString = currentWeekMonday.toString();
+      const currentWeekSundayString = currentWeekSunday.toString();
+
+      const nextWeekMonday = currentWeekMonday.plusDays(7);
+      const nextWeekSunday = nextWeekMonday.plusDays(6);
+      const nextWeekMondayString = nextWeekMonday.toString();
+      const nextWeekSundayString = nextWeekSunday.toString();
+
+      let planNeedsGenerating = false;
+      let dateStringToPassToEdgeFunction = '';
+      let messageForUser = ''; // Message when initiating generation
+      let relevantWeekStatusMessage = ''; // Message if plan is already in place
+
+      if (dayOfWeek === DayOfWeek.SUNDAY) {
+        // On Sunday, check if NEXT week's plan (next Mon to next Sun) is missing.
+        const sessionsInNextWeek = upcomingSessions.filter(s => {
+          const sessionDate = s.date; // YYYY-MM-DD
+          return sessionDate >= nextWeekMondayString && sessionDate <= nextWeekSundayString;
+        });
+
+        if (sessionsInNextWeek.length < 1) {
+          planNeedsGenerating = true;
+          dateStringToPassToEdgeFunction = nextWeekMondayString; // Tell EF to generate for next week's Monday
+          messageForUser = "New plan for next week required. Initiating generation...";
+        } else {
+          relevantWeekStatusMessage = "Plan for next week is in place.";
+        }
+      } else { // Monday to Saturday
+        // On other days (Mon-Sat), check if CURRENT week's plan (current Mon to current Sun) is missing.
+        const sessionsInCurrentWeek = upcomingSessions.filter(s => {
+          const sessionDate = s.date; // YYYY-MM-DD
+          return sessionDate >= currentWeekMondayString && sessionDate <= currentWeekSundayString;
+        });
+
+        if (sessionsInCurrentWeek.length < 1) {
+          planNeedsGenerating = true;
+          dateStringToPassToEdgeFunction = currentWeekMondayString; // Tell EF to generate for current week's Monday
+          messageForUser = "New plan for the current week required. Initiating generation...";
+        } else {
+          relevantWeekStatusMessage = "Plan for current week is in place.";
+        }
+      }
+
+      if (planNeedsGenerating) {
+        setPlanUpdateStatus({
+          needsUpdate: true,
+          isLoading: false,
+          message: messageForUser,
+          targetDateForGeneration: dateStringToPassToEdgeFunction,
+        });
+      } else {
+        // Plan is in place for the relevant period.
+        // Only update message if not loading and no error, or if message was the "initiating" one.
+        if (!planUpdateStatus.isLoading) {
+           // If current message is an error and needsUpdate is false, keep error. Else, show "in place" message.
+          const shouldUpdateMessage = !(planUpdateStatus.message.toLowerCase().includes('error') && !planUpdateStatus.needsUpdate);
+
+          setPlanUpdateStatus(prev => ({
+            ...prev,
+            needsUpdate: false,
+            message: shouldUpdateMessage ? relevantWeekStatusMessage : prev.message,
+            targetDateForGeneration: null,
+          }));
+        }
+      }
+    } catch (error) {
+      console.error('[PlanCheck] Error in checkIfPlanUpdateNeeded:', error);
+      setPlanUpdateStatus({
+        needsUpdate: false, // Or true if you want to retry on error
+        isLoading: false,
+        message: 'Error checking plan status.',
+        targetDateForGeneration: null,
+      });
+    }
+  }, [session, profile, upcomingSessions, planUpdateStatus.isLoading, planUpdateStatus.message, planUpdateStatus.needsUpdate, lastPlanCheckTimestamp, setPlanUpdateStatus]);
+
+  // Check for plan update on initial load and when sessions/profile data changes
+  useEffect(() => {
+    if (profile && session?.user) { // Ensure profile and session are loaded
+        checkIfPlanUpdateNeeded();
+    }
+  }, [profile, upcomingSessions, session, checkIfPlanUpdateNeeded]);
+
+  // Also check on screen focus, in case the user navigates away and comes back
+  useFocusEffect(
+    useCallback(() => {
+      if (session?.user && profile) {
+        checkIfPlanUpdateNeeded();
+      }
+    }, [session, profile, checkIfPlanUpdateNeeded])
+  );
+
+  const handleRequestWeeklyPlanUpdate = useCallback(async (targetDateForGeneration?: string | null) => {
+    if (!session?.user) {
+      Alert.alert('Not Signed In', 'Please sign in to update your plan.');
+      return;
+    }
+    // Preserve the "Initiating generation..." message if it was set, otherwise use default.
+    setPlanUpdateStatus(prev => ({
+      ...prev, // Important to spread prev to keep targetDateForGeneration if it was set
+      needsUpdate: false,
+      isLoading: true,
+      message: prev.message.startsWith("New plan for") ? prev.message : 'Requesting new weekly plan...',
+      // targetDateForGeneration is already part of prev or passed in
+    }));
+    
+    const systemZone = ZoneId.systemDefault();
+    // clientLocalDateString will be the specific Monday (if passed) or today's date.
+    // The Edge Function's getMondayUtc will correctly use this Monday or find the Monday of the week this date is in.
+    const clientLocalDateString = targetDateForGeneration || LocalDate.now(systemZone).toString();
+
+    try {
+      console.log(`[HomeScreen] Calling fn_request_weekly_plan_update with clientLocalDateString (target Monday or today): ${clientLocalDateString}`);
+      const { data, error } = await supabase.functions.invoke('fn_request_weekly_plan_update', {
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientLocalDateString: clientLocalDateString }),
+      });
+      if (error) {
+        console.error('[HomeScreen] Error calling Edge Function fn_request_weekly_plan_update:', error);
+        Alert.alert('Error', `Failed to update weekly plan: ${error.message || 'Unknown error'}`);
+        setPlanUpdateStatus({
+          needsUpdate: true, // Suggest re-evaluation
+          isLoading: false,
+          message: `Error: ${error.message || 'Plan update failed.'}`,
+          targetDateForGeneration: targetDateForGeneration !== undefined ? targetDateForGeneration : null, // Keep target for context, ensure null if undefined
+        });
+      } else {
+        console.log('[HomeScreen] Edge Function fn_request_weekly_plan_update success:', data);
+        Alert.alert('Success', data.message || 'Weekly plan update request processed! Fetching new plan...');
+        setPlanUpdateStatus({
+          needsUpdate: false,
+          isLoading: false,
+          message: data.message || 'Plan requested successfully!',
+          targetDateForGeneration: null, // Clear target after success
+        });
+        await fetchUserData(); // Refresh data
+      }
+    } catch (e: any) {
+      console.error('[HomeScreen] Exception calling Edge Function fn_request_weekly_plan_update:', e);
+      Alert.alert('Error', `An exception occurred: ${e.message || 'Unknown error'}`);
+      setPlanUpdateStatus({
+        needsUpdate: true, // Suggest re-evaluation
+        isLoading: false,
+        message: `Exception: ${e.message || 'Plan update failed.'}`,
+        targetDateForGeneration: targetDateForGeneration !== undefined ? targetDateForGeneration : null, // Keep target for context, ensure null if undefined
+      });
+    }
+  }, [session, fetchUserData]); // supabase is global, ZoneId, LocalDate are stable, fetchUserData is useCallback-wrapped
+
+  // useEffect to automatically trigger plan update if needed
+  useEffect(() => {
+    if (planUpdateStatus.needsUpdate && !planUpdateStatus.isLoading && session?.user) {
+      handleRequestWeeklyPlanUpdate(planUpdateStatus.targetDateForGeneration);
+    }
+    // Add planUpdateStatus.targetDateForGeneration to dependency array
+  }, [planUpdateStatus.needsUpdate, planUpdateStatus.isLoading, planUpdateStatus.targetDateForGeneration, session?.user, handleRequestWeeklyPlanUpdate]);
 
   const handleSessionUpdate = async (sessionId: string, updates: Partial<TrainingSession>) => {
     const user = supabase.auth.session()?.user;
@@ -397,6 +594,20 @@ export function HomeScreen() {
             <Text className="text-gray-500 text-center py-4">No mileage data yet.</Text>
           )}
         </View>
+
+        {/* Plan Update UI */}
+        {planUpdateStatus.isLoading && (
+          <View style={styles.planUpdateContainer}>
+            <ActivityIndicator size="small" color="#007AFF" />
+            <Text style={styles.planUpdateText}>{planUpdateStatus.message}</Text>
+          </View>
+        )}
+        {!planUpdateStatus.isLoading && planUpdateStatus.message && !planUpdateStatus.needsUpdate && (
+           <View style={styles.planUpdateContainer}>
+              <Text style={styles.planUpdateText}>{planUpdateStatus.message}</Text>
+           </View>
+         )}
+        {/* End Plan Update UI */}
       </ScrollView>
     </SafeAreaView>
   );
@@ -485,5 +696,39 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 14,
     fontWeight: 'bold',
+  },
+  planUpdateContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    marginHorizontal: 16,
+    marginBottom: 10,
+    borderRadius: 10,
+    backgroundColor: '#E9E9EB', // Neutral background
+  },
+  planUpdateNeeded: {
+    backgroundColor: '#FFD699', // Light orange to indicate action needed
+    justifyContent: 'space-between',
+  },
+  planUpdateText: {
+    fontSize: 14,
+    color: '#3C3C43',
+    flexShrink: 1, // Allow text to shrink if button is present
+    marginRight: 8,
+  },
+  planUpdateNeededText: {
+    fontWeight: 'bold',
+    color: '#BF5B04', // Darker orange for text
+  },
+  planUpdateButton: {
+    backgroundColor: '#007AFF', // Standard iOS blue
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  planUpdateButtonText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+    fontSize: 14,
   },
 }); 

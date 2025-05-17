@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { View, ActivityIndicator, TouchableOpacity, Alert, ScrollView } from 'react-native';
+import { View, ActivityIndicator, TouchableOpacity, Alert, ScrollView, LayoutChangeEvent } from 'react-native';
 import { Text } from '../../components/ui/StyledText';
 import { supabase } from '../../lib/supabase';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -278,29 +278,36 @@ export default function TrainingPlanScreen() {
   };
 
   const generateFallbackPlan = async () => {
-    setRetrying(true);
+    if (!userId) {
+      Alert.alert("Error", "User ID not found. Cannot generate fallback plan.");
+      return;
+    }
+    setLoading(true);
     setError(null);
     try {
-      const user = supabase.auth.session()?.user;
-      if (!user) throw new Error('Not logged in');
-      const profile = await fetchProfile(user.id);
-      if (!profile) throw new Error('No profile data found');
-      
-      const onboardingData: OnboardingData = {
-        goalType: profile.goal_type || 'General fitness',
-        raceDate: profile.race_date || '',
-        raceDistance: profile.race_distance || '',
-        experienceLevel: profile.experience_level || 'Beginner',
-        trainingFrequency: profile.current_frequency || profile.schedule_constraints || '3 days per week',
-        trainingPreferences: profile.injury_history || '',
+      const profileData = await fetchProfile(userId);
+      if (!profileData) throw new Error('No profile data found for fallback plan generation');
+
+      const fallbackOnboardingData: OnboardingData = {
+        goalType: profileData.goal_description || 'General Fitness',
+        raceDate: profileData.race_date,
+        raceDistance: profileData.goal_distance,
+        experienceLevel: profileData.running_experience || 'Beginner',
+        trainingFrequency: profileData.training_frequency || '3 days per week',
+        current_mileage: profileData.weekly_volume || '20',
+        units: profileData.units || 'km',
+        nickname: profileData.display_name || 'Runner',
+        trainingPreferences: profileData.training_preferences,
       };
-      await generateAndSavePlan(user.id, onboardingData);
-      await fetchSessions(); // Fetch newly created plan
+      await generateAndSavePlan(userId, fallbackOnboardingData);
+      await fetchSessions();
+      Alert.alert("Fallback Plan Generated", "A sample training plan has been generated for you.");
     } catch (err: any) {
       console.error('Error generating fallback plan:', err);
-      setError(`Failed to generate plan: ${err.message}`);
+      setError('Failed to generate fallback plan: ' + err.message);
+      Alert.alert("Error", "Could not generate a fallback plan. " + err.message);
     } finally {
-      setRetrying(false);
+      setLoading(false);
     }
   };
 
@@ -460,6 +467,49 @@ export default function TrainingPlanScreen() {
     fetchSessions(); // Initial load
   }, []);
 
+  // Auto-scroll to current day or first upcoming session
+  useEffect(() => {
+    if (sessions && sessions.length > 0 && scrollViewRef.current && sessionLayoutsRef.current) {
+      const todayISO = new Date().toISOString().split('T')[0];
+      let targetSessionId: string | null = null;
+      let firstUpcomingSessionY: number | null = null;
+      let currentDaySessionY: number | null = null;
+
+      // Sort sessions by date to ensure correct identification of current/upcoming
+      const sortedSessions = [...sessions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+      for (const session of sortedSessions) {
+        if (session.date === todayISO && sessionLayoutsRef.current[session.id]) {
+          currentDaySessionY = sessionLayoutsRef.current[session.id].y;
+          targetSessionId = session.id;
+          break; // Prioritize current day
+        }
+        if (session.date > todayISO && sessionLayoutsRef.current[session.id]) {
+          if (firstUpcomingSessionY === null) { // Find the first upcoming session
+            firstUpcomingSessionY = sessionLayoutsRef.current[session.id].y;
+            if (!targetSessionId) targetSessionId = session.id; // Set if current day not found
+          }
+        }
+      }
+
+      const targetY = currentDaySessionY ?? firstUpcomingSessionY;
+
+      if (targetY !== null) {
+        // Check if the target session is already visible to prevent unnecessary scrolls
+        // This requires knowing the scroll view's current scroll position and height, 
+        // which is more complex and might not be strictly necessary for a basic auto-scroll.
+        // For simplicity, we'll scroll if a target is found.
+        console.log(`[TrainingPlanScreen] Auto-scrolling to session ${targetSessionId} at y: ${targetY}`);
+        scrollViewRef.current.scrollTo({ y: targetY, animated: true });
+      }
+    }
+  }, [sessions]); // Rerun when sessions change
+
+  const handleSessionLayout = (sessionId: string, event: LayoutChangeEvent) => {
+    sessionLayoutsRef.current[sessionId] = event.nativeEvent.layout;
+    // console.log('[TrainingPlanScreen] Layout for session', sessionId, event.nativeEvent.layout);
+  };
+
   const renderHeader = () => (
     <View style={{ padding: 16, backgroundColor: '#F0ECEB', borderRadius: 8, marginHorizontal: 16, marginBottom: 16 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -495,6 +545,7 @@ export default function TrainingPlanScreen() {
               isModified={isModified}
               userId={userId || undefined}
               onUpdateSession={handleUpdateSession}
+              onLayout={(event: LayoutChangeEvent) => handleSessionLayout(session.id, event)}
             />
           )}
         </SessionList>

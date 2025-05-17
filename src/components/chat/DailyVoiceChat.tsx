@@ -185,11 +185,16 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
                 input_audio_transcription: {
                     model: "whisper-1" 
                 },
+                input_audio_noise_reduction: {
+                    "type": "near_field"
+                },
                 turn_detection: {
-                    type: "semantic_vad",
-                    eagerness: "medium",
-                    create_response: false,
-                    interrupt_response: true
+                    "type": "server_vad",
+                    "threshold": 0.8,
+                    "prefix_padding_ms": 500,
+                    "silence_duration_ms": 500,
+                    "create_response": true,
+                    "interrupt_response": true
                 }
             }
         };
@@ -207,7 +212,7 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
             } else {
                  console.warn('[DailyVoiceChat] DataChannel closed before response.create could be sent.');
             }
-        }, 300);
+        }, 1000);
 
     } else {
         console.error('[DailyVoiceChat] Cannot configure AI: DataChannel not open or not available.');

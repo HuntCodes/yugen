@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, TouchableOpacity, TextInput, StyleSheet, Alert, Modal } from 'react-native';
+import { View, TouchableOpacity, TextInput, StyleSheet, Alert, Modal, LayoutChangeEvent } from 'react-native';
 import { Text } from '../../../../components/ui/StyledText';
 import { TrainingSession, SessionStatus } from './types';
 import { formatDate } from '../../../../lib/utils/dateUtils';
@@ -18,6 +18,7 @@ export interface SessionCardProps {
   isModified?: boolean;
   userId?: string;
   onUpdateSession?: (sessionId: string, updates: Partial<TrainingSession>) => Promise<void>;
+  onLayout?: (event: LayoutChangeEvent) => void;
 }
 
 export const SessionCard: React.FC<SessionCardProps> = ({
@@ -26,7 +27,8 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   dayOfWeek,
   isModified = false,
   userId,
-  onUpdateSession
+  onUpdateSession,
+  onLayout
 }) => {
   // Map existing status values to our app's status values
   const mapStatus = (status?: string): AppSessionStatus => {
@@ -179,7 +181,7 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   };
 
   return (
-    <View style={styles.card}>
+    <View style={styles.card} onLayout={onLayout}>
       <View style={styles.header}>
         <Text style={styles.date}>{formatDate(displayDate)}</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>

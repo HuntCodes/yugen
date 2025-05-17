@@ -1,14 +1,58 @@
 # Project Overview
 
-This is an AI-powered run club app for On. Users choose their coach (Craig, Thomas, Dathan), complete a smart, adaptive onboarding chat, then receive weekly-updated, personalized training plans. They chat with their AI coach to adjust training, log feedback, and get contextual gear recommendations.
+This is an AI-powered run club app. Users choose their coach (Craig, Thomas, Dathan), complete a smart, adaptive onboarding chat, then receive weekly-updated, personalized training plans. They chat with their AI coach to adjust training, log feedback, and get contextual gear recommendations.
+
+## App Flow
+1. Entry Screen - EntryScreen.tsx
+
+2. Login or Signup - Users sign up (SignUpScreen.tsx) or login (LoginScreen.tsx). User profile created in the profiles table in Supabase. 
+
+3. CoachSelect.tsx handles the user's decision for which coach they want to work with. profileService.ts will create or update the user's profile with coach_id. 
+
+4. Onboarding interview occurs via Voice (VoiceChat.tsx and VoiceOnboarding.tsx) or Chat Messaging (OnboardingChat.tsx, OnboardingInput.tsx, ChatMessageList.tsx). The answers to this interview inform the initial training plan that is created. 
+
+5. A transcript of the onboarding is created in the respective onboarding files (VoiceOnboarding.tsx, VoiceChat.tsx and OnboardingChat.tsx). useOnboardingConversation.ts orchestrates the parsing anad profile updating process. onboardingFlow.ts, coachPromptBuilder.ts, responseParser.ts and onboardingDataFormatter.ts handle the transcript parsing using GPT-3.5-turbo, a lightweight extractor. Then, useOnboardingConversation.ts and supabase.ts update the user's profiles table in the Supabase database. 
+
+6. The next step is the generation of the initial training plan, which occurs before the user is shown the HomeScreen (user is kept in a loading screen until then). This is in an effort to maximize the user's experience, so that everything is set up for them upon arrival. useOnboardingConversation.ts sets up the onboarding data for the plan. planService.ts orchestrates the process of this initial plan generation, where it calls the AI plan generation function (defined in openai.ts, which uses GPT-4o-mini). 
+
+7. openai.ts then receives the AI's text response and uses a parsing function (from planGeneration.ts) to convert this text into a structured array of training sessions. This structured plan is returned to planService.ts, which then maps these sessions to the database row structure and inserts the plan into the training_plans table in Supabase (using the client from supabase.ts). In case of failure in AI generation or parsing, a fallback plan can be generated (logic for this is also found in planGeneration.ts and called from openai.ts). 
+
+8. Upon onboarding's completion, the user is then pushed to the HomeScreen.ts where the everyday experience begins. There are several actions from here that the user can take. 
+
+      8 a. Chatting to their coach through HomeScreen.tsx can be done by chat messaging the coach or starting a voice check-in on the ChatMini.tsx component. There are a range of files that are used in the daily chat.
+            - useMessageProcessing.ts determines whether the message is a regular chat or a plan adjustment request.
+            - useMessageFormatting.ts formats raw data like the profile, training plan, and chat summaries into strings suitable for the AI model.
+            - DailyVoiceChat.tsx handles the voice-specific aspects of check-ins, including real-time transcription and audio.
+            - useMessageAnalysis.ts interacts with the AI to generate responses and understand conversation context.
+            - useMessageStorage.ts handles the saving and retrieving of chat-related data, including message history and summaries.
+            - useChatFlow.tsx orchestrates this overall process, coordinating the various hooks and services.
+            - usePlanAdjustment.ts (and its refactored counterparts like useAdjustmentLogic.ts): Manages the specific sub-flow when a user's message is identified as a request to modify their training plan.
+            - useSupabaseChat.ts: Provides focused hooks for fetching chat history and saving individual messages, acting as an intermediary to chatService.ts.
+            - chatService.ts: Contains functions for direct database interactions with Supabase to store and retrieve chat messages.
+            - planService.ts: Manages fetching training plan data from and saving updates to Supabase, particularly when plan adjustments are confirmed.
+      
+      8 b. Viewing and managing the training plan primarily occurs within TrainingPlanScreen.tsx, which orchestrates data fetching, display, and modification interactions. Users can mark their workouts as completed or skipped or neither. 
+            - TrainingPlanScreen.tsx: The main UI orchestrator that fetches plan data using planService.ts, displays sessions via components like SessionList.tsx and SessionCard.tsx, and handles direct session updates (e.g., status changes) by calling Supabase.
+            - planService.ts: Provides core functions for all training plan backend operations, including fetching existing plans, generating new/fallback plans, refreshing weekly schedules, and saving all changes to Supabase.
+            - UpdateSessionModal.tsx: A modal component used for editing specific details of a training session, such as adding notes or changing status.
+      
+      8 c. Viewing and managing user profile information is primarily handled by ProfileScreen.tsx, which displays data and offers editing capabilities, with EditProfileScreen.tsx likely providing a more focused editing interface.
+            - ProfileScreen.tsx: The main UI for displaying profile details (fetched via profileService.ts), selected coach information (from COACHES constant), and provides inline editing for many fields (saving via profileService.ts) as well as a sign-out option (using useAuth).
+            - profileService.ts: Contains the core functions fetchProfile and updateProfile for retrieving and saving user profile data to Supabase.
+            - EditProfileScreen.tsx: A dedicated screen, navigated to from ProfileScreen.tsx, for making more detailed or specific edits to the user's profile, also interacting with profileService.ts.
+      
+      8 d. GearScreen is an unfinished screen where brand apparrel and footwear will live. Users will be able to list their "owned" gear, track their shoe usage, and get prompted for new gear depending on the season, age of their shoes, etc. 
+
+9. Training plans for the upcoming week are generated on a Sunday. planService.ts is used in this process to check if the plan needs updating. If a plan is needed, HomeScreen.tsx automatically triggers the fn_request_weekly_plan_update Supabase Edge Function, displaying a "generating plan" message. This server-side function, located in supabase/functions/fn_request_weekly_plan_update/index.ts, first utilizes supabase/functions/_shared/feedbackService.ts to process the previous week's workout notes and chat logs with OpenAI, storing a summary in user_training_feedback. It then calls supabase/functions/_shared/planServiceDeno.ts, which uses the user's profile and the feedback summary to generate a new training plan up until Sunday via another OpenAI call, saving it to the database. Finally, HomeScreen.tsx refreshes, displaying the newly created plan to the user.
+
 
 ## Key Technologies
 
 - **Cursor** – AI coding assistant and editor
-- **Expo Go** – Mobile testing environment
-- **Supabase** – Auth, database, and edge functions
+- **Supabase v1** – Auth, database, and edge functions (note, version 1 is used for dependency reasons)
 - **NativeWind** – Tailwind-like styling for React Native
-- **OpenAI (GPT-3.5 Turbo)** – Conversational coaching logic
+- **OpenAI (various models)** – Conversational coaching logic
+- **WebRTC** – responsible for the Realtime API (Voice chat) conenction
 
 ## Architecture Principles
 
@@ -29,11 +73,12 @@ This is an AI-powered run club app for On. Users choose their coach (Craig, Thom
 - Fully adaptive chat with background parsing
 - Extracts core athlete data into `profiles` table
 - Conversation feels natural — not like a form
+- Users use voice by default, otherwise they use chat if they prefer or experience errors
 - Coach style and tone persist through the onboarding and into daily coaching
 
 ## Daily Chat
 - Coach tone and communication style persist
-- Chat summaries stored and referenced for future planning
+- Chat summaries stored and referenced for future training planning
 - Context window populated with:
   - User profile data
   - Recent chat + workout summaries
@@ -101,17 +146,4 @@ This is an AI-powered run club app for On. Users choose their coach (Craig, Thom
 - Every folder must have a `README.md` for onboarding
 - Keep text (e.g. coach phrases, tone) centralized
 - Shared logic (e.g. formatting, summarizing, parsing) lives in `/lib`
-
----
-
-# ✅ Refactor Checklist
-
-- [x] Coach tone & style persist across all chat interactions
-- [x] Onboarding uses GPT parsing to store structured profile info
-- [x] Summaries of chats + workouts stored and reused
-- [x] Supabase handles all persistent storage
-- [x] Data access abstracted into `services/`
-- [x] UI styled only with NativeWind
-- [x] File structure follows domain-driven design
-- [x] Prompt system reduced for token efficiency
 

@@ -1,0 +1,32 @@
+{
+    "compilerOptions": {
+      "allowImportingTsExtensions": true,
+      "lib": ["deno.window", "deno.unstable"] // Added deno.unstable for Deno.env if needed by older Deno std
+    },
+    "lint": {
+      "files": {
+        "include": ["./"],
+        "exclude": ["./node_modules/"] // If you happen to have it
+      },
+      "rules": {
+        "tags": ["recommended"],
+        "include": [],
+        "exclude": []
+      }
+    },
+    "fmt": {
+      "files": {
+        "include": ["./"],
+        "exclude": ["./node_modules/"]
+      },
+      "options": {
+        "useTabs": false,
+        "lineWidth": 80,
+        "indentWidth": 2,
+        "singleQuote": true
+      }
+    },
+    "tasks": {
+      "serve": "deno run --allow-all --watchmod=auto supabase/functions/index.ts"
+    }
+  }
