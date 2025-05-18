@@ -84,7 +84,7 @@ export async function generateTrainingPlan(onboarding: OnboardingData): Promise<
   const units = onboarding.units || 'km';
   
   // Use text form instead of JSON for more reliable parsing
-  const prompt = `You are an expert running coach. Based on the following runner profile, create a detailed training plan for their first two weeks.
+  const prompt = `You are an expert running coach. Based on the following runner profile, create the best possible training plan for their first two weeks.
 
 Please fill out this training plan form for ${onboarding.nickname || 'Runner'}:
 

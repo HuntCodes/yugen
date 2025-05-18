@@ -36,6 +36,32 @@ const getSuggestedShoe = (sessionType: string): string => {
 
 type TabView = 'Schedule' | 'Outlook';
 
+// Custom compact header component
+const CompactHeaderBar = ({ title }: { title: string }) => {
+  return (
+    <View style={compactHeaderStyles.header}>
+      <Text style={compactHeaderStyles.headerTitle}>{title}</Text>
+    </View>
+  );
+};
+
+// Compact header styles
+const compactHeaderStyles = StyleSheet.create({
+  header: {
+    backgroundColor: '#FBF7F6',
+    paddingTop: 4,
+    paddingHorizontal: 16,
+    paddingBottom: 4,
+    minHeight: 38,
+  },
+  headerTitle: {
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: 'bold',
+    color: '#333333',
+  },
+});
+
 export default function TrainingPlanScreen() {
   const [sessions, setSessions] = useState<TrainingSession[]>([]);
   const [loading, setLoading] = useState(true);
@@ -477,7 +503,7 @@ export default function TrainingPlanScreen() {
   return (
     <Screen style={{ backgroundColor: '#FBF7F6' }}>
       <SafeAreaView edges={['top']} style={styles.flexOne}>
-        <HeaderBar title="Training Plan" />
+        <CompactHeaderBar title="Training Plan" />
         <View style={styles.tabBarContainer}>
           <TouchableOpacity 
             style={[styles.tabButton, activeTab === 'Schedule' && styles.activeTabButton]}

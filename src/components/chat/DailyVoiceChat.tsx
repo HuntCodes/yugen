@@ -32,6 +32,12 @@ const glowAnimation = {
   1: { opacity: 0.3, borderWidth: 2 },
 };
 
+// Extended ChatMessage interface with timestamp
+interface TimestampedChatMessage extends ChatMessage {
+  timestamp?: number;
+  id?: string;
+}
+
 interface DailyVoiceChatProps {
   coachId: string;
   coachName: string;
@@ -47,6 +53,7 @@ interface DailyVoiceChatProps {
   onClose: () => void;
   onSpeakingStateChange?: (isSpeaking: boolean, speaker?: 'user' | 'coach') => void;
   isVisible: boolean;
+  refreshHomeScreen?: () => void;
 }
 
 const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
@@ -64,12 +71,13 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
   onClose,
   onSpeakingStateChange,
   isVisible,
+  refreshHomeScreen,
 }) => {
   const [isLoading, setIsLoading] = useState(true); // Initial loading/setup phase
   const [isConnecting, setIsConnecting] = useState(false); // Connecting to WebRTC/Deepgram
   const [isListening, setIsListening] = useState(false); // Actively listening for user speech
   const [isCoachSpeakingTTS, setIsCoachSpeakingTTS] = useState(false);
-  const [conversationHistory, setConversationHistory] = useState<ChatMessage[]>([]);
+  const [conversationHistory, setConversationHistory] = useState<TimestampedChatMessage[]>([]);
   const [currentTranscript, setCurrentTranscript] = useState(''); // Real-time transcript from STT
   const [pendingCoachResponse, setPendingCoachResponse] = useState(''); // Accumulates coach TTS text
   const [error, setErrorState] = useState<string | null>(null);
@@ -79,6 +87,7 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
   const [userIsActuallySpeaking, setUserIsActuallySpeaking] = useState(false);
   const [isReceivingCoachMessage, setIsReceivingCoachMessage] = useState(false);
   const [showAnimatedCoachView, setShowAnimatedCoachView] = useState(false); // New state for animation
+  const [userTranscriptJustReceived, setUserTranscriptJustReceived] = useState(false); // Added to track new user input
 
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const dataChannelRef = useRef<any | null>(null);
@@ -115,33 +124,59 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
   }, [onError]);
 
   const buildDailyCheckInPrompt = useCallback(() => {
-    let prompt = `You are ${coachName}, a friendly and supportive running coach, having a daily voice check-in with ${profile?.nickname || 'the athlete'}.\n`;
-    
-    // Add personality details if available
-    if (coachPersonalityBlurb) {
-      prompt += `Your personality is: ${coachPersonalityBlurb}\n`;
-    }
-    if (coachVibe) {
-      prompt += `Your vibe is: ${coachVibe}\n`;
-    }
-    if (coachPhilosophy) {
-      prompt += `Your coaching philosophy is: ${coachPhilosophy}\n`;
-    }
+    let prompt = `
+    You are ${coachName}, a friendly and supportive running coach. You are speaking with your athlete, ${profile?.nickname || 'the athlete'}.
 
-    prompt += `\nYour goal is to have a natural, turn-by-turn conversation. Ask one main question at a time and wait for their response before asking another or moving to a new topic.\n`;
-    prompt += `Start by asking how they are feeling today.\n`;
-    prompt += `Based on their response, you can then inquire about how their training is going generally, and then if they need any adjustments to their plan for the upcoming days or week.\n`;
-    prompt += `When discussing plan adjustments, be specific. For example: "I see you have a 10km tempo run on Thursday. How are you feeling about that?"\n`;
-    prompt += `If the athlete suggests a change or you propose one (e.g., "Maybe we should shorten that to 7km or make it an easy run if you're feeling tired."), you MUST get explicit verbal confirmation before considering it final.\n`;
-    prompt += `Ask clearly: "So, to confirm, you'd like to change [original workout details] to [new workout details]. Is that correct?" or "Shall I make that change to [new workout details]?"\n`;
-    prompt += `Listen carefully for a "yes" or "no" (or similar explicit confirmation/rejection). If they confirm, acknowledge it, for example: "Okay, consider it done! I've updated your plan." If they reject or are unsure, acknowledge that and do not proceed with the change, e.g., "No problem, we'll stick to the current plan then."\n`;
-    prompt += `If multiple adjustments are discussed and confirmed, try to summarize them at the end if natural.\n`;
-    if (currentTrainingPlan && currentTrainingPlan.length > 0) {
-       prompt += `\n\nHere is their upcoming plan for reference (first few sessions):\n`;
-       currentTrainingPlan.slice(0, 3).forEach(s => {
-         prompt += `- ${s.date}: ${s.session_type} - ${s.distance} ${profile?.units || 'km'}\n`;
-       });
-     }
+    🚫 You must NEVER speak as ${profile?.nickname || 'the athlete'} or describe things from their perspective.
+    🚫 You must never say "I felt tired yesterday", "My tempo run was hard", or similar — that would be ${profile?.nickname || 'the athlete'} speaking, and you are NOT them.
+    ✅ Always speak from YOUR perspective — as a coach.
+
+    You are here to help, guide, listen, and encourage.
+
+    Your role is fixed. You are ${coachName}, their coach, at all times.
+
+    Have a natural, turn-by-turn voice conversation. Ask ONE clear question at a time. Wait for ${profile?.nickname || 'the athlete'} to answer before proceeding.
+
+    IMPORTANT: Wait for the user to respond after each statement or question you make.
+    Do not continue speaking or ask multiple questions without user input.
+    NEVER continue the conversation without waiting for the user to respond first.
+
+    Start with: "Hey, how are you feeling today?"
+
+    Then:
+    - Ask how training has been going in general
+    - Then ask if they'd like to adjust anything in the plan
+
+    If they suggest changes, you must get explicit verbal confirmation before making them.
+    Ask clearly: "Just to confirm, would you like to change [original workout] to [new workout]?"
+
+    ✅ If they say yes, acknowledge and confirm the change.
+    ❌ If they say no or are unsure, do not change the plan.
+
+    If they say no, ask if they'd like to adjust anything in the plan.
+
+    If they say yes, ask them what they'd like to change.
+
+    If they say no, ask if they'd like to adjust anything in the plan.
+
+      `;
+
+      if (coachPersonalityBlurb) {
+        prompt += `Your personality is: ${coachPersonalityBlurb}\n`;
+      }
+      if (coachVibe) {
+        prompt += `Your vibe is: ${coachVibe}\n`;
+      }
+      if (coachPhilosophy) {
+        prompt += `Your coaching philosophy is: ${coachPhilosophy}\n`;
+      }
+
+      if (currentTrainingPlan && currentTrainingPlan.length > 0) {
+        prompt += `Here is ${profile?.nickname || 'the athlete'}'s upcoming plan:\n`;
+        currentTrainingPlan.slice(0, 3).forEach(s => {
+          prompt += `- ${s.date}: ${s.session_type} - ${s.distance} ${profile?.units || 'km'}\n`;
+        });
+      }
     return prompt;
   }, [coachName, profile, currentTrainingPlan, coachPersonalityBlurb, coachVibe, coachPhilosophy]);
 
@@ -174,6 +209,45 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
     }
   }, [handleError]);
 
+  // Helper function to determine if two text strings are similar
+  const isSimilarText = (text1: string, text2: string): boolean => {
+    // Convert to lowercase for case-insensitive comparison
+    const normalizedText1 = text1.toLowerCase().trim();
+    const normalizedText2 = text2.toLowerCase().trim();
+    
+    console.log('[DailyVoiceChat] Comparing similarity between:');
+    console.log(`[DailyVoiceChat] Text1: "${normalizedText1}"`);
+    console.log(`[DailyVoiceChat] Text2: "${normalizedText2}"`);
+    
+    // If the strings are mostly the same, consider them similar
+    if (normalizedText1 === normalizedText2) {
+      console.log('[DailyVoiceChat] MATCH: Exact match');
+      return true;
+    }
+    
+    // Check if one string contains the other or is a significant substring
+    if (normalizedText1.includes(normalizedText2) || normalizedText2.includes(normalizedText1)) {
+      console.log('[DailyVoiceChat] MATCH: One string contains the other');
+      return true;
+    }
+    
+    // Check for similarity by comparing individual words
+    const words1 = normalizedText1.split(/\s+/);
+    const words2 = normalizedText2.split(/\s+/);
+    
+    // If more than 90% of words match, consider them similar
+    const commonWords = words1.filter(word => words2.includes(word));
+    const similarityRatio = commonWords.length / Math.min(words1.length, words2.length);
+    console.log(`[DailyVoiceChat] Word similarity: ${commonWords.length}/${Math.min(words1.length, words2.length)} = ${similarityRatio * 100}%`);
+    if (similarityRatio >= 0.9) {
+      console.log('[DailyVoiceChat] MATCH: Word similarity >= 90%');
+      return true;
+    }
+    
+    console.log('[DailyVoiceChat] NO MATCH: Texts not similar enough');
+    return false;
+  };
+
   // Memoize configureAIInstructions - MOVED EARLIER
   const configureAIInstructions = useCallback((dc: any) => { 
     if (dc && dc.readyState === 'open') {
@@ -191,8 +265,8 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
                 turn_detection: {
                     "type": "server_vad",
                     "threshold": 0.8,
-                    "prefix_padding_ms": 500,
-                    "silence_duration_ms": 500,
+                    "prefix_padding_ms": 800,
+                    "silence_duration_ms": 800,
                     "create_response": true,
                     "interrupt_response": true
                 }
@@ -366,21 +440,49 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
                     const finalTranscript = transcriptText?.trim();
                     if (finalTranscript) {
                         console.log('[DailyVoiceChat] User Utterance (final):', finalTranscript);
-                        // setCurrentTranscript(''); // Moved down
+                        
+                        // Check if this transcript closely matches the coach's last message
+                        const lastCoachMessage = conversationHistory.findLast(msg => msg.sender === 'coach')?.message || '';
+                        if (lastCoachMessage && isSimilarText(finalTranscript, lastCoachMessage)) {
+                            console.log('[DailyVoiceChat] Ignoring transcript that closely matches coach\'s last message');
+                            setCurrentTranscript('');
+                            break;
+                        }
 
-                        const newUserMessage: ChatMessage = { sender: 'user', message: finalTranscript };
-                        setConversationHistory(prev => [...prev, newUserMessage]);
+                        // Create a timestamp for ordering
+                        const messageTimestamp = Date.now();
+                        const newUserMessage: TimestampedChatMessage = { 
+                            sender: 'user', 
+                            message: finalTranscript,
+                            timestamp: messageTimestamp 
+                        };
+                        console.log('[DailyVoiceChat] Adding user message to history:', finalTranscript);
+                        
+                        // Add the message and sort conversation history by timestamp to ensure correct ordering
+                        setConversationHistory(prev => {
+                            const updated = [...prev, newUserMessage];
+                            // Sort by timestamp if available, otherwise maintain insertion order
+                            return updated.sort((a, b) => {
+                                const timeA = a.timestamp || 0;
+                                const timeB = b.timestamp || 0;
+                                return timeA - timeB;
+                            });
+                        });
+                        
+                        // Set flag that we've received a valid user transcript
+                        setUserTranscriptJustReceived(true);
                         
                         if (dataChannelRef.current && dataChannelRef.current.readyState === 'open') {
-                            if (!isReceivingCoachMessage && !isCoachSpeakingTTS) {
-                                console.log('[DailyVoiceChat] User transcript processed in onmessage. Requesting AI response.');
+                            if (!isReceivingCoachMessage && !isCoachSpeakingTTS && userTranscriptJustReceived) {
+                                console.log('[DailyVoiceChat] User transcript processed. Requesting AI response.');
                                 const responseCreateEvent = {
                                     type: 'response.create'
                                 };
                                 dataChannelRef.current.send(JSON.stringify(responseCreateEvent));
                                 setIsReceivingCoachMessage(true); // Expecting the coach to speak
+                                setUserTranscriptJustReceived(false); // Clear flag after use
                             } else {
-                                console.log('[DailyVoiceChat] User transcript processed in onmessage, but coach is already active. Not sending response.create.');
+                                console.log('[DailyVoiceChat] User transcript processed, but coach is already active or no valid user input. Not sending response.create.');
                             }
                         } else {
                             handleError("Cannot request AI response: DataChannel not open.");
@@ -484,7 +586,15 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
                     console.log('[DailyVoiceChat] DC Event: response.done - status:', messageData.response?.status);
                     setIsCoachSpeakingTTS(false);
                     if (onSpeakingStateChange) onSpeakingStateChange(false, 'coach');
-                    setIsReceivingCoachMessage(false); // Coach's turn is definitively over.
+                    
+                    // Instead of immediately setting isReceivingCoachMessage to false, add a cooldown period
+                    // This prevents the AI from immediately responding to its own transcripts
+                    // AND requires new user input before coach responds again
+                    setTimeout(() => {
+                        console.log('[DailyVoiceChat] Coach response cooldown period ended, now ready for user input');
+                        setIsReceivingCoachMessage(false); // Now it's safe to accept new user input
+                        // Do NOT automatically trigger a new coach response here
+                    }, 2000); // 2-second cooldown after coach finishes
 
                     if (messageData.response?.status === 'completed') {
                         const outputItem = messageData.response.output?.[0];
@@ -493,7 +603,9 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
 
                         if (finalTranscriptFromDone) {
                             console.log('[DailyVoiceChat] Coach Utterance (via response.done):', finalTranscriptFromDone);
-                             // Prefer response.done transcript as it's authoritative
+                            // Create a timestamp for ordering
+                            const messageTimestamp = Date.now();
+                            // Prefer response.done transcript as it's authoritative
                             setConversationHistory(prev => {
                                 // Avoid duplicates if ai_response_ended already added a very similar message
                                 const lastMessage = prev[prev.length -1];
@@ -501,13 +613,40 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
                                     console.log("[DailyVoiceChat] response.done transcript matches last message from ai_response_ended. Skipping duplicate.");
                                     return prev;
                                 }
-                                return [...prev, { sender: 'coach', message: finalTranscriptFromDone, id: Date.now().toString() + 'coach_respdone'}];
+                                console.log('[DailyVoiceChat] Adding coach message to history:', finalTranscriptFromDone);
+                                const newCoachMessage: TimestampedChatMessage = { 
+                                    sender: 'coach', 
+                                    message: finalTranscriptFromDone, 
+                                    id: Date.now().toString() + 'coach_respdone',
+                                    timestamp: messageTimestamp
+                                };
+                                const updated = [...prev, newCoachMessage];
+                                // Sort by timestamp if available, otherwise maintain insertion order
+                                return updated.sort((a, b) => {
+                                    const timeA = a.timestamp || 0;
+                                    const timeB = b.timestamp || 0;
+                                    return timeA - timeB;
+                                });
                             });
                             setPendingCoachResponse(finalTranscriptFromDone); // Ensure UI shows the most complete version
                         } else if (pendingCoachResponse.trim()) {
                             // Fallback to pendingCoachResponse if response.done had no transcript but we accumulated something
                             console.warn('[DailyVoiceChat] response.done was completed but no transcript. Using accumulated pendingCoachResponse.');
-                            setConversationHistory(prev => [...prev, { sender: 'coach', message: pendingCoachResponse.trim(), id: Date.now().toString() + 'coach_pending_fallback'}]);
+                            const messageTimestamp = Date.now();
+                            setConversationHistory(prev => {
+                                const newCoachMessage: TimestampedChatMessage = { 
+                                    sender: 'coach', 
+                                    message: pendingCoachResponse.trim(), 
+                                    id: Date.now().toString() + 'coach_pending_fallback',
+                                    timestamp: messageTimestamp
+                                };
+                                const updated = [...prev, newCoachMessage];
+                                return updated.sort((a, b) => {
+                                    const timeA = a.timestamp || 0;
+                                    const timeB = b.timestamp || 0;
+                                    return timeA - timeB;
+                                });
+                            });
                         }
                     } else if (messageData.response?.status === 'cancelled') {
                         console.log('[DailyVoiceChat] Coach response cancelled (e.g., user barge-in). Reason:', messageData.response?.status_details?.reason);
@@ -519,6 +658,12 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
                     if (messageData.response?.conversation_is_complete || messageData.conversation_is_complete) { // Check both places
                         console.log('[DailyVoiceChat] Conversation marked as complete by AI.');
                         setConversationComplete(true);
+                        
+                        // Add a delay to ensure conversation history state is updated before ending
+                        setTimeout(() => {
+                            console.log('[DailyVoiceChat] Conversation complete, calling handleEndSession');
+                            handleEndSession();
+                        }, 500);
                     }
                     break;
 
@@ -601,7 +746,14 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
         }
       };
       
-      const stream = await mediaDevices.getUserMedia({ audio: true, video: false });
+      const stream = await mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        } as any, 
+        video: false 
+      });
       localStreamRef.current = stream;
       stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
@@ -773,6 +925,25 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
     console.log('[DailyVoiceChat] Ending session manually or on completion.');
     setConversationComplete(true); // Mark as complete
     
+    // Sort the conversation history one final time by timestamp before saving
+    const sortedHistory = [...conversationHistory].sort((a, b) => {
+      const timeA = a.timestamp || 0;
+      const timeB = b.timestamp || 0;
+      return timeA - timeB;
+    });
+    
+    // Log the final conversation history with timestamps for debugging
+    console.log('[DailyVoiceChat] Final sorted conversation history:');
+    sortedHistory.forEach((msg, index) => {
+      console.log(`[DailyVoiceChat] [${index}] ${msg.sender}: "${msg.message.substring(0, 40)}..." (timestamp: ${msg.timestamp || 'missing'})`);
+    });
+    
+    // Update the conversation history with the sorted version
+    setConversationHistory(sortedHistory);
+    
+    // Log the final conversation history
+    console.log('[DailyVoiceChat] Final conversation history:', JSON.stringify(sortedHistory));
+    
     // Stop any TTS playback
     if (ttsPlayerRef.current) {
       await ttsPlayerRef.current.stopAsync();
@@ -814,15 +985,35 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
     setIsCoachSpeakingTTS(false);
     setShowAnimatedCoachView(false);
 
+    // IMPORTANT: Save conversation to Supabase BEFORE closing
+    // This ensures the messages are saved properly
+    if (sortedHistory.length > 0) {
+      try {
+        console.log('[DailyVoiceChat] Saving final conversation before closing...');
+        await saveConversationToSupabase(sortedHistory);
+        console.log('[DailyVoiceChat] Final conversation saved successfully.');
+      } catch (e) {
+        console.error('[DailyVoiceChat] Error saving final conversation:', e);
+      }
+    }
+    
+    // After saving, call onSessionComplete to pass conversation to parent
+    if (onSessionComplete) {
+      console.log('[DailyVoiceChat] Calling onSessionComplete with', sortedHistory.length, 'messages');
+      onSessionComplete(sortedHistory);
+    }
+    
+    // Refresh the home screen to show updated messages
+    if (refreshHomeScreen) {
+      console.log('[DailyVoiceChat] Refreshing home screen...');
+      refreshHomeScreen();
+    }
+
     // Call the onClose prop to notify parent (e.g., HomeScreen)
     if (onClose) {
       onClose(); 
     }
     
-    // Persist conversation if needed (already called by Deepgram handlers on specific events)
-    // but can be called here as a final safeguard if the session ends abruptly.
-    // await saveConversationToSupabase(conversationHistory);
-    // onSessionComplete(conversationHistory, undefined); // Example: no plan update here
     console.log('[DailyVoiceChat] Session cleanup complete.');
   };
 
@@ -861,32 +1052,41 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
   };
 
   // Function to save conversation to Supabase
-  const saveConversationToSupabase = async (history: ChatMessage[]) => {
-    console.log('[DailyVoiceChat] Saving conversation to Supabase...');
+  const saveConversationToSupabase = async (history: TimestampedChatMessage[]) => {
+    console.log('[DailyVoiceChat] Saving conversation to Supabase...', history.length, 'messages');
     if (!userId) {
       console.error('[DailyVoiceChat] Cannot save conversation: User ID is missing.');
       return;
     }
+    
+    if (history.length === 0) {
+      console.log('[DailyVoiceChat] No messages to save.');
+      return;
+    }
+    
     try {
-      for (const chatMessage of history) {
-        if (chatMessage.message.trim() === '') continue; 
-        
-        const messageSender: 'user' | 'coach' = chatMessage.sender === 'user' ? 'user' : 'coach';
-
-        // Corrected call to saveMessage
-        const messagePayload: ChatMessage = {
-          sender: messageSender,
-          message: chatMessage.message,
-          // timestamp is optional in ChatMessage and saveMessage creates its own created_at
-        };
-        await saveMessage(messagePayload, userId); // Pass userId as the second argument
-
-      }
-      console.log('[DailyVoiceChat] Conversation saved successfully.');
+      // Filter out empty messages and create an array of save operations
+      const savePromises = history
+        .filter(chatMessage => chatMessage.message.trim() !== '') 
+        .map(chatMessage => {
+          const messageSender: 'user' | 'coach' = chatMessage.sender === 'user' ? 'user' : 'coach';
+          const messagePayload: ChatMessage = {
+            sender: messageSender,
+            message: chatMessage.message,
+          };
+          console.log('[DailyVoiceChat] Saving message:', messagePayload.sender, messagePayload.message.substring(0, 30) + (messagePayload.message.length > 30 ? '...' : ''));
+          return saveMessage(messagePayload, userId);
+        });
+      
+      // Wait for all save operations to complete
+      await Promise.all(savePromises);
+      console.log('[DailyVoiceChat] All messages saved successfully.');
+      
+      // No need to call onSessionComplete here - it's now called in handleEndSession
+      // to ensure better sequencing of operations
     } catch (e: any) {
       console.error('[DailyVoiceChat] Error saving conversation to Supabase:', e);
-      // Notify user or log to a monitoring service if needed
-      // Not calling handleError here to avoid UI error message for background save failure
+      throw e; // Re-throw so the calling function can handle it
     }
   };
 

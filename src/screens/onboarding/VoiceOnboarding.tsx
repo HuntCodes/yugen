@@ -158,14 +158,35 @@ export function VoiceOnboarding() {
     console.log('[VOICE_ONBOARDING] Transcript received from VoiceChat:', { isVoiceChatDone });
     
     setVoiceChatActiveForAnimation(false); 
-    setVoiceChatUIVisible(false); 
-
+    
     if (isVoiceChatDone) {
       console.log('[VOICE_ONBOARDING] Full Voice Chat History (at completion point):', JSON.stringify(fullVoiceChatHistory, null, 2));
       setFinalVoiceHistory(fullVoiceChatHistory);
       setVoiceConversationActuallyCompleted(true);
-      await delay(1000); // Wait 1 second for TTS to likely finish
-      setShowContinueButtonStage(true); // Then show the continue button
+      
+      // Don't immediately hide the voice chat - let the final message finish playing
+      // The continue button will only appear after a significant delay
+      
+      // Wait for TTS to finish playing (increased delay to ensure it completes)
+      // Average reading speed is ~150 words per minute = 2.5 words per second
+      // For a typical final message of ~25 words, that's ~10 seconds
+      // Add buffer time to ensure completion
+      const lastCoachMessage = fullVoiceChatHistory.findLast(h => h.role === 'coach')?.content || '';
+      const wordCount = lastCoachMessage.split(/\s+/).length;
+      const estimatedSeconds = Math.max(3, Math.min(15, wordCount / 2.5)); // Between 3-15 seconds based on word count
+      
+      console.log(`[VOICE_ONBOARDING] Waiting ${estimatedSeconds.toFixed(1)} seconds for final message TTS to complete`);
+      
+      // First wait a bit before hiding the voice chat
+      await delay(Math.ceil(estimatedSeconds * 1000));
+      setVoiceChatUIVisible(false);
+      
+      // Then wait another second before showing the continue button
+      await delay(1000);
+      setShowContinueButtonStage(true);
+    } else {
+      // For non-completion events, hide the voice chat immediately
+      setVoiceChatUIVisible(false);
     }
   }, []); // Dependencies are correct
   

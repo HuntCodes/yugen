@@ -425,7 +425,11 @@ const VoiceChat = ({ isVisible, onClose, coachId, apiKey, onError, onboardingMod
       // Get access to the microphone
       AudioDebugLogger.log('Requesting user media for microphone...');
       const userMedia = await mediaDevices.getUserMedia({
-        audio: true,
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        } as any,
         video: false
       });
       
@@ -571,8 +575,8 @@ Provide specific, actionable advice tailored to the athlete's needs.`;
           turn_detection: {
             "type": "server_vad",
             "threshold": 0.8,
-            "prefix_padding_ms": 500,
-            "silence_duration_ms": 500,
+            "prefix_padding_ms": 800,
+            "silence_duration_ms": 800,
             "create_response": true,
             "interrupt_response": true
           }
@@ -789,19 +793,31 @@ Provide specific, actionable advice tailored to the athlete's needs.`;
 
       if (matchedPhrase) {
         console.log('[VOICE_COMPLETION] ✅ Completion phrase in transcript.done message:', finalCoachMessage);
-        setConversationComplete(true); // Mark as complete
         
-        // Use a timeout to ensure state updates flush before calling stopListening and onTranscriptComplete
+        // Wait for TTS to finish before finalizing the conversation
+        // Estimate time based on message length (about 2.5 words per second for TTS)
+        const wordCount = finalCoachMessage.split(/\s+/).length;
+        const estimatedSeconds = Math.max(3, Math.min(10, wordCount / 2.5)); // Between 3-10 seconds
+        
+        console.log(`[VOICE_COMPLETION] Waiting ${estimatedSeconds.toFixed(1)} seconds for final TTS to complete before finishing conversation`);
+        
+        // Don't immediately set conversation as complete - let TTS finish playing
+        // Instead, wait for the estimated time before triggering the completion
         setTimeout(() => {
-          // Access the latest history via the variable populated by setConversationHistory's callback
-          console.log('[VOICE_COMPLETION] FINAL HISTORY (transcript.done):', JSON.stringify(historyForCallback, null, 2));
-          if (onTranscriptComplete) {
-            const lastUserTranscript = transcript || ''; // `transcript` state holds the last user utterance
-            onTranscriptComplete(lastUserTranscript, finalCoachMessage, true, historyForCallback);
-          }
-          stopListening(); // This will set isSpeaking to false and clean up
-          setIsReceivingCoachMessage(false); 
-        }, 100); // Short delay
+          setConversationComplete(true); // Mark as complete
+          
+          // Use another small timeout to ensure state updates flush before calling stopListening and onTranscriptComplete
+          setTimeout(() => {
+            // Access the latest history via the variable populated by setConversationHistory's callback
+            console.log('[VOICE_COMPLETION] FINAL HISTORY (transcript.done):', JSON.stringify(historyForCallback, null, 2));
+            if (onTranscriptComplete) {
+              const lastUserTranscript = transcript || ''; // `transcript` state holds the last user utterance
+              onTranscriptComplete(lastUserTranscript, finalCoachMessage, true, historyForCallback);
+            }
+            stopListening(); // This will set isSpeaking to false and clean up
+            setIsReceivingCoachMessage(false); 
+          }, 100); // Short delay
+        }, estimatedSeconds * 1000); // Delay based on estimated TTS duration
       } else {
         // If not a completion phrase, coach's turn is still over
         setIsReceivingCoachMessage(false);
@@ -839,9 +855,15 @@ Provide specific, actionable advice tailored to the athlete's needs.`;
         const finalMessageForCompletion = currentAccumulated.trim();
         console.log('[VOICE_COMPLETION] ✅ Completion phrase in content_part.added (accumulated):', finalMessageForCompletion);
         
-        // Debounce or ensure this logic runs only once if parts arrive rapidly
-        // Setting conversationComplete to true helps here
-        setConversationComplete(true); 
+        // Wait for TTS to finish before finalizing the conversation
+        // Estimate time based on message length (about 2.5 words per second for TTS)
+        const wordCount = finalMessageForCompletion.split(/\s+/).length;
+        const estimatedSeconds = Math.max(3, Math.min(10, wordCount / 2.5)); // Between 3-10 seconds
+        
+        console.log(`[VOICE_COMPLETION] Waiting ${estimatedSeconds.toFixed(1)} seconds for final TTS to complete before finishing conversation`);
+        
+        // Flag as complete, but wait before triggering completion callbacks
+        setConversationComplete(true);
 
         setTimeout(() => {
           if (dataChannel) {
@@ -856,14 +878,14 @@ Provide specific, actionable advice tailored to the athlete's needs.`;
               if (onTranscriptComplete) {
                 const lastUserTranscript = transcript || '';
                 onTranscriptComplete(lastUserTranscript, finalMessageForCompletion, true, newHistory);
-          }
+              }
               stopListening();
               setPendingTranscript('');
               setIsReceivingCoachMessage(false);
               return newHistory;
             });
           }
-        }, 1500);
+        }, estimatedSeconds * 1000); // Delay based on estimated TTS duration
       }
     }
   };

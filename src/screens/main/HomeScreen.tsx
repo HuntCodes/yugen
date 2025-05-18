@@ -99,6 +99,27 @@ export function HomeScreen() {
     return date.getFullYear().toString();
   };
 
+  const loadChatHistory = useCallback(async (userId: string) => {
+    if (!userId) {
+      console.error('[HomeScreen] Cannot load chat history: User ID is missing.');
+      return;
+    }
+    
+    try {
+      console.log('[HomeScreen] Loading chat history for user:', userId);
+      const history = await fetchChatHistory(userId);
+      if (history && history.length > 0) {
+        console.log('[HomeScreen] Loaded', history.length, 'chat messages.');
+        setChatMessages(history);
+      } else {
+        console.log('[HomeScreen] No chat history found.');
+        setChatMessages([]);
+      }
+    } catch (error) {
+      console.error('[HomeScreen] Error loading chat history:', error);
+    }
+  }, [setChatMessages]);
+
   useEffect(() => {
     fetchUserData();
   }, [session]);
@@ -108,18 +129,7 @@ export function HomeScreen() {
     if (session?.user) {
       loadChatHistory(session.user.id);
     }
-  }, [session]);
-
-  const loadChatHistory = async (userId: string) => {
-    try {
-      const history = await fetchChatHistory(userId);
-      if (history && history.length > 0) {
-        setChatMessages(history);
-      }
-    } catch (error) {
-      console.error('Error loading chat history:', error);
-    }
-  };
+  }, [session, loadChatHistory]);
 
   const fetchUserData = useCallback(async () => {
     if (!session?.user) {
@@ -481,6 +491,20 @@ export function HomeScreen() {
     setIsDailyVoiceModeActive(false);
   }, []);
 
+  // New function to refresh data including chat messages
+  const refreshHomeData = useCallback(async () => {
+    console.log('[HomeScreen] Refreshing home data...');
+    if (session?.user) {
+      try {
+        // Refresh chat history
+        await loadChatHistory(session.user.id);
+        console.log('[HomeScreen] Chat history refreshed successfully.');
+      } catch (error) {
+        console.error('[HomeScreen] Error refreshing home data:', error);
+      }
+    }
+  }, [session, loadChatHistory]);
+
   if (loading) {
     return (
       <SafeAreaView className="flex-1 bg-[#FBF7F6] px-6 justify-center items-center">
@@ -542,6 +566,7 @@ export function HomeScreen() {
               onError={handleDailyVoiceError}
               onClose={handleDailyVoiceClose}
               isVisible={isDailyVoiceModeActive}
+              refreshHomeScreen={refreshHomeData}
               // onSpeakingStateChange={(isSpeaking, speaker) => console.log('Speaker:', speaker, 'isSpeaking:', isSpeaking)}
             />
           ) : (
