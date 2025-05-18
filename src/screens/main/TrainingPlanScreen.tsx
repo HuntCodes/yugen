@@ -1,18 +1,20 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { View, ActivityIndicator, TouchableOpacity, Alert, ScrollView, LayoutChangeEvent } from 'react-native';
+import { View, ActivityIndicator, TouchableOpacity, Alert, ScrollView, LayoutChangeEvent, StyleSheet } from 'react-native';
 import { Text } from '../../components/ui/StyledText';
 import { supabase } from '../../lib/supabase';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { OnboardingData } from '../../lib/openai';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation, useFocusEffect, useScrollToTop } from '@react-navigation/native';
 import { Screen } from '../../components/ui/Screen';
 import { TrainingSession } from './training/components/types';
 import { HeaderBar } from './training/components/HeaderBar';
-import { SessionList } from './training/components/SessionList';
+import { SessionList, SessionListProps } from './training/components/SessionList';
 import { SessionCard } from './training/components/SessionCard';
-import { UpdateSessionModal } from './training/components/UpdateSessionModal';
+import { UpdateSessionModal, UpdateSessionModalProps } from './training/components/UpdateSessionModal';
 import { fetchTrainingPlan, generateAndSavePlan, refreshWeeklyPlan, checkNeedsRefresh } from '../../services/plan';
 import { fetchProfile } from '../../services/profile/profileService';
+import TrainingOutlookView from './training/components/TrainingOutlookView';
+import { formatDate as formatDateUtil, getDayOfWeek as getDayOfWeekUtil } from '../../lib/utils/dateUtils';
 
 // Add this type definition for layout storage
 type SessionLayout = { y: number; height: number };
@@ -31,6 +33,8 @@ const getSuggestedShoe = (sessionType: string): string => {
   // Default
   return 'Cloudmonster';
 };
+
+type TabView = 'Schedule' | 'Outlook';
 
 export default function TrainingPlanScreen() {
   const [sessions, setSessions] = useState<TrainingSession[]>([]);
@@ -52,6 +56,10 @@ export default function TrainingPlanScreen() {
   const [targetScrollSessionId, setTargetScrollSessionId] = useState<string | null>(null);
   const [isTargetFirstOfWeek, setIsTargetFirstOfWeek] = useState<boolean>(false);
   const [scrollToTargetNeeded, setScrollToTargetNeeded] = useState(false);
+
+  const [activeTab, setActiveTab] = useState<TabView>('Schedule');
+
+  useScrollToTop(scrollViewRef); // For tapping tab bar to scroll to top
 
   // Function to format date string for display
   const formatDate = (dateString: string) => {
@@ -79,23 +87,23 @@ export default function TrainingPlanScreen() {
   };
 
   // Function to safely parse session data
-  const safeParseSession = (session: any): TrainingSession => {
+  const safeParseSession = (session: any, currentUserId: string): TrainingSession => {
     try {
       return {
-        id: session.id || 'unknown-id',
+        id: session.id || `unknown-${Math.random().toString(36).substring(7)}`,
         week_number: typeof session.week_number === 'number' ? session.week_number : 1,
-        day_of_week: typeof session.day_of_week === 'number' ? session.day_of_week : 
-                    new Date(session.date || new Date()).getDay() || 7, // Convert 0 (Sunday) to 7
-        session_type: session.session_type || 'Unknown Type',
-        date: session.date || new Date().toISOString(),
+        day_of_week: typeof session.day_of_week === 'number' ? session.day_of_week : new Date(session.date || Date.now()).getUTCDay() || 7,
+        session_type: session.session_type || 'Workout',
+        date: session.date || new Date().toISOString().split('T')[0],
         distance: typeof session.distance === 'number' ? session.distance : 0,
         time: typeof session.time === 'number' ? session.time : 0,
         notes: session.notes || '',
-        modified: !!session.modified,
         status: session.status || 'not_completed',
+        phase: session.phase || 'Base',
         post_session_notes: session.post_session_notes || '',
-        suggested_shoe: session.suggested_shoe || ''
-      };
+        modified: session.modified || false,
+        user_id: session.user_id || currentUserId,
+      } as TrainingSession;
     } catch (err) {
       console.error('Error parsing session:', err, session);
       return {
@@ -162,156 +170,7 @@ export default function TrainingPlanScreen() {
     }
   };
 
-  // Function to update a session
-  const handleUpdateSession = async (sessionId: string, updates: Partial<TrainingSession>) => {
-    setUpdatingSession(true);
-    try {
-      const user = supabase.auth.session()?.user;
-      if (!user) {
-        console.warn("handleSessionUpdate: No user found, cannot update.");
-        return;
-      }
-      
-      // Update locally first for immediate UI feedback
-      setSessions(prev => 
-        prev.map(session => 
-          session.id === sessionId 
-            ? { 
-                ...session,
-                ...updates,
-                distance: session.distance,
-                time: session.time,
-                suggested_shoe: session.suggested_shoe,
-                session_type: session.session_type,
-                date: session.date,
-                notes: session.notes
-              } 
-            : session
-        )
-      );
-      
-      // Prepare update object
-      const updateData: any = {
-        updated_at: new Date().toISOString()
-      };
-      if (updates.status) updateData.status = updates.status;
-      if (updates.post_session_notes !== undefined) updateData.post_session_notes = updates.post_session_notes;
-      
-      // Update Supabase
-      const { data: updatedSession, error: updateError } = await supabase
-        .from('training_plans')
-        .update(updateData)
-        .eq('id', sessionId)
-        .select();
-        
-      if (updateError) {
-        console.error('🔄 [TrainingPlanScreen] Error updating session:', updateError);
-        Alert.alert('Error', 'Failed to update session. Please try again.');
-        await fetchSessions(); // Revert local state
-      }
-    } catch (err: any) {
-      console.error('🔄 [TrainingPlanScreen] Error in handleUpdateSession:', err);
-      Alert.alert('Error', 'Failed to update session: ' + err.message);
-      await fetchSessions(); // Revert local state
-    } finally {
-      setUpdatingSession(false);
-    }
-  };
-
-  // Function to update all plan dates to current year
-  const updatePlanDates = async () => {
-    setUpdatingDates(true);
-    setError(null);
-    
-    try {
-      const user = supabase.auth.session()?.user;
-      if (!user) throw new Error('Not logged in');
-      
-      const currentYear = new Date().getFullYear();
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
-      const firstSessionOfWeek1 = sessions
-        .filter(s => s.week_number === 1)
-        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0];
-      
-      if (!firstSessionOfWeek1) throw new Error('Could not find first session to anchor dates');
-      
-      const updates = sessions.map(session => {
-        try {
-          const sessionDate = new Date(session.date);
-          if (sessionDate.getFullYear() === currentYear) return session;
-          
-          const firstDate = new Date(firstSessionOfWeek1.date);
-          const dayDiff = Math.round((sessionDate.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24));
-          
-          const newDate = new Date(today);
-          newDate.setDate(today.getDate() + dayDiff);
-          
-          return { ...session, date: newDate.toISOString().split('T')[0] };
-        } catch (err) {
-          console.error('Error updating date for session:', session.id, err);
-          return session;
-        }
-      });
-      
-      // Batch update (or individual if preferred)
-      for (const session of updates) {
-        const { error: updateError } = await supabase
-          .from('training_plans')
-          .update({ date: session.date, updated_at: new Date().toISOString() })
-          .eq('id', session.id);
-        if (updateError) console.error('Error updating session date:', session.id, updateError);
-      }
-      
-      await fetchSessions(); // Refresh sessions
-      setShowUpdateModal(false);
-      Alert.alert('Success', 'Training plan dates updated!');
-      
-    } catch (err: any) {
-      console.error('Error updating plan dates:', err);
-      setError(`Failed to update plan dates: ${err.message}`);
-      Alert.alert('Error', 'Failed to update plan dates.');
-    } finally {
-      setUpdatingDates(false);
-    }
-  };
-
-  const generateFallbackPlan = async () => {
-    if (!userId) {
-      Alert.alert("Error", "User ID not found. Cannot generate fallback plan.");
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const profileData = await fetchProfile(userId);
-      if (!profileData) throw new Error('No profile data found for fallback plan generation');
-
-      const fallbackOnboardingData: OnboardingData = {
-        goalType: profileData.goal_description || 'General Fitness',
-        raceDate: profileData.race_date,
-        raceDistance: profileData.goal_distance,
-        experienceLevel: profileData.running_experience || 'Beginner',
-        trainingFrequency: profileData.training_frequency || '3 days per week',
-        current_mileage: profileData.weekly_volume || '20',
-        units: profileData.units || 'km',
-        nickname: profileData.display_name || 'Runner',
-        trainingPreferences: profileData.training_preferences,
-      };
-      await generateAndSavePlan(userId, fallbackOnboardingData);
-      await fetchSessions();
-      Alert.alert("Fallback Plan Generated", "A sample training plan has been generated for you.");
-    } catch (err: any) {
-      console.error('Error generating fallback plan:', err);
-      setError('Failed to generate fallback plan: ' + err.message);
-      Alert.alert("Error", "Could not generate a fallback plan. " + err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchSessions = async () => {
+  const loadData = useCallback(async (scrollToSessionId?: string) => {
     setLoading(true);
     setError(null);
     sessionLayoutsRef.current = {}; // Clear layouts
@@ -329,12 +188,13 @@ export default function TrainingPlanScreen() {
 
       if (!planSessions || planSessions.length === 0) {
         // Don't auto-generate a plan - set an error and let user generate explicitly
-        setError('No training plan found. Click the button below to generate your personalized plan.');
+        setError('No training plan found. You can generate one from settings or your coach chat.');
+        setSessions([]);
         setLoading(false);
         return;
       }
 
-      let processedSessions = planSessions.map(safeParseSession);
+      let processedSessions = planSessions.map(s => safeParseSession(s, user.id));
       processedSessions = processedSessions.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
       // Recalculate week numbers (assuming this logic is correct)
@@ -407,10 +267,11 @@ export default function TrainingPlanScreen() {
     } catch (err: any) {
       console.error('Error fetching training plan:', err);
       setError(err.message);
+      setSessions([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   // Effect to scroll when needed and layout is available
   useEffect(() => {
@@ -459,13 +320,13 @@ export default function TrainingPlanScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      fetchSessions();
-    }, [])
+      loadData();
+    }, [loadData])
   );
 
   useEffect(() => {
-    fetchSessions(); // Initial load
-  }, []);
+    loadData(); // Initial load
+  }, [loadData]);
 
   // Auto-scroll to current day or first upcoming session
   useEffect(() => {
@@ -510,82 +371,188 @@ export default function TrainingPlanScreen() {
     // console.log('[TrainingPlanScreen] Layout for session', sessionId, event.nativeEvent.layout);
   };
 
-  const renderHeader = () => (
-    <View style={{ padding: 16, backgroundColor: '#F0ECEB', borderRadius: 8, marginHorizontal: 16, marginBottom: 16 }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <Text style={{ fontSize: 18, fontWeight: 'bold' }}>Weekly Training Plan</Text>
-      </View>
-      {nextRefreshDate && (
-        <Text style={{ fontSize: 14, color: '#666' }}>
-          Next week's plan will be generated on: {nextRefreshDate.toLocaleDateString('en-US', {
-            weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: 'numeric'
-          })}
-        </Text>
-      )}
-    </View>
-  );
+  const handleSessionUpdate = async (sessionId: string, updates: Partial<TrainingSession>) => {
+    setSessions(prevSessions =>
+      prevSessions.map(s => (s.id === sessionId ? { ...s, ...updates } : s))
+    );
+    try {
+      const { error: updateError } = await supabase
+        .from('training_plans')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', sessionId);
+      if (updateError) throw updateError;
+    } catch (e: any) {
+      console.error('Failed to update session:', e);
+      Alert.alert('Error', 'Failed to update session. Please try again.');
+      await loadData(); 
+    }
+  };
 
-  const renderSessionList = () => {
-    return (
-      <View style={{ flex: 1 }}>
-        {renderHeader()}
-        <SessionList 
-          sessions={sessions}
-          formatDate={formatDate}
-          getDayOfWeek={getDayOfWeek}
-          sessionLayoutsRef={sessionLayoutsRef}
-          scrollViewRef={scrollViewRef}
-        >
-          {(session, formattedDate, dayOfWeek, isModified) => (
-            <SessionCard
-              key={session.id}
-              session={session}
-              formattedDate={formattedDate}
-              dayOfWeek={dayOfWeek}
-              isModified={isModified}
-              userId={userId || undefined}
-              onUpdateSession={handleUpdateSession}
-              onLayout={(event: LayoutChangeEvent) => handleSessionLayout(session.id, event)}
-            />
-          )}
-        </SessionList>
+  const handleGenerateFallback = async () => {
+    if (!userId) {
+      Alert.alert("Error", "User ID not found.");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const profile = await fetchProfile(userId);
+      if (!profile) throw new Error('No profile data for fallback.');
+      const fallbackOnboardingData: OnboardingData = {
+        goalType: profile.goal_type || 'General Fitness',
+        raceDate: profile.race_date,
+        raceDistance: profile.race_distance,
+        experienceLevel: profile.experience_level || 'Beginner',
+        trainingFrequency: profile.current_frequency || '3 days/week',
+        current_mileage: String(profile.current_mileage || '20'),
+        units: profile.units || 'km',
+        nickname: profile.nickname || 'Runner',
+        userStartDate: new Date().toISOString().split('T')[0],
+      };
+      await generateAndSavePlan(userId, fallbackOnboardingData);
+      await loadData();
+      Alert.alert("Fallback Plan Generated", "A sample training plan has been generated for you.");
+    } catch (err: any) {
+      setError('Failed to generate fallback plan: ' + err.message);
+      Alert.alert("Error", "Could not generate fallback plan. " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  let content;
+  if (loading) {
+    content = <View style={styles.centeredMessageContainer}><ActivityIndicator size="large" /></View>;
+  } else if (error && sessions.length === 0) {
+    content = (
+      <View style={styles.centeredMessageContainer}>
+        <Text style={styles.errorText}>{error}</Text>
+        {userId && (
+          <TouchableOpacity onPress={handleGenerateFallback} style={styles.button}>
+            <Text style={styles.buttonText}>Generate Sample Plan</Text>
+          </TouchableOpacity>
+        )}
       </View>
     );
-  };
+  } else if (activeTab === 'Schedule') {
+    if (sessions.length === 0 && !error) {
+      content = (
+        <View style={styles.centeredMessageContainer}>
+          <Text style={styles.infoText}>No training sessions found.</Text>
+          {userId && (
+            <TouchableOpacity onPress={handleGenerateFallback} style={styles.button}>
+              <Text style={styles.buttonText}>Generate Sample Plan</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      );
+    } else {
+      content = (
+        <ScrollView ref={scrollViewRef}>
+          <SessionList
+            sessions={sessions}
+            formatDate={formatDateUtil}
+            getDayOfWeek={getDayOfWeekUtil}
+            sessionLayoutsRef={sessionLayoutsRef}
+            scrollViewRef={scrollViewRef}
+          >
+            {(session, formattedDate, dayOfWeek, isModified) => (
+              <SessionCard
+                session={session}
+                formattedDate={formattedDate}
+                dayOfWeek={dayOfWeek}
+                isModified={isModified}
+                onUpdateSession={handleSessionUpdate}
+                userId={userId || undefined}
+              />
+            )}
+          </SessionList>
+        </ScrollView>
+      );
+    }
+  } else if (activeTab === 'Outlook') {
+    content = <TrainingOutlookView />;
+  }
 
   return (
     <Screen style={{ backgroundColor: '#FBF7F6' }}>
-      <HeaderBar title="Training Plan" />
-      
-      {loading ? (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <ActivityIndicator size="large" color="#007AFF" />
-          <Text style={{ marginTop: 16, color: '#666' }}>Loading your training plan...</Text>
-        </View>
-      ) : error ? (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 }}>
-          <Text style={{ color: 'red', marginBottom: 16, textAlign: 'center' }}>{error}</Text>
-          <TouchableOpacity
-            style={{ backgroundColor: '#007AFF', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 4 }}
-            onPress={retrying ? undefined : fetchSessions}
+      <SafeAreaView edges={['top']} style={styles.flexOne}>
+        <HeaderBar title="Training Plan" />
+        <View style={styles.tabBarContainer}>
+          <TouchableOpacity 
+            style={[styles.tabButton, activeTab === 'Schedule' && styles.activeTabButton]}
+            onPress={() => setActiveTab('Schedule')}
           >
-            <Text style={{ color: 'white' }}>{retrying ? 'Retrying...' : 'Retry'}</Text>
+            <Text style={[styles.tabText, activeTab === 'Schedule' && styles.activeTabText]}>Schedule</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.tabButton, activeTab === 'Outlook' && styles.activeTabButton]}
+            onPress={() => setActiveTab('Outlook')}
+          >
+            <Text style={[styles.tabText, activeTab === 'Outlook' && styles.activeTabText]}>Outlook</Text>
           </TouchableOpacity>
         </View>
-      ) : (
-         <ScrollView ref={scrollViewRef} style={{ flex: 1 }}>
-            {renderSessionList()}
-         </ScrollView>
-      )}
-      
-      {showUpdateModal && !updatingDates && hasOldDates && (
-        <UpdateSessionModal
-          isVisible={showUpdateModal}
-          onClose={() => setShowUpdateModal(false)}
-          onUpdateDates={updatePlanDates}
-          isUpdating={updatingDates}
-        />
-      )}
+        {content}
+      </SafeAreaView>
     </Screen>
   );
-} 
+}
+
+const styles = StyleSheet.create({
+  flexOne: { flex: 1 },
+  tabBarContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    backgroundColor: '#F3F4F6', // neutral-100ish
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB', // neutral-200
+  },
+  tabButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+  },
+  activeTabButton: {
+    backgroundColor: '#3B82F6', // blue-500
+  },
+  tabText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#4B5563', // neutral-600
+  },
+  activeTabText: {
+    color: '#FFFFFF', // white
+    fontWeight: '600',
+  },
+  centeredMessageContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  errorText: {
+    textAlign: 'center',
+    color: '#EF4444', // red-500
+    fontSize: 16,
+    marginBottom: 16,
+  },
+  infoText: {
+    textAlign: 'center',
+    color: '#6B7280', // neutral-500
+    fontSize: 16,
+    marginBottom: 16,
+  },
+  button: {
+    backgroundColor: '#3B82F6', // blue-500
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+  },
+  buttonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+}); 

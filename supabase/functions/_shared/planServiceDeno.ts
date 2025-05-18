@@ -1,6 +1,9 @@
         // supabase/functions/_shared/planServiceDeno.ts
         import { arqué } from './arquéClient.ts'; // Supabase client for Deno
-        import { type ChatCompletionRequestMessage, Configuration, OpenAIApi } from "https://esm.sh/openai@3.2.1";
+        // import { type ChatCompletionRequestMessage, Configuration, OpenAIApi } from "https://esm.sh/openai@3.2.1"; // Old v3 import
+        import OpenAI from "https://esm.sh/openai@4.29.2"; // New v4 import (example version, check esm.sh for latest v4)
+        import { LocalDate, TemporalAdjusters, ChronoUnit, DayOfWeek } from 'https://esm.sh/@js-joda/core@5.5.2'; // Example: using esm.sh for @js-joda/core
+        // Note: You might need to adjust the @js-joda/core version or import method based on your Deno setup.
 
         // --- Type Definitions (consistent with existing app and feedbackService.ts) ---
         interface UserProfileOnboarding {
@@ -12,24 +15,24 @@
           current_frequency?: string | null;   // Was training_frequency
           current_mileage?: string | null;     // Was weekly_volume (ensure string for consistency with schema)
           units?: string | null;
-          training_preferences?: string[] | null;
           nickname?: string | null;            // Was display_name
           injury_history?: string | null;
           schedule_constraints?: string | null; // Directly from profiles
+          created_at: string; // Expect created_at as timestamp string from DB
         }
 
         interface OnboardingDataInternal {
           goalType: string;
-          raceDate?: string;
+          raceDate?: string | null;
           raceDistance?: string;
           experienceLevel: string;
           trainingFrequency: string;
           currentMileage: string;
           units: string;
-          trainingPreferences?: string[];
           nickname?: string;
           injuryHistory?: string;
           scheduleConstraints?: string;
+          planStartDate: string; // Will be derived from created_at (YYYY-MM-DD)
         }
 
         interface TrainingSessionDeno {
@@ -49,12 +52,11 @@
 
         // Initialize OpenAI client (similar to feedbackService.ts)
         const openAiApiKey = Deno.env.get("OPENAI_API_KEY");
-        let openai: OpenAIApi | null = null;
+        let openai: OpenAI | null = null; // Changed type to OpenAI (v4)
         if (openAiApiKey) {
-          const configuration = new Configuration({
-            apiKey: openAiApiKey,
-          });
-          openai = new OpenAIApi(configuration);
+          // const configuration = new Configuration({ apiKey: openAiApiKey }); // Old v3 config
+          // openai = new OpenAIApi(configuration); // Old v3 client
+          openai = new OpenAI({ apiKey: openAiApiKey }); // New v4 client initialization
         } else {
           console.warn("[planServiceDeno] OPENAI_API_KEY is not set. AI plan generation will be disabled.");
         }
@@ -64,7 +66,7 @@
           console.log(`[planServiceDeno] Fetching onboarding data for user ${userId} from profiles table.`);
           const { data: profileData, error: profileError } = await arquéClient
             .from('profiles')
-            .select('goal_type, race_date, race_distance, experience_level, current_frequency, current_mileage, units, training_preferences, nickname, injury_history, schedule_constraints')
+            .select('goal_type, race_date, race_distance, experience_level, current_frequency, current_mileage, units, nickname, injury_history, schedule_constraints, created_at') // Fetch created_at
             .eq('id', userId)
             .single();
 
@@ -73,38 +75,44 @@
             return null;
           }
 
-          // Cast to UserProfileOnboarding to ensure we only use known fields from profiles
           const p = profileData as UserProfileOnboarding;
+
+          // Convert created_at (timestamp string) to YYYY-MM-DD string for planStartDate
+          // Supabase typically returns timestamps in ISO 8601 format e.g., "2023-10-27T10:30:00.123456+00:00"
+          const createdAtDate = new Date(p.created_at);
+          const planStartDateString = createdAtDate.toISOString().split('T')[0];
 
           return {
             goalType: p.goal_type || 'General fitness',
-            raceDate: p.race_date || undefined,
+            raceDate: p.race_date || null,
             raceDistance: p.race_distance || undefined,
             experienceLevel: p.experience_level || 'beginner',
             trainingFrequency: p.current_frequency || '3-4 days per week',
-            currentMileage: String(p.current_mileage || '20'), // Ensure string
+            currentMileage: String(p.current_mileage || '20'),
             units: p.units || 'km',
-            trainingPreferences: p.training_preferences || undefined,
             nickname: p.nickname || undefined,
             injuryHistory: p.injury_history || undefined,
             scheduleConstraints: p.schedule_constraints || undefined,
+            planStartDate: planStartDateString, // Use formatted created_at
           };
         }
 
         // --- Helper: Remove Workouts (Conditional based on interaction) ---
-        async function removeWorkoutsFromDateDeno(arquéClient: any, userId: string, fromDateUtcString: string): Promise<boolean> {
-          console.log(`[planServiceDeno] Removing workouts for user ${userId} from date ${fromDateUtcString}`);
+        // Renamed and modified to delete only for a specific week
+        async function deleteWorkoutsForSpecificWeekDeno(arquéClient: any, userId: string, weekStartUtcString: string, weekEndUtcString: string): Promise<boolean> {
+          console.log(`[planServiceDeno] Removing workouts for user ${userId} for week ${weekStartUtcString} to ${weekEndUtcString}`);
           const { error } = await arquéClient
             .from('training_plans')
             .delete()
             .eq('user_id', userId)
-            .gte('date', fromDateUtcString);
+            .gte('date', weekStartUtcString)
+            .lte('date', weekEndUtcString); // Added condition to only delete within the specified week
 
           if (error) {
-            console.error(`[planServiceDeno] Error removing workouts from ${fromDateUtcString} for user ${userId}:`, error);
+            console.error(`[planServiceDeno] Error removing workouts for week ${weekStartUtcString}-${weekEndUtcString} for user ${userId}:`, error);
             return false;
           }
-          console.log(`[planServiceDeno] Successfully removed workouts from ${fromDateUtcString} for user ${userId}`);
+          console.log(`[planServiceDeno] Successfully removed workouts for week ${weekStartUtcString}-${weekEndUtcString} for user ${userId}`);
           return true;
         }
 
@@ -113,6 +121,8 @@
         // or a similar AI call to generate a 7-day plan.
         async function generateNewWeekPlanWithAI(
           onboardingData: OnboardingDataInternal,
+          currentPhase: string, // ADDED: current training phase
+          weeksSincePlanStart: number, // ADDED: for week_number in sessions
           latestFeedbackSummary?: string,
           targetMondayDate?: Date
         ): Promise<Omit<TrainingSessionDeno, 'user_id' | 'status' | 'created_at' | 'updated_at'>[]> {
@@ -128,36 +138,53 @@
           prompt += `- Experience: ${onboardingData.experienceLevel}\n`;
           prompt += `- Training Frequency: ${onboardingData.trainingFrequency}\n`;
           prompt += `- Current Mileage: ${onboardingData.currentMileage} ${onboardingData.units}\n`;
-          if (onboardingData.trainingPreferences) prompt += `- Preferences: ${onboardingData.trainingPreferences.join(', ')}\n`;
           if (onboardingData.injuryHistory) prompt += `- Injury History: ${onboardingData.injuryHistory}\n`;
           if (onboardingData.scheduleConstraints) prompt += `- Schedule Constraints: ${onboardingData.scheduleConstraints}\n`;
           if (onboardingData.nickname) prompt += `- Nickname: ${onboardingData.nickname}\n`;
+          
+          prompt += `\nINFO FOR PLAN STRUCTURE:\n`; // Added section for clarity
+          prompt += `- Current Training Phase: ${currentPhase}\n`; // ADDED
+          prompt += `- Week Number in Plan: ${weeksSincePlanStart + 1}\n`; // ADDED (assuming weeksSincePlanStart is 0-indexed)
 
           if (latestFeedbackSummary) {
             prompt += `\nRecent feedback summary: ${latestFeedbackSummary}\n`;
           }
-          if (targetMondayDate) {
-            prompt += `\nThe plan should be for the week starting Monday, ${targetMondayDate.toISOString().split('T')[0]}.\n`;
-          }
-          prompt += `\nPlease provide the plan as a JSON array, where each object has: \"day_of_week\" (1 for Monday, ..., 7 for Sunday), \"session_type\" (e.g., \"Easy Run\", \"Tempo Run\", \"Long Run\", \"Rest\", \"Strength Training\"), \"date\" (YYYY-MM-DD format for the specific day of the target week), \"distance\" (in ${onboardingData.units}, null if not applicable), \"time\" (in minutes, null if not applicable), \"notes\" (brief description or instructions, null if none). Ensure dates align with the target week starting ${targetMondayDate ? targetMondayDate.toISOString().split('T')[0] : 'current Monday'}.`;
 
-          console.log("[planServiceDeno] Generating plan with prompt (first 200 chars):", prompt.substring(0,200));
+          let targetMondayString = 'current Monday';
+          if (targetMondayDate) {
+            const targetSundayDate = new Date(targetMondayDate);
+            targetSundayDate.setUTCDate(targetMondayDate.getUTCDate() + 6);
+            targetMondayString = targetMondayDate.toISOString().split('T')[0];
+            const targetSundayString = targetSundayDate.toISOString().split('T')[0];
+            prompt += `\nThe plan should be for the week starting Monday, ${targetMondayString}, and ending Sunday, ${targetSundayString}.\n`;
+          }
+          prompt += `\nPlease provide the plan as a JSON array, where each object has: \"day_of_week\" (1 for Monday, ..., 7 for Sunday), \"session_type\" (e.g., \"Easy Run\", \"Tempo Run\", \"Long Run\", \"Rest\", \"Strength Training\"), \"date\" (YYYY-MM-DD format for the specific day of the target week), \"distance\" (in ${onboardingData.units}, null if not applicable), \"time\" (in minutes, null if not applicable), \"notes\" (brief description or instructions, null if none). Ensure dates align with the target week starting ${targetMondayString} and are within this Mon-Sun range. Include a \"phase\": \"${currentPhase}\" and \"week_number\": ${weeksSincePlanStart + 1} in each session object.`;
+
+          console.log("[planServiceDeno] Generating plan with prompt (first 300 chars):", prompt.substring(0,300));
 
           try {
-            const messages: ChatCompletionRequestMessage[] = [
+            // Old v3 ChatCompletionRequestMessage type might not be needed if using v4 direct params
+            const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
               { role: "system", content: "You are a highly experienced running coach. Generate detailed, personalized 7-day training plans." },
               { role: "user", content: prompt }
             ];
 
-            const completion = await openai.createChatCompletion({
-              model: "gpt-4-turbo-preview", // Or your preferred model for plan generation
+            // const completion = await openai.createChatCompletion({ // Old v3 call
+            //   model: "gpt-4-turbo-preview",
+            //   messages: messages,
+            //   max_tokens: 1500,
+            //   temperature: 0.5,
+            // });
+            const completion = await openai.chat.completions.create({ // New v4 call
+              model: "gpt-4-turbo-preview",
               messages: messages,
-              // response_format: { type: "json_object" }, // If using a model that supports JSON mode and you structure the prompt accordingly
-              max_tokens: 1500, // Adjust based on expected plan length
-              temperature: 0.5, // Adjust for creativity/consistency
+              max_tokens: 1500,
+              temperature: 0.5,
+              // response_format: { type: "json_object" }, // Still an option in v4 if desired
             });
 
-            const content = completion.data.choices[0].message?.content;
+            // const content = completion.data.choices[0].message?.content; // Old v3 access
+            const content = completion.choices[0].message?.content; // New v4 access
             if (!content) {
               console.error("[planServiceDeno] OpenAI response was empty.");
               return [];
@@ -194,11 +221,16 @@
                 distance: item.distance ? Number(item.distance) : null,
                 time: item.time ? Number(item.time) : null,
                 notes: item.notes || null,
-                week_number: 1, // Or derive based on targetMondayDate for long-term plan tracking
+                week_number: item.week_number || (weeksSincePlanStart + 1), // Use AI's week_number or calculated
+                phase: item.phase || currentPhase, // Use AI's phase or calculated currentPhase
             }));
 
           } catch (error: any) {
-            console.error("[planServiceDeno] Error calling OpenAI for plan generation:", error.response ? error.response.data : error.message);
+            console.error("[planServiceDeno] Raw error object from OpenAI call:", error);
+            console.error("[planServiceDeno] Error calling OpenAI for plan generation (error.message):", error.message);
+            if (error.response) {
+              console.error("[planServiceDeno] OpenAI error response data:", error.response.data);
+            }
             throw new Error(`OpenAI plan generation failed: ${error.message}`);
           }
         }
@@ -218,66 +250,44 @@
             return false;
           }
 
-          const mondayString = targetMondayUtcDate.toISOString().split('T')[0];
-          const sundayDate = new Date(targetMondayUtcDate);
-          sundayDate.setUTCDate(targetMondayUtcDate.getUTCDate() + 6);
-          const sundayString = sundayDate.toISOString().split('T')[0];
+          // Calculate current training phase and weeksSincePlanStart
+          // planStartDate will now always be populated from created_at
+          const planStartDateForPhaseCalc = new Date(onboardingData.planStartDate + 'T00:00:00Z'); 
 
-          // 1. Fetch existing sessions for the target week (Mon-Sun)
-          const { data: existingSessions, error: fetchError } = await arquéClient
-            .from('training_plans')
-            .select('id, date, status, notes, post_session_notes') // Added 'notes' to select, as schema has both
-            .eq('user_id', userId)
-            .gte('date', mondayString)
-            .lte('date', sundayString);
+          // Ensure targetMondayUtcDate is treated as UTC for phase calculation
+          // We need to be careful with timezones. targetMondayUtcDate IS already a UTC date object.
+          const currentPhase = getTrainingPhaseDeno(onboardingData.raceDate, targetMondayUtcDate, planStartDateForPhaseCalc);
+          
+          // Calculate weeksSincePlanStart relative to targetMondayUtcDate
+          const diffTime = Math.abs(targetMondayUtcDate.getTime() - planStartDateForPhaseCalc.getTime());
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          const weeksSincePlanStart = Math.floor(diffDays / 7);
 
-          if (fetchError) {
-            console.error(`[planServiceDeno] Error fetching existing sessions for user ${userId}:`, fetchError);
-            return false; // Critical error
+          console.log(`[planServiceDeno] Plan Start Date (from created_at): ${onboardingData.planStartDate}, Target Monday: ${targetMondayUtcDate.toISOString().split('T')[0]}, Current Phase: ${currentPhase}, Weeks Since Plan Start: ${weeksSincePlanStart}`);
+
+          // Calculate the end of the week (Sunday) for deletion range
+          const targetSundayUtcDate = new Date(targetMondayUtcDate);
+          targetSundayUtcDate.setUTCDate(targetMondayUtcDate.getUTCDate() + 6);
+          const targetMondayString = targetMondayUtcDate.toISOString().split('T')[0];
+          const targetSundayString = targetSundayUtcDate.toISOString().split('T')[0];
+
+          // Delete existing workouts for the target week ONLY
+          const deleteSuccess = await deleteWorkoutsForSpecificWeekDeno(arquéClient, userId, targetMondayString, targetSundayString);
+          if (!deleteSuccess) {
+            console.error(`[planServiceDeno] Failed to delete existing workouts for week ${targetMondayString}. Aborting plan generation.`);
+            // Depending on desired behavior, you might choose to proceed or return false.
+            // For now, returning false if deletion fails to prevent potential duplicates or partial overwrites.
+            return false; 
           }
 
-          let hasInteractedSessionsInTargetWeek = false;
-          if (existingSessions) {
-            for (const session of existingSessions) {
-              // Define "interacted": status is not 'not_completed', or there are notes
-              // Adjust this logic based on your 'training_plans' table structure (e.g. column names for notes)
-              const sessionNotes = session.notes || session.post_session_notes; // Example if notes can be in either field
-              if (session.status !== 'not_completed' || (sessionNotes && String(sessionNotes).trim() !== '')) {
-                hasInteractedSessionsInTargetWeek = true;
-                break;
-              }
-            }
-          }
-          console.log(`[planServiceDeno] User ${userId} hasInteractedSessionsInTargetWeek (${mondayString}-${sundayString}): ${hasInteractedSessionsInTargetWeek}`);
-
-          // 2. Conditional Deletion of workouts
-          // The Edge function will call this for the *current* user's week (e.g. Mon June 10 - Sun June 16)
-          // If user logs in on Wed June 12, targetMonday is June 10.
-          // We need to decide what to clear.
-          // Original logic: if interacted in target week, only clear from *today* (server time) onwards.
-          // New server-side logic: the function is told the *exact Monday* of the week to plan for.
-          // We should clear non-interacted future sessions for that week.
-          // And preserve past interacted sessions within that week.
-
-          const todayUtc = new Date();
-          todayUtc.setUTCHours(0,0,0,0);
-          const todayUtcString = todayUtc.toISOString().split('T')[0];
-
-          if (!hasInteractedSessionsInTargetWeek) {
-            // No interactions AT ALL in the target week (Mon-Sun). Safe to clear the whole target week.
-            console.log(`[planServiceDeno] No interacted sessions in target week. Removing all sessions from ${mondayString} for user ${userId}`);
-            await removeWorkoutsFromDateDeno(arquéClient, userId, mondayString);
-          } else {
-            // Interactions found within the target week. Only delete future, non-interacted items.
-            // This means deleting any session in training_plans from *today* onwards.
-            // This is simpler and safer than trying to pick out individual future non-interacted sessions.
-            // The subsequent save logic will handle not overwriting past interacted ones.
-            console.log(`[planServiceDeno] Interacted sessions found in target week. Removing sessions from ${todayUtcString} (today UTC) onwards for user ${userId}`);
-            await removeWorkoutsFromDateDeno(arquéClient, userId, todayUtcString);
-          }
-
-          // 3. Generate new 7-day plan (Mon-Sun for the targetMondayUtcDate)
-          const newRawSessions = await generateNewWeekPlanWithAI(onboardingData, latestFeedbackSummary, targetMondayUtcDate);
+          // Generate new plan using AI
+          const newRawSessions = await generateNewWeekPlanWithAI(
+            onboardingData,
+            currentPhase, // Pass calculated phase
+            weeksSincePlanStart, // Pass weeks since start
+            latestFeedbackSummary,
+            targetMondayUtcDate
+          );
           if (!newRawSessions || newRawSessions.length === 0) {
             console.error(`[planServiceDeno] No new sessions generated by AI for user: ${userId}`);
             // Depending on requirements, this might not be a hard fail if, for instance, deletion occurred
@@ -345,4 +355,102 @@
           }
           
           return true;
+        }
+
+        // --- Phase Calculation Logic (Mirrored from planAnalysis.ts) ---
+
+        // Helper to get the Monday of the week for a given JS Date (Deno version)
+        function getMondayOfWeekDeno(date: Date): LocalDate {
+          // JS Date month is 0-indexed, LocalDate month is 1-indexed
+          const jsJodaDate = LocalDate.of(date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate());
+          return jsJodaDate.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+        }
+
+        // Helper to calculate full weeks between two Mondays (Deno version)
+        function calculateFullWeeksBetweenMondaysDeno(date1Monday: LocalDate, date2Monday: LocalDate): number {
+          if (date1Monday.isAfter(date2Monday)) return 0;
+          return ChronoUnit.WEEKS.between(date1Monday, date2Monday);
+        }
+
+        // Main phase calculation function (Deno version)
+        function getTrainingPhaseDeno(
+          raceDateString?: string | null,
+          currentDateForPhase: Date = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate())),
+          planStartDateJs?: Date | null
+        ): string {
+          const today = new Date(currentDateForPhase.valueOf()); // Clone to avoid modifying original
+          // Ensure time components are zeroed out for consistent day-based comparisons, using UTC for Deno functions
+          today.setUTCHours(0, 0, 0, 0);
+          const currentWeekMonday = getMondayOfWeekDeno(today);
+
+          const actualPlanStartDate = planStartDateJs ? new Date(planStartDateJs.valueOf()) : new Date(today.valueOf());
+          actualPlanStartDate.setUTCHours(0, 0, 0, 0);
+          const planStartMonday = getMondayOfWeekDeno(actualPlanStartDate);
+
+          const basePeriodEndDateGlobal = planStartMonday.plusDays(13);
+
+          if (raceDateString && raceDateString !== 'None') {
+            const raceDayLd = LocalDate.parse(raceDateString);
+            if (currentWeekMonday.isAfter(raceDayLd)) {
+              const daysPastRaceStartOfWeek = ChronoUnit.DAYS.between(raceDayLd, currentWeekMonday);
+              if (daysPastRaceStartOfWeek < 0) { 
+              } else if (daysPastRaceStartOfWeek <= 6) { 
+                return "Recovery";
+              } else if (daysPastRaceStartOfWeek <= 13) { 
+                return "Recovery";
+              } else if (daysPastRaceStartOfWeek <= 20) { 
+                return "Base";
+              } else if (daysPastRaceStartOfWeek <= 27) { 
+                return "Base";
+              }
+            }
+          }
+
+          if (raceDateString && raceDateString !== 'None') {
+            const raceDayLd = LocalDate.parse(raceDateString);
+            const daysTillRaceForPrimaryLogic = ChronoUnit.DAYS.between(currentWeekMonday, raceDayLd);
+
+            if (daysTillRaceForPrimaryLogic >= -27) {
+              const raceWeekMonday = raceDayLd.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+              const taperWeekMonday = raceWeekMonday.minusWeeks(1);
+              const peakWeekMonday = taperWeekMonday.minusWeeks(1);
+
+              if (currentWeekMonday.isEqual(raceDayLd.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))) && daysTillRaceForPrimaryLogic >=0) {
+                return "Race Week";
+              }
+              if (currentWeekMonday.isEqual(taperWeekMonday)) {
+                return "Taper";
+              }
+              if (currentWeekMonday.isEqual(peakWeekMonday)) {
+                return "Peak";
+              }
+
+              if (currentWeekMonday.isBefore(peakWeekMonday)) {
+                if (currentWeekMonday.isBefore(basePeriodEndDateGlobal.plusDays(1)) && 
+                    (currentWeekMonday.isEqual(planStartMonday) || currentWeekMonday.isAfter(planStartMonday))) {
+                  return "Base";
+                }
+                const weeksFromPeakToCurrent = calculateFullWeeksBetweenMondaysDeno(currentWeekMonday, peakWeekMonday.minusDays(1));
+                const cyclePositionReversed = weeksFromPeakToCurrent % 4;
+                if (cyclePositionReversed === 0) return "Base"; 
+                if (cyclePositionReversed === 1) return "Build";
+                if (cyclePositionReversed === 2) return "Build";
+                if (cyclePositionReversed === 3) return "Build";
+              }
+            }
+          }
+
+          if (currentWeekMonday.isBefore(basePeriodEndDateGlobal.plusDays(1)) && 
+              (currentWeekMonday.isEqual(planStartMonday) || currentWeekMonday.isAfter(planStartMonday))) {
+            return "Base";
+          }
+
+          const weeksSincePlanStartForCycle = calculateFullWeeksBetweenMondaysDeno(planStartMonday, currentWeekMonday);
+          const adjustedWeeksForCycle = weeksSincePlanStartForCycle - 2;
+          if (adjustedWeeksForCycle < 0) {
+              return "Base"; 
+          }
+          const cyclePositionForward = adjustedWeeksForCycle % 4;
+          if (cyclePositionForward < 3) return "Build";
+          return "Base";
         }

@@ -33,10 +33,20 @@ export async function generateTrainingPlan(onboarding: OnboardingData): Promise<
 
   // Calculate current week dates for context
   // Use userStartDate from onboarding data if available, otherwise default to server's current date
-  const today = onboarding.userStartDate ? new Date(onboarding.userStartDate) : new Date();
-  // Ensure time is set to beginning of day for consistency if using userStartDate string
+  let today: Date;
   if (onboarding.userStartDate) {
-    today.setUTCHours(0, 0, 0, 0); // Use UTC to avoid timezone shifts from string conversion
+    // userStartDate is expected to be "YYYY-MM-DD"
+    const [year, month, day] = onboarding.userStartDate.split('-').map(Number);
+    // Create a Date object representing midnight UTC for the given user's start date
+    today = new Date(Date.UTC(year, month - 1, day));
+  } else {
+    // This fallback is highly problematic for users in different timezones than the server.
+    // It's strongly recommended to ensure userStartDate is always provided from the client.
+    console.error("CRITICAL: userStartDate not provided to generateTrainingPlan. Falling back to server's current date. This will cause timezone issues for the user's first week plan and may lead to plans starting on the wrong day for the user.");
+    // Use server's current date as a last resort
+    const serverNow = new Date();
+    // Align to UTC midnight of the server's current date
+    today = new Date(Date.UTC(serverNow.getUTCFullYear(), serverNow.getUTCMonth(), serverNow.getUTCDate()));
   }
   
   // Calculate the next Sunday

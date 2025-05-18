@@ -194,22 +194,30 @@ export function HomeScreen() {
 
   // New useEffect to check for plan updates when upcomingSessions are loaded or profile changes
   useEffect(() => {
-    if (profile && upcomingSessions.length > 0) { // Check only when we have some plan data
+    // Only check if we have a profile and the initial load of sessions isn't pending (or has completed)
+    // The original upcomingSessions.length > 0 might be too restrictive if a user has NO plan yet.
+    // Let fetchUserData complete first.
+    if (profile && !loading) { 
       checkIfPlanUpdateNeeded();
     }
-  }, [profile, upcomingSessions]);
+  }, [profile, loading]); // Removed upcomingSessions, check when profile is loaded and initial loading is done
 
   const checkIfPlanUpdateNeeded = useCallback(async () => {
-    if (!session?.user || !profile) return;
-    if (planUpdateStatus.isLoading) return;
+    if (!session?.user || !profile) {
+      console.log('[checkIfPlanUpdateNeeded] No session or profile.');
+      return;
+    }
 
     const now = Date.now();
-    // Adjust debounce logic slightly: if needsUpdate is already true, allow re-check more readily
-    // or if an error message is shown.
-    if (lastPlanCheckTimestamp && (now - lastPlanCheckTimestamp < 60000) && !planUpdateStatus.needsUpdate && !planUpdateStatus.message.toLowerCase().includes('error')) {
+    // Debounce: if already checked recently, and no update is flagged or error shown, skip.
+    if (lastPlanCheckTimestamp && (now - lastPlanCheckTimestamp < 60000) && 
+        !planUpdateStatus.needsUpdate && 
+        !(planUpdateStatus.message && planUpdateStatus.message.toLowerCase().includes('error'))) {
+      console.log('[checkIfPlanUpdateNeeded] Debounced.');
       return;
     }
     setLastPlanCheckTimestamp(now);
+    console.log('[checkIfPlanUpdateNeeded] Running check...');
 
     try {
       const systemZone = ZoneId.systemDefault();
@@ -228,152 +236,142 @@ export function HomeScreen() {
 
       let planNeedsGenerating = false;
       let dateStringToPassToEdgeFunction = '';
-      let messageForUser = ''; // Message when initiating generation
-      let relevantWeekStatusMessage = ''; // Message if plan is already in place
+      let messageForUser = '';
+      let relevantWeekStatusMessage = '';
 
+      // On SUNDAY: check for NEXT week if it's empty
       if (dayOfWeek === DayOfWeek.SUNDAY) {
-        // On Sunday, check if NEXT week's plan (next Mon to next Sun) is missing.
+        console.log('[checkIfPlanUpdateNeeded] Today is Sunday, checking for NEXT week.');
         const sessionsInNextWeek = upcomingSessions.filter(s => {
-          const sessionDate = s.date; // YYYY-MM-DD
+          const sessionDate = s.date; 
           return sessionDate >= nextWeekMondayString && sessionDate <= nextWeekSundayString;
         });
 
         if (sessionsInNextWeek.length < 1) {
+          console.log('[checkIfPlanUpdateNeeded] Next week plan is missing. Flagging for generation.');
           planNeedsGenerating = true;
-          dateStringToPassToEdgeFunction = nextWeekMondayString; // Tell EF to generate for next week's Monday
-          messageForUser = "New plan for next week required. Initiating generation...";
+          dateStringToPassToEdgeFunction = nextWeekMondayString;
+          messageForUser = "New plan for next week needed. Generating...";
         } else {
+          console.log('[checkIfPlanUpdateNeeded] Plan for next week is already in place.');
           relevantWeekStatusMessage = "Plan for next week is in place.";
         }
-      } else { // Monday to Saturday
-        // On other days (Mon-Sat), check if CURRENT week's plan (current Mon to current Sun) is missing.
+      } else { // Monday to Saturday: Only check current week if completely empty.
+        console.log('[checkIfPlanUpdateNeeded] Today is Mon-Sat, checking for CURRENT week (only if empty).');
         const sessionsInCurrentWeek = upcomingSessions.filter(s => {
-          const sessionDate = s.date; // YYYY-MM-DD
+          const sessionDate = s.date; 
           return sessionDate >= currentWeekMondayString && sessionDate <= currentWeekSundayString;
         });
 
         if (sessionsInCurrentWeek.length < 1) {
+          console.log('[checkIfPlanUpdateNeeded] Current week plan is completely missing. Flagging for generation.');
           planNeedsGenerating = true;
-          dateStringToPassToEdgeFunction = currentWeekMondayString; // Tell EF to generate for current week's Monday
-          messageForUser = "New plan for the current week required. Initiating generation...";
+          dateStringToPassToEdgeFunction = currentWeekMondayString;
+          messageForUser = "Current week's plan missing. Generating...";
         } else {
-          relevantWeekStatusMessage = "Plan for current week is in place.";
+          console.log('[checkIfPlanUpdateNeeded] Plan for current week is (at least partially) in place.');
+          relevantWeekStatusMessage = "Plan for the current week is in place.";
         }
       }
 
-      if (planNeedsGenerating) {
+      if (planNeedsGenerating && dateStringToPassToEdgeFunction) {
+        console.log(`[checkIfPlanUpdateNeeded] Needs update for ${dateStringToPassToEdgeFunction}. Message: ${messageForUser}`);
+        if (!planUpdateStatus.isLoading) { // Only set if not already loading from a previous trigger
         setPlanUpdateStatus({
           needsUpdate: true,
-          isLoading: false,
+                isLoading: false, // This will be set to true by the effect that calls handleRequestWeeklyPlanUpdate
           message: messageForUser,
           targetDateForGeneration: dateStringToPassToEdgeFunction,
         });
+        }
       } else {
-        // Plan is in place for the relevant period.
-        // Only update message if not loading and no error, or if message was the "initiating" one.
-        if (!planUpdateStatus.isLoading) {
-           // If current message is an error and needsUpdate is false, keep error. Else, show "in place" message.
-          const shouldUpdateMessage = !(planUpdateStatus.message.toLowerCase().includes('error') && !planUpdateStatus.needsUpdate);
-
-          setPlanUpdateStatus(prev => ({
-            ...prev,
+        console.log(`[checkIfPlanUpdateNeeded] No plan generation needed. Status: ${relevantWeekStatusMessage}`);
+        if (planUpdateStatus.needsUpdate || (relevantWeekStatusMessage && planUpdateStatus.message !== relevantWeekStatusMessage)) {
+           setPlanUpdateStatus({
             needsUpdate: false,
-            message: shouldUpdateMessage ? relevantWeekStatusMessage : prev.message,
+             isLoading: false,
+             message: relevantWeekStatusMessage, // Update message if plan is in place
             targetDateForGeneration: null,
-          }));
+           });
         }
       }
     } catch (error) {
-      console.error('[PlanCheck] Error in checkIfPlanUpdateNeeded:', error);
-      setPlanUpdateStatus({
-        needsUpdate: false, // Or true if you want to retry on error
-        isLoading: false,
+      console.error('[checkIfPlanUpdateNeeded] Error:', error);
+      setPlanUpdateStatus(prev => ({
+          ...prev,
+          isLoading: false, // Ensure loading is false on error
+          needsUpdate: false, // Don't keep trying if check itself failed
         message: 'Error checking plan status.',
-        targetDateForGeneration: null,
-      });
+        }));
     }
-  }, [session, profile, upcomingSessions, planUpdateStatus.isLoading, planUpdateStatus.message, planUpdateStatus.needsUpdate, lastPlanCheckTimestamp, setPlanUpdateStatus]);
+  // Key dependencies for re-running the check. 
+  // upcomingSessions is important because its content determines if a plan is needed.
+  // profile is needed for session.user.
+  // planUpdateStatus itself (or parts of it) to avoid re-running if already processing or recently decided.
+}, [session, profile, upcomingSessions, lastPlanCheckTimestamp, planUpdateStatus.isLoading, planUpdateStatus.needsUpdate, planUpdateStatus.message]);
 
-  // Check for plan update on initial load and when sessions/profile data changes
+  // useEffect to actually call the Edge Function when an update is needed and not already loading.
   useEffect(() => {
-    if (profile && session?.user) { // Ensure profile and session are loaded
-        checkIfPlanUpdateNeeded();
-    }
-  }, [profile, upcomingSessions, session, checkIfPlanUpdateNeeded]);
-
-  // Also check on screen focus, in case the user navigates away and comes back
-  useFocusEffect(
-    useCallback(() => {
-      if (session?.user && profile) {
-        checkIfPlanUpdateNeeded();
-      }
-    }, [session, profile, checkIfPlanUpdateNeeded])
-  );
-
-  const handleRequestWeeklyPlanUpdate = useCallback(async (targetDateForGeneration?: string | null) => {
-    if (!session?.user) {
-      Alert.alert('Not Signed In', 'Please sign in to update your plan.');
-      return;
-    }
-    // Preserve the "Initiating generation..." message if it was set, otherwise use default.
-    setPlanUpdateStatus(prev => ({
-      ...prev, // Important to spread prev to keep targetDateForGeneration if it was set
-      needsUpdate: false,
-      isLoading: true,
-      message: prev.message.startsWith("New plan for") ? prev.message : 'Requesting new weekly plan...',
-      // targetDateForGeneration is already part of prev or passed in
-    }));
-    
-    const systemZone = ZoneId.systemDefault();
-    // clientLocalDateString will be the specific Monday (if passed) or today's date.
-    // The Edge Function's getMondayUtc will correctly use this Monday or find the Monday of the week this date is in.
-    const clientLocalDateString = targetDateForGeneration || LocalDate.now(systemZone).toString();
-
-    try {
-      console.log(`[HomeScreen] Calling fn_request_weekly_plan_update with clientLocalDateString (target Monday or today): ${clientLocalDateString}`);
-      const { data, error } = await supabase.functions.invoke('fn_request_weekly_plan_update', {
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientLocalDateString: clientLocalDateString }),
-      });
-      if (error) {
-        console.error('[HomeScreen] Error calling Edge Function fn_request_weekly_plan_update:', error);
-        Alert.alert('Error', `Failed to update weekly plan: ${error.message || 'Unknown error'}`);
-        setPlanUpdateStatus({
-          needsUpdate: true, // Suggest re-evaluation
-          isLoading: false,
-          message: `Error: ${error.message || 'Plan update failed.'}`,
-          targetDateForGeneration: targetDateForGeneration !== undefined ? targetDateForGeneration : null, // Keep target for context, ensure null if undefined
-        });
-      } else {
-        console.log('[HomeScreen] Edge Function fn_request_weekly_plan_update success:', data);
-        Alert.alert('Success', data.message || 'Weekly plan update request processed! Fetching new plan...');
-        setPlanUpdateStatus({
-          needsUpdate: false,
-          isLoading: false,
-          message: data.message || 'Plan requested successfully!',
-          targetDateForGeneration: null, // Clear target after success
-        });
-        await fetchUserData(); // Refresh data
-      }
-    } catch (e: any) {
-      console.error('[HomeScreen] Exception calling Edge Function fn_request_weekly_plan_update:', e);
-      Alert.alert('Error', `An exception occurred: ${e.message || 'Unknown error'}`);
-      setPlanUpdateStatus({
-        needsUpdate: true, // Suggest re-evaluation
-        isLoading: false,
-        message: `Exception: ${e.message || 'Plan update failed.'}`,
-        targetDateForGeneration: targetDateForGeneration !== undefined ? targetDateForGeneration : null, // Keep target for context, ensure null if undefined
-      });
-    }
-  }, [session, fetchUserData]); // supabase is global, ZoneId, LocalDate are stable, fetchUserData is useCallback-wrapped
-
-  // useEffect to automatically trigger plan update if needed
-  useEffect(() => {
-    if (planUpdateStatus.needsUpdate && !planUpdateStatus.isLoading && session?.user) {
+    if (planUpdateStatus.needsUpdate && planUpdateStatus.targetDateForGeneration && !planUpdateStatus.isLoading) {
+      // Immediately set isLoading to true to prevent multiple invocations from rapid state changes.
+      // The message is already set by checkIfPlanUpdateNeeded.
+      setPlanUpdateStatus(prev => ({ ...prev, isLoading: true })); 
       handleRequestWeeklyPlanUpdate(planUpdateStatus.targetDateForGeneration);
     }
-    // Add planUpdateStatus.targetDateForGeneration to dependency array
-  }, [planUpdateStatus.needsUpdate, planUpdateStatus.isLoading, planUpdateStatus.targetDateForGeneration, session?.user, handleRequestWeeklyPlanUpdate]);
+  }, [planUpdateStatus]); // Depends on the entire planUpdateStatus object
+
+  const handleRequestWeeklyPlanUpdate = async (targetMonday: string) => {
+    if (!session?.user) {
+      Alert.alert("Error", "You must be logged in to update the plan.");
+      setPlanUpdateStatus({ isLoading: false, needsUpdate: false, message: 'User not logged in.', targetDateForGeneration: null });
+      return;
+    }
+
+    console.log(`[handleRequestWeeklyPlanUpdate] Requesting plan update for week starting: ${targetMonday}`);
+    setPlanUpdateStatus({ isLoading: true, needsUpdate: false, message: `Generating plan for week of ${targetMonday}...`, targetDateForGeneration: targetMonday });
+
+    try {
+      // Corrected: The body should be a stringified JSON object for this type of invocation.
+      const { data, error: functionInvokeError } = await supabase.functions.invoke('fn_request_weekly_plan_update', {
+        body: JSON.stringify({ clientLocalDateString: targetMonday }), 
+      });
+
+      console.log('[handleRequestWeeklyPlanUpdate] Edge function response:', { data, functionInvokeError });
+
+      if (functionInvokeError) {
+        console.error('Edge function invocation error:', functionInvokeError.message);
+        Alert.alert("Error", `Failed to request plan update: ${functionInvokeError.message}`);
+        setPlanUpdateStatus({ isLoading: false, needsUpdate: true, message: `Error: ${functionInvokeError.message}`, targetDateForGeneration: targetMonday });
+        return;
+      }
+
+      if (data && data.error) { // Check for error returned in the data payload
+        console.error('Edge function returned an error:', data.error);
+        Alert.alert("Error", `Plan update failed: ${data.error}`);
+        setPlanUpdateStatus({ isLoading: false, needsUpdate: true, message: `Error: ${data.error}`, targetDateForGeneration: targetMonday });
+        return;
+      }
+      
+      if (data && !data.success) { // Handle cases where success is explicitly false but no detailed error given
+        console.warn('Edge function reported failure without specific error:', data);
+        Alert.alert("Plan Update Issue", data.message || "The plan update could not be completed as expected. Please try again later.");
+        setPlanUpdateStatus({ isLoading: false, needsUpdate: true, message: data.message || "Update process reported an issue.", targetDateForGeneration: targetMonday });
+        return;
+      }
+
+      Alert.alert("Plan Update Requested", data.message || "Your training plan is being updated. This may take a moment.");
+      setPlanUpdateStatus({ isLoading: false, needsUpdate: false, message: data.message || 'Plan update request sent.', targetDateForGeneration: null });
+      
+      setTimeout(() => {
+        fetchUserData(); 
+      }, 3000);
+
+    } catch (e: any) {
+      console.error('Client-side error calling edge function:', e);
+      Alert.alert("Update Error", `An unexpected error occurred: ${e.message}`);
+      setPlanUpdateStatus({ isLoading: false, needsUpdate: true, message: `Client error: ${e.message}`, targetDateForGeneration: targetMonday });
+    }
+  };
 
   const handleSessionUpdate = async (sessionId: string, updates: Partial<TrainingSession>) => {
     const user = supabase.auth.session()?.user;

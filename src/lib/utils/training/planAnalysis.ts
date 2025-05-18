@@ -1,3 +1,17 @@
+import { LocalDate, TemporalAdjusters, ChronoUnit, DayOfWeek } from '@js-joda/core';
+
+// Helper to get the Monday of the week for a given JS Date
+function getMondayOfWeek(date: Date): LocalDate {
+  const jsJodaDate = LocalDate.of(date.getFullYear(), date.getMonth() + 1, date.getDate());
+  return jsJodaDate.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+}
+
+// Helper to calculate full weeks between two Mondays (date1Monday is earlier or same as date2Monday)
+function calculateFullWeeksBetweenMondays(date1Monday: LocalDate, date2Monday: LocalDate): number {
+  if (date1Monday.isAfter(date2Monday)) return 0; 
+  return ChronoUnit.WEEKS.between(date1Monday, date2Monday);
+}
+
 /**
  * Determine the training phase based on race date and plan start date
  * @param raceDate Optional date of the race (YYYY-MM-DD format)
@@ -6,132 +20,120 @@
  * @returns The current training phase
  */
 export function getTrainingPhase(
-  raceDate?: string | null,
-  currentDate: Date = new Date(),
-  planStartDate?: Date | null
+  raceDateString?: string | null,
+  currentDateForPhase: Date = new Date(),
+  planStartDateJs?: Date | null
 ): string {
-  // Clone current date to avoid modifying the original
-  const today = new Date(currentDate);
+  const today = new Date(currentDateForPhase); 
   today.setHours(0, 0, 0, 0);
+  const currentWeekMonday = getMondayOfWeek(today);
 
-  // If plan start date is not provided, assume it's the same as current date
-  const startDate = planStartDate ? new Date(planStartDate) : new Date(today);
-  startDate.setHours(0, 0, 0, 0);
+  const actualPlanStartDate = planStartDateJs ? new Date(planStartDateJs) : new Date(today); 
+  actualPlanStartDate.setHours(0, 0, 0, 0);
+  const planStartMonday = getMondayOfWeek(actualPlanStartDate);
 
-  // Calculate time since plan started (in weeks)
-  const weeksSincePlanStart = Math.floor((today.getTime() - startDate.getTime()) / (7 * 24 * 60 * 60 * 1000));
-  
-  // If race date exists and is valid, calculate phase based on race
-  if (raceDate && raceDate !== 'None') {
-    const raceDay = new Date(raceDate);
-    
-    // Handle invalid date
-    if (isNaN(raceDay.getTime())) {
-      return calculateCyclicalPhase(weeksSincePlanStart);
-    }
-    
-    // Calculate days until race
-    const daysUntilRace = Math.floor((raceDay.getTime() - today.getTime()) / (24 * 60 * 60 * 1000));
-    
-    // Check if race is in the next 3 months (90 days)
-    if (daysUntilRace <= 90 && daysUntilRace > 0) {
-      // Find the Monday of race week
-      const raceDayOfWeek = raceDay.getDay(); // 0 = Sunday, 1 = Monday, etc.
-      const daysToRaceWeekMonday = raceDayOfWeek === 0 ? -6 : 1 - raceDayOfWeek; // Calculate days to previous Monday
-      
-      const raceWeekMonday = new Date(raceDay);
-      raceWeekMonday.setDate(raceDay.getDate() + daysToRaceWeekMonday);
-      raceWeekMonday.setHours(0, 0, 0, 0);
-      
-      // Find Monday 1 week before race (taper week)
-      const taperWeekMonday = new Date(raceWeekMonday);
-      taperWeekMonday.setDate(taperWeekMonday.getDate() - 7);
-      
-      // Find Monday 2 weeks before race (start of peak)
-      const peakWeekMonday = new Date(taperWeekMonday);
-      peakWeekMonday.setDate(peakWeekMonday.getDate() - 7);
-      
-      // Determine phase based on these dates
-      if (today >= raceWeekMonday) {
-        return "Race Week";
-      } else if (today >= taperWeekMonday) {
-        return "Taper";
-      } else if (today >= peakWeekMonday) {
-        return "Peak";
-      } else if (daysUntilRace <= 7) {
-        // Race is very soon but not on a Monday boundary
-        return "Race Week";
-      } else {
-        // We're still in the build phase
-        return "Build";
-      }
-    }
-    
-    // Race is more than 3 months away (or in the past), use cyclical pattern
-    if (daysUntilRace <= 0) {
-      // Race is in the past, check if within recovery period (2 weeks after race)
-      const daysAfterRace = Math.abs(daysUntilRace);
-      if (daysAfterRace <= 14) {
+  const basePeriodEndDateGlobal = planStartMonday.plusDays(13); // End of the initial 2-week base period of the entire plan
+
+  // Handle Post-Race Phases first if a race has occurred
+  if (raceDateString && raceDateString !== 'None') {
+    const raceDayLd = LocalDate.parse(raceDateString);
+    if (currentWeekMonday.isAfter(raceDayLd)) {
+      const daysPastRaceStartOfWeek = ChronoUnit.DAYS.between(raceDayLd, currentWeekMonday);
+
+      if (daysPastRaceStartOfWeek < 0) { 
+        // This means currentWeekMonday is before raceDayLd, logic error or raceDate in future, handled later.
+      } else if (daysPastRaceStartOfWeek <= 6) { // Week 1 post-race (0-6 days after race day for Mon of that week)
         return "Recovery";
+      } else if (daysPastRaceStartOfWeek <= 13) { // Week 2 post-race (7-13 days after)
+        return "Recovery";
+      } else if (daysPastRaceStartOfWeek <= 20) { // Week 3 post-race (14-20 days after)
+        return "Base";
+      } else if (daysPastRaceStartOfWeek <= 27) { // Week 4 post-race (21-27 days after)
+        return "Base";
+      }
+      // If more than 4 weeks (2R+2B) past race, fall through to general cyclical logic based on original plan start.
+    }
+  }
+
+  // Race-Specific Countdown (if race is in the future or very recent past for current week)
+  if (raceDateString && raceDateString !== 'None') {
+    const raceDayLd = LocalDate.parse(raceDateString);
+
+    // Only apply race countdown if current week is not significantly past the race (beyond the 4-week post-race special handling)
+    const daysTillRaceForPrimaryLogic = ChronoUnit.DAYS.between(currentWeekMonday, raceDayLd);
+    if (daysTillRaceForPrimaryLogic >= -27) { // -27 allows this block to catch the Race Week itself even if currentWeekMonday is slightly after raceDayLd
+      const raceWeekMonday = raceDayLd.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+      const taperWeekMonday = raceWeekMonday.minusWeeks(1);
+      const peakWeekMonday = taperWeekMonday.minusWeeks(1);
+
+      if (currentWeekMonday.isEqual(raceDayLd.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))) && daysTillRaceForPrimaryLogic >= 0) {
+        // Ensure this is only for future/current race week, not overriding post-race.
+        // The post-race block above handles currentWeekMonday > raceDayLd already.
+        return "Race Week";
+      }
+      if (currentWeekMonday.isEqual(taperWeekMonday)) {
+        return "Taper";
+      }
+      if (currentWeekMonday.isEqual(peakWeekMonday)) {
+        return "Peak";
+      }
+
+      if (currentWeekMonday.isBefore(peakWeekMonday)) {
+        // Check if it's global Base period first (initial 2 weeks of entire plan)
+        if (currentWeekMonday.isBefore(basePeriodEndDateGlobal.plusDays(1)) && 
+            (currentWeekMonday.isEqual(planStartMonday) || currentWeekMonday.isAfter(planStartMonday))) {
+          return "Base";
+        }
+
+        // If after global Base and before Peak, apply reverse cyclical from Peak
+        const weeksFromPeakToCurrent = calculateFullWeeksBetweenMondays(currentWeekMonday, peakWeekMonday.minusDays(1));
+        const cyclePositionReversed = weeksFromPeakToCurrent % 4;
+        if (cyclePositionReversed === 0) return "Base"; // Week immediately before Peak (was Recovery)
+        if (cyclePositionReversed === 1) return "Build";
+        if (cyclePositionReversed === 2) return "Build";
+        if (cyclePositionReversed === 3) return "Build";
       }
     }
   }
-  
-  // No race date or race is far away, use cyclical pattern
-  return calculateCyclicalPhase(weeksSincePlanStart);
-}
 
-/**
- * Calculate training phase in a cyclical pattern of 3 weeks build + 1 week recovery
- * @param weeksSincePlanStart Number of weeks since the plan started
- * @returns The current training phase
- */
-export function calculateCyclicalPhase(weeksSincePlanStart: number): string {
-  // First week is always Base
-  if (weeksSincePlanStart === 0) {
+  // General Cyclical Logic (No race, race is far, or race significantly in past >4wks)
+  // Is it the global initial Base period?
+  if (currentWeekMonday.isBefore(basePeriodEndDateGlobal.plusDays(1)) && 
+      (currentWeekMonday.isEqual(planStartMonday) || currentWeekMonday.isAfter(planStartMonday))) {
     return "Base";
   }
+
+  // If after global Base period, apply forward cyclical logic
+  const weeksSincePlanStartForCycle = calculateFullWeeksBetweenMondays(planStartMonday, currentWeekMonday);
+  const adjustedWeeksForCycle = weeksSincePlanStartForCycle - 2; // Subtract 2 global base weeks
+
+  if (adjustedWeeksForCycle < 0) {
+      return "Base"; // Should be caught by the check above
+  }
   
-  // 3 weeks build + 1 week recovery cycle (after the first Base week)
-  const adjustedWeeks = weeksSincePlanStart - 1;
-  const cyclePosition = adjustedWeeks % 4;
-  
-  // Weeks 1-3 of cycle are build, week 4 is recovery
-  return cyclePosition < 3 ? "Build" : "Recovery";
+  const cyclePositionForward = adjustedWeeksForCycle % 4;
+  if (cyclePositionForward < 3) return "Build";
+  return "Base"; // Was Recovery
 }
 
 /**
  * Extract the numeric training frequency from the training frequency text
  */
 export function extractTrainingFrequency(trainingFrequency: string): number {
-  // Try to extract a number from the string
-  const matches = trainingFrequency.match(/(\d+)/);
+  const matches = trainingFrequency.match(/(\\d+)/);
   if (matches && matches[1]) {
     const frequency = parseInt(matches[1], 10);
-    // Sanity check - only accept 1-7 days per week
     if (frequency >= 1 && frequency <= 7) {
       return frequency;
     }
   }
-  
-  // If we couldn't extract a number, try to interpret common phrases
   const loweredText = trainingFrequency.toLowerCase();
-  if (loweredText.includes('once a week') || loweredText.includes('1 day')) {
-    return 1;
-  } else if (loweredText.includes('twice a week') || loweredText.includes('2 day')) {
-    return 2;
-  } else if (loweredText.includes('three') || loweredText.includes('3 day')) {
-    return 3;
-  } else if (loweredText.includes('four') || loweredText.includes('4 day')) {
-    return 4;
-  } else if (loweredText.includes('five') || loweredText.includes('5 day')) {
-    return 5;
-  } else if (loweredText.includes('six') || loweredText.includes('6 day')) {
-    return 6;
-  } else if (loweredText.includes('seven') || loweredText.includes('every day') || loweredText.includes('7 day')) {
-    return 7;
-  }
-  
-  // Default to 3 days if we can't determine
+  if (loweredText.includes('once a week') || loweredText.includes('1 day')) return 1;
+  if (loweredText.includes('twice a week') || loweredText.includes('2 day')) return 2;
+  if (loweredText.includes('three') || loweredText.includes('3 day')) return 3;
+  if (loweredText.includes('four') || loweredText.includes('4 day')) return 4;
+  if (loweredText.includes('five') || loweredText.includes('5 day')) return 5;
+  if (loweredText.includes('six') || loweredText.includes('6 day')) return 6;
+  if (loweredText.includes('seven') || loweredText.includes('every day') || loweredText.includes('7 day')) return 7;
   return 3;
 } 

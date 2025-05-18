@@ -1,6 +1,5 @@
 {
     "compilerOptions": {
-      "allowImportingTsExtensions": true,
       "lib": ["deno.window", "deno.unstable"] // Added deno.unstable for Deno.env if needed by older Deno std
     },
     "lint": {
