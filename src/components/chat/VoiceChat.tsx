@@ -548,6 +548,12 @@ Acknowledge their answer before asking the next question.
 Make sure to always complete your full thought or question - don't stop mid-sentence.
 Keep your responses friendly and encouraging but concise.
 
+FUNCTION CALLING INSTRUCTIONS:
+Each time the user provides new profile information, you MUST call the extract_user_profile function
+with the information gathered so far. Don't wait until the end - call the function after EVERY user response
+that contains relevant profile information. This happens automatically in the background and won't 
+interrupt your conversation with the user. Even partial information is valuable.
+
 When you have collected ALL required information, end by saying "Perfect! I've got all the information I need."
 Your final message MUST include the exact phrase "Perfect! I've got all the information I need." for the system to recognize completion.`;
       } else {

@@ -1,6 +1,5 @@
-import { coachStyles, requiredInformation } from '../../config/coachingGuidelines';
+import { coachStyles } from '../../config/coachingGuidelines';
 import { ConversationContext } from './types';
-import { formatField } from './onboardingDataFormatter';
 
 /**
  * Builds the system prompt for coach conversation
@@ -9,62 +8,39 @@ export function buildConversationPrompt(
   context: ConversationContext,
   userMessage: string | null
 ): string {
-  const { coachId, userProfile } = context;
-  
-  // Get coach-specific data
+  const { coachId } = context;
   const coachStyle = coachStyles[coachId];
-  
-  // Identify missing fields
-  const allRequiredFields = Object.keys(requiredInformation).filter(key => key !== 'onboarding_completed' && key !== 'coach_id');
-  
-  // Calculate missing fields based on current context
-  const missingFields = allRequiredFields.filter(key => {
-    // Skip race fields if user has explicitly indicated no races
-    if ((key === 'race_distance' || key === 'race_date') && 
-        (userProfile.race_distance === null || 
-         userProfile.race_date === null)) {
-      return false;
-    }
-    return !userProfile[key as keyof typeof userProfile];
-  });
 
-  // Handle special case for initial greeting
+  // Determine if it's the initial greeting
   const isInitialGreeting = userMessage === null || userMessage === "START_CONVERSATION";
+
+  let modeSpecificInstructions = '';
+  if (isInitialGreeting) {
+    modeSpecificInstructions = `Start by welcoming the athlete. Ask for their preferred name or nickname. Also, ask if they prefer to use miles or kilometers for distances.`;
+  } else {
+    modeSpecificInstructions = `Continue the conversation naturally. Your goal is to gather all the information needed to populate the fields for the 'update_onboarding_profile' function.`;
+  }
+
+  return `You are ${coachStyle.name}, a friendly and expert running coach, having your first conversation with a new athlete.
+  The athlete has specifically chosen you as their coach.
   
-  // Build system prompt
-  return `You are ${coachStyle.name}, a running coach having your first conversation with a new athlete.
-  The athlete has specifically chosen you, ${coachStyle.name}, as their coach.
+  Your personality: ${coachStyle.personality.join(', ')}
+  Your communication style: ${coachStyle.communicationStyle.join(', ')}
   
-  PERSONALITY: ${coachStyle.personality.join(', ')}
-  COMMUNICATION STYLE: ${coachStyle.communicationStyle.join(', ')}
+  ${modeSpecificInstructions}
   
-  MODE: ${isInitialGreeting ? 'INITIAL_GREETING' : 'INFORMATION_GATHERING'}
-  
-  ${isInitialGreeting
-    ? `INITIAL_GREETING MODE: Welcome the athlete. Ask for their preferred name or nickname to call them by. If they don't mention their preferred units (miles or kilometers) when responding, then ask if they prefer to use miles or kilometers for distances.`
-    : `INFORMATION_GATHERING MODE:
-  Known Information:
-  ${Object.entries(userProfile)
-    .filter(([key, value]) => {
-      if ((key === 'race_distance' || key === 'race_date') && value === null) return true;
-      return value && key !== 'onboarding_completed' && key !== 'id' && key !== 'coach_id';
-    })
-    .map(([key, value]) => `- ${formatField(key)}: ${value ?? 'None'}`)
-    .join('\n')}
-  
-  You need to collect these remaining fields:
-  ${missingFields.map(field => `- ${formatField(field)}`).join('\n')}
-  `}
-  
-  Conduct a natural, friendly conversation to collect ALL required information.
-  ASK ONE OR TWO QUESTIONS AT A TIME - do not overwhelm the user.
-  When you have collected ALL required information, end by saying "Perfect! I've got all the information I need."
+  Conduct a natural, empathetic, and flowing conversation. 
+  Ask one or two questions at a time to avoid overwhelming the user.
+  Your ultimate goal is to collect all the information required by the 'update_onboarding_profile' function.
+  Once you are confident you have ALL the necessary information as defined in the function's parameters (especially the required ones: nickname, units, current_mileage, current_frequency, experience_level, goal_type), call the 'update_onboarding_profile' function.
+  Do not make up data for fields the user has not provided. Use null or omit optional fields if the user indicates they don't have that information (e.g., no specific race planned).
+  Ensure the data you pass to the function call accurately reflects what the user has told you.
+  After the function call is made (or if you are confirming information before a call), you can provide a brief, natural concluding message or ask if they have any initial questions for you.
   `;
 }
 
-/**
- * Builds the system prompt for extracting information from conversation
- */
+// buildExtractionPrompt is no longer needed as we are using OpenAI function calling.
+/*
 export function buildExtractionPrompt(
   conversationHistory: {role: 'user' | 'coach'; content: string}[],
   coachId: string
@@ -74,7 +50,7 @@ export function buildExtractionPrompt(
     .map(msg => `${msg.role.toUpperCase()}: ${msg.content}`)
     .join('\n\n');
   
-  return `You are an expert at extracting structured information from conversations. 
+  return `You are an expert data extraction assistant. 
 Analyze the following onboarding conversation between a running coach and a client.
 Extract all relevant information the client has shared about their running profile and goals.
 
@@ -102,3 +78,4 @@ Pay close attention to how current_mileage is stated to infer the 'units'. For e
 CONVERSATION:
 ${formattedConversation}`;
 } 
+*/ 

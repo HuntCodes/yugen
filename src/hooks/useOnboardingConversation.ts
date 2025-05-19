@@ -24,6 +24,7 @@ export function useOnboardingConversation(initialCoachId: string) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
   const [message, setMessage] = useState<string>('');
+  const [extractedProfileFromTool, setExtractedProfileFromTool] = useState<Partial<OnboardingProfile> | null>(null);
   
   // Conversation processing state
   const [processingStep, setProcessingStep] = useState<'idle' | 'extracting' | 'saving' | 'generating_plan' | 'complete'>('idle');
@@ -67,26 +68,34 @@ export function useOnboardingConversation(initialCoachId: string) {
     setIsTyping(true);
     
     // Add user message to conversation
-    const updatedHistory = [
-      ...conversationHistory,
-      { role: 'user' as const, content: userMessage }
-    ];
-    
-    setConversationHistory(updatedHistory);
+    const currentHistory = [...conversationHistory, { role: 'user' as const, content: userMessage }];
+    setConversationHistory(currentHistory);
+    setMessage(''); // Clear previous coach message while waiting for new one
     
     try {
       const result = await onboardingService.handleOnboardingConversation(userMessage, {
         coachId: initialCoachId,
-        userProfile: {},
-        conversationHistory
+        userProfile: {}, // Current userProfile state could be passed here if needed by prompt
+        conversationHistory: conversationHistory // Pass the history *before* adding the current user message for the AI call
       });
       
       setMessage(result.message);
       setConversationHistory(result.conversationHistory);
       
-      // Check if conversation is complete
+      if (result.toolCallArguments) {
+        console.log('[useOnboardingConversation] Received tool call arguments:', result.toolCallArguments);
+        setExtractedProfileFromTool(result.toolCallArguments);
+        if (result.isComplete) {
+          console.log('[useOnboardingConversation] Onboarding reported as complete along with tool call.');
+        }
+      }
+
       if (result.isComplete) {
         setIsComplete(true);
+        // Potentially call completeConversation directly if toolCallArguments are present and that's the desired flow
+        // However, typically completeConversation is triggered separately or after a final user action.
+        // The existing flow in OnboardingChat.tsx / VoiceOnboarding.tsx seems to call completeConversation
+        // when isHookProcessingComplete (derived from isComplete) is true or manually.
       }
     } catch (error) {
       console.error('Error sending message:', error);
@@ -98,71 +107,67 @@ export function useOnboardingConversation(initialCoachId: string) {
   
   // Function to manually complete the conversation and process results
   const completeConversation = useCallback(async (
-    providedHistory?: {role: 'user' | 'coach'; content: string}[]
+    providedHistory?: {role: 'user' | 'coach'; content: string}[],
+    directExtractedProfile?: Partial<OnboardingProfile> | null
   ) => {
     if (!session || isProcessing) return { success: false, error: 'Session not active or already processing.' };
     
     setIsProcessing(true);
-    setProcessingStep('extracting');
     
+    // Prioritize directly passed profile, then state, then fallback
+    let profileToProcess: Partial<OnboardingProfile> | null | undefined = directExtractedProfile;
+
+    if (!profileToProcess && extractedProfileFromTool) {
+        console.log('[ONBOARDING_CONVERSATION] Using profile from tool call state (direct was not provided):', extractedProfileFromTool);
+        profileToProcess = extractedProfileFromTool;
+    }
+
     try {
       console.log('[ONBOARDING_CONVERSATION] ✅ Starting completion process...');
       
-      // Use the provided history if available, otherwise use the current conversation history
-      const historyToProcess = providedHistory || conversationHistory;
-      
-      console.log('[ONBOARDING_CONVERSATION] Conversation history for extraction:', 
-        JSON.stringify(historyToProcess, null, 2));
-      
-      // Extract data from conversation
-      const { extractedProfile } = await onboardingService.processOnboardingTranscript(
-        historyToProcess,
-        initialCoachId
-      );
-      
-      console.log('[ONBOARDING_CONVERSATION] Extracted profile:', extractedProfile);
-      
-      // Ensure extractedProfile is not null or undefined
-      if (!extractedProfile) {
-        throw new Error("Extracted profile is null or undefined");
+      if (profileToProcess) {
+        console.log('[ONBOARDING_CONVERSATION] Using profile from direct pass or tool call state:', profileToProcess);
+        setProcessingStep('saving'); 
+      } else {
+        // If no profile is available from tool call (direct or state), it means onboarding is not yet complete via function call.
+        // This indicates an issue or incomplete flow if completeConversation was called prematurely.
+        console.warn('[ONBOARDING_CONVERSATION] No profile from tool call. Onboarding might be incomplete or an error occurred.');
+        // Alert.alert('Incomplete Information', 'The onboarding conversation hasn\'t provided all necessary details yet. Please continue the chat or check for errors.');
+        setIsProcessing(false);
+        setProcessingStep('idle');
+        return { success: false, error: 'Onboarding data not available from AI function call.' };
       }
-
+      
       // Prepare the profile for saving, mapping fields and ensuring type correctness
       const profileToSave: Partial<OnboardingProfile> = {};
 
-      // Map known fields from extractedProfile to profileToSave
-      // This also filters out any unexpected fields from extractedProfile
       const knownKeys: (keyof OnboardingProfile)[] = [
         'nickname', 'units', 'current_mileage', 'current_frequency', 
         'goal_type', 'experience_level', 'schedule_constraints', 
         'race_distance', 'race_date', 'injury_history', 
         'shoe_size', 'clothing_size', 'onboarding_completed', 'coach_id'
-        // Add any other valid OnboardingProfile keys here
       ];
 
       for (const key of knownKeys) {
-        if (key in extractedProfile && extractedProfile[key] !== undefined) {
-          (profileToSave as any)[key] = extractedProfile[key];
+        if (key in profileToProcess && profileToProcess[key] !== undefined) {
+          (profileToSave as any)[key] = profileToProcess[key];
         }
       }
       
-      // Handle specific mappings: name -> nickname
-      if ((extractedProfile as any).name && !profileToSave.nickname) {
-        profileToSave.nickname = (extractedProfile as any).name;
+      if ((profileToProcess as any).name && !profileToSave.nickname) {
+        profileToSave.nickname = (profileToProcess as any).name;
       }
       if (profileToSave.nickname === '' || profileToSave.nickname === null) {
         profileToSave.nickname = undefined;
       }
 
-      // Handle specific mappings: goal -> goal_type
-      if ((extractedProfile as any).goal && !profileToSave.goal_type) {
-        profileToSave.goal_type = (extractedProfile as any).goal;
+      if ((profileToProcess as any).goal && !profileToSave.goal_type) {
+        profileToSave.goal_type = (profileToProcess as any).goal;
       }
-      if (!profileToSave.goal_type) { // Default if still no goal_type
+      if (!profileToSave.goal_type) { 
         profileToSave.goal_type = 'General fitness';
       }
       
-      // Ensure race_date is undefined or a valid string
       if (profileToSave.race_date && String(profileToSave.race_date).trim() === '') {
         profileToSave.race_date = undefined;
       } else if (profileToSave.race_date) {
@@ -173,22 +178,19 @@ export function useOnboardingConversation(initialCoachId: string) {
 
       profileToSave.coach_id = initialCoachId;
 
-      console.log('[ONBOARDING_CONVERSATION] Profile to save to database:', profileToSave);
+      console.log('[ONBOARDING_CONVERSATION] Profile to save to database (pre-defaults for plan):', JSON.stringify(profileToSave, null, 2));
 
-      // Save to the user profile in Supabase
       setProcessingStep('saving');
       
-      // Make sure session.user is not null before using it
       if (!session.user) {
         throw new Error("User is not authenticated");
       }
       
-      // Save extracted profile to database
       const { error: profileUpdateError } = await supabase
         .from('profiles')
         .update({
-          ...profileToSave, // Use the cleaned and mapped profile
-          onboarding_completed: true, // Ensure this is set
+          ...profileToSave, 
+          onboarding_completed: true, 
           updated_at: new Date().toISOString()
         })
         .eq('id', session.user.id);
@@ -200,22 +202,32 @@ export function useOnboardingConversation(initialCoachId: string) {
       
       console.log('[ONBOARDING_CONVERSATION] Profile saved successfully.');
 
-      // Generate and save training plan
       console.log('[ONBOARDING_CONVERSATION] Generating training plan...');
       setProcessingStep('generating_plan');
       
-      // Determine user's current date in YYYY-MM-DD format
       const userCurrentDate = new Date().toISOString().split('T')[0];
 
-      // Construct OnboardingData from profileToSave. This might need adjustment based on OnboardingData definition.
-      // For now, assume profileToSave is compatible or contains enough info.
-      // Critical: Ensure all fields required by `OnboardingData` are present in `profileToSave` or mapped correctly.
+      let parsedFrequency = 0;
+      const freqInput = profileToSave.current_frequency ? String(profileToSave.current_frequency).toLowerCase() : '0';
+      if (freqInput === 'everyday' || freqInput === 'daily') {
+        parsedFrequency = 7;
+      } else {
+        parsedFrequency = parseInt(freqInput, 10);
+        if (isNaN(parsedFrequency)) {
+          console.warn(`[useOnboardingConversation] Could not parse current_frequency: '${profileToSave.current_frequency}'. Defaulting to 0 for plan generation.`);
+          parsedFrequency = 0; 
+        }
+      }
+      console.log(`[useOnboardingConversation] Parsed current_frequency: ${parsedFrequency} from input: '${profileToSave.current_frequency}'`);
+
+      const parsedMileage = profileToSave.current_mileage ? parseFloat(String(profileToSave.current_mileage).replace(/[^\d.-]/g, '')) : 0;
+      console.log(`[useOnboardingConversation] Parsed current_mileage: ${parsedMileage} from input: '${profileToSave.current_mileage}'`);
+
       const onboardingDataForPlan: OnboardingData = {
-        // Map fields from profileToSave to OnboardingData structure
-        nickname: profileToSave.nickname || session.user.email || 'Athlete',
+        nickname: profileToSave.nickname || session.user.email?.split('@')[0] || 'Athlete',
         units: profileToSave.units || 'km',
-        current_mileage: String(profileToSave.current_mileage ? parseFloat(String(profileToSave.current_mileage)) : 0),
-        trainingFrequency: String(profileToSave.current_frequency ? parseInt(String(profileToSave.current_frequency), 10) : 0),
+        current_mileage: String(parsedMileage),
+        trainingFrequency: String(parsedFrequency),
         goalType: profileToSave.goal_type || 'General fitness',
         experienceLevel: profileToSave.experience_level || 'beginner',
         schedule_constraints: profileToSave.schedule_constraints || 'none',
@@ -224,7 +236,7 @@ export function useOnboardingConversation(initialCoachId: string) {
         injury_history: profileToSave.injury_history || 'none',
         shoe_size: profileToSave.shoe_size || undefined,
         clothing_size: profileToSave.clothing_size || undefined,
-        userStartDate: userCurrentDate, // Add user's current date
+        userStartDate: userCurrentDate, 
       };
 
       try {
@@ -232,9 +244,6 @@ export function useOnboardingConversation(initialCoachId: string) {
         console.log('[ONBOARDING_CONVERSATION] Training plan generated and saved successfully.');
       } catch (planError) {
         console.error('[ONBOARDING_CONVERSATION] Error generating/saving training plan:', planError);
-        // Decide on handling: either throw to make completeConversation fail, 
-        // or allow completion but log/notify about plan failure.
-        // For now, let's throw to indicate the whole process wasn't successful.
         throw new Error(`Training plan generation failed: ${planError instanceof Error ? planError.message : String(planError)}`);
       }
       
@@ -250,7 +259,47 @@ export function useOnboardingConversation(initialCoachId: string) {
       setProcessingStep('idle');
       return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
-  }, [session, isProcessing, conversationHistory, initialCoachId]);
+  }, [session, isProcessing, conversationHistory, initialCoachId, extractedProfileFromTool]);
+  
+  // New function to process a complete transcript (e.g., from voice)
+  const processFinalTranscriptForToolCall = useCallback(async (finalHistory: {role: 'user' | 'coach'; content: string}[]) => {
+    if (!session || isProcessing || isComplete) return null; // Return null if cannot process
+
+    console.log('[useOnboardingConversation] Processing final transcript for potential tool call.');
+    setIsTyping(true); 
+    let toolArgsToReturn: Partial<OnboardingProfile> | null = null;
+
+    try {
+      const result = await onboardingService.handleOnboardingConversation(null, { 
+        coachId: initialCoachId,
+        userProfile: {}, 
+        conversationHistory: finalHistory 
+      });
+      
+      if (result.message && result.message.trim() !== "") {
+          setMessage(result.message);
+          setConversationHistory(result.conversationHistory);
+      }
+      
+      if (result.toolCallArguments) {
+        console.log('[useOnboardingConversation] Tool call arguments received from final transcript processing:', result.toolCallArguments);
+        setExtractedProfileFromTool(result.toolCallArguments); // Still set state for other potential flows
+        toolArgsToReturn = result.toolCallArguments;
+      }
+
+      if (result.isComplete) {
+        console.log('[useOnboardingConversation] Onboarding marked complete after final transcript processing.');
+        setIsComplete(true);
+      }
+      return toolArgsToReturn; // Return the arguments
+    } catch (error) {
+      console.error('Error processing final transcript:', error);
+      Alert.alert('Error', 'Failed to process the conversation. Please try again.');
+      return null; // Return null on error
+    } finally {
+      setIsTyping(false);
+    }
+  }, [session, initialCoachId, isTyping, isProcessing, isComplete, setExtractedProfileFromTool, setIsComplete, setMessage, setConversationHistory]);
   
   // Compute loading message based on current processing step
   const getProcessingMessage = useCallback(() => {
@@ -281,6 +330,7 @@ export function useOnboardingConversation(initialCoachId: string) {
     processingMessage: getProcessingMessage(),
     sendMessage,
     completeConversation,
-    markOnboardingComplete
+    markOnboardingComplete,
+    processFinalTranscriptForToolCall
   };
 } 

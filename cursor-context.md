@@ -11,7 +11,7 @@ This is an AI-powered run club app. Users choose their coach (Craig, Thomas, Dat
 
 4. Onboarding interview occurs via Voice (VoiceChat.tsx and VoiceOnboarding.tsx) or Chat Messaging (OnboardingChat.tsx, OnboardingInput.tsx, ChatMessageList.tsx). The answers to this interview inform the initial training plan that is created. 
 
-5. A transcript of the onboarding is created in the respective onboarding files (VoiceOnboarding.tsx, VoiceChat.tsx and OnboardingChat.tsx). useOnboardingConversation.ts orchestrates the parsing anad profile updating process. onboardingFlow.ts, coachPromptBuilder.ts, responseParser.ts and onboardingDataFormatter.ts handle the transcript parsing using GPT-3.5-turbo, a lightweight extractor. Then, useOnboardingConversation.ts and supabase.ts update the user's profiles table in the Supabase database. 
+5. During the onboarding conversation (Voice/Chat), `handleOnboardingConversation` (within `src/services/onboarding/onboardingFlow.ts`) interacts with an OpenAI model (GPT-4o-mini). This model is prompted to use its function calling capability to directly extract user profile information by invoking a predefined `update_onboarding_profile` function. If the AI successfully calls this function, structured data arguments are returned. `useOnboardingConversation.ts` then receives these structured arguments and updates the user's `profiles` table in the Supabase database. Transcripts of the conversation are still created by the respective UI components (VoiceOnboarding.tsx, OnboardingChat.tsx).
 
 6. The next step is the generation of the initial training plan, which occurs before the user is shown the HomeScreen (user is kept in a loading screen until then). This is in an effort to maximize the user's experience, so that everything is set up for them upon arrival. useOnboardingConversation.ts sets up the onboarding data for the plan. planService.ts orchestrates the process of this initial plan generation, where it calls the AI plan generation function (defined in openai.ts, which uses GPT-4o-mini). 
 
@@ -105,8 +105,8 @@ This is an AI-powered run club app. Users choose their coach (Craig, Thomas, Dat
 - `messages`: chat history (optional long-term storage)
 
 ## Parsing Functions
-- Format user onboarding responses
-- Summarize past conversations and workouts
+- Structured data for user onboarding is primarily extracted via OpenAI function calling during the conversation (see App Flow Step 5).
+- Summarize past conversations and workouts (this likely still uses other parsing/summarization techniques).
 - Store summaries with timestamps for lightweight memory
 
 ---

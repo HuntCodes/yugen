@@ -83,7 +83,8 @@ export function VoiceOnboarding() {
     isComplete: isHookProcessingComplete,
     processingStep,
     processingMessage,
-    completeConversation
+    completeConversation,
+    processFinalTranscriptForToolCall
   } = useOnboardingConversation(currentCoachId);
   
   useEffect(() => {
@@ -157,36 +158,32 @@ export function VoiceOnboarding() {
   ) => {
     console.log('[VOICE_ONBOARDING] Transcript received from VoiceChat:', { isVoiceChatDone });
     
-    setVoiceChatActiveForAnimation(false); 
+    // setVoiceChatActiveForAnimation(false); // Only deactivate animation on final completion or error
     
     if (isVoiceChatDone) {
-      console.log('[VOICE_ONBOARDING] Full Voice Chat History (at completion point):', JSON.stringify(fullVoiceChatHistory, null, 2));
+      console.log('[VOICE_ONBOARDING] Voice chat is DONE. Full History:', JSON.stringify(fullVoiceChatHistory, null, 2));
       setFinalVoiceHistory(fullVoiceChatHistory);
       setVoiceConversationActuallyCompleted(true);
+      setVoiceChatActiveForAnimation(false); // Deactivate animation here
       
-      // Don't immediately hide the voice chat - let the final message finish playing
-      // The continue button will only appear after a significant delay
-      
-      // Wait for TTS to finish playing (increased delay to ensure it completes)
-      // Average reading speed is ~150 words per minute = 2.5 words per second
-      // For a typical final message of ~25 words, that's ~10 seconds
-      // Add buffer time to ensure completion
       const lastCoachMessage = fullVoiceChatHistory.findLast(h => h.role === 'coach')?.content || '';
       const wordCount = lastCoachMessage.split(/\s+/).length;
-      const estimatedSeconds = Math.max(3, Math.min(15, wordCount / 2.5)); // Between 3-15 seconds based on word count
+      const estimatedSeconds = Math.max(3, Math.min(15, wordCount / 2.5)); 
       
-      console.log(`[VOICE_ONBOARDING] Waiting ${estimatedSeconds.toFixed(1)} seconds for final message TTS to complete`);
+      console.log(`[VOICE_ONBOARDING] Waiting ${estimatedSeconds.toFixed(1)} seconds for final message TTS to complete before showing Continue button.`);
       
-      // First wait a bit before hiding the voice chat
       await delay(Math.ceil(estimatedSeconds * 1000));
-      setVoiceChatUIVisible(false);
+      setVoiceChatUIVisible(false); // Hide the actual VoiceChat UI component now
       
-      // Then wait another second before showing the continue button
-      await delay(1000);
+      await delay(1000); // Short delay before showing button
       setShowContinueButtonStage(true);
     } else {
-      // For non-completion events, hide the voice chat immediately
-      setVoiceChatUIVisible(false);
+      // This is an intermediate transcript update from VoiceChat.tsx (e.g., after each AI turn that's not the *final* one)
+      // VoiceChat.tsx is still active and managing its UI and TTS.
+      // We should not hide it here.
+      console.log('[VOICE_ONBOARDING] Intermediate transcript segment received. VoiceChat UI remains visible.');
+      // We could update a running history here if needed, but VoiceChat.tsx passes the full history when done.
+      // setVoiceChatActiveForAnimation(true); // Keep animation active if AI is about to speak or user can speak
     }
   }, []); // Dependencies are correct
   
@@ -222,11 +219,24 @@ export function VoiceOnboarding() {
   const handleContinueAfterVoice = async () => {
     setShowContinueButtonStage(false); // Hide the continue button
     console.log('[VOICE_ONBOARDING] Continue button clicked. Processing voice conversation...');
+    
+    if (isProcessing) {
+      console.log('[VOICE_ONBOARDING] Already processing, skipping new request.');
+      return;
+    }
+
     if (finalVoiceHistory && finalVoiceHistory.length > 0) {
-      await completeConversation(finalVoiceHistory);
+      // Step 1: Let the hook process the final transcript for a potential tool call.
+      // This will set internal state in the hook (isComplete, extractedProfileFromTool) AND return args.
+      const toolArgs = await processFinalTranscriptForToolCall(finalVoiceHistory);
+      
+      // Step 2: Call completeConversation. Pass the returned toolArgs directly.
+      // It will use the tool-extracted data if available (from toolArgs),
+      // or fall back to the old transcript processing otherwise.
+      await completeConversation(finalVoiceHistory, toolArgs);
     } else {
-      console.warn('[VOICE_ONBOARDING] Attempted to continue without voice history. Using hook default history or failing if none.');
-      await completeConversation(); // Allow hook to use its internally managed history if finalVoiceHistory is empty for some reason
+      console.warn('[VOICE_ONBOARDING] Attempted to continue without voice history. Calling completeConversation with default hook history.');
+      await completeConversation(); // Pass no history and no direct args
     }
   };
   
