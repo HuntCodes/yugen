@@ -2,6 +2,21 @@ import Constants from 'expo-constants';
 import { ChatMessage } from './useMessageTypes';
 import { identifyChatContext } from '../../services/summary/chatSummaryService';
 
+// Define the structure for a tool call, if needed for type safety elsewhere
+export interface OpenAIToolCall {
+  id: string;
+  type: 'function';
+  function: {
+    name: string;
+    arguments: string; // JSON string
+  };
+}
+
+export interface OpenAIResponse {
+  content?: string | null;
+  tool_calls?: OpenAIToolCall[];
+}
+
 /**
  * Hook for message analysis utilities
  */
@@ -22,9 +37,9 @@ export function useMessageAnalysis() {
    * Call the OpenAI API with a system prompt and user message
    */
   const callOpenAI = async (
-    systemPrompt: string,
-    userMessage: string
-  ): Promise<string | null> => {
+    messages: Array<{role: string, content: string | null, tool_calls?: OpenAIToolCall[]}>, // Expects the full messages array
+    tools?: any[] 
+  ): Promise<OpenAIResponse | null> => {
     try {
       const apiKey = getApiKey();
       
@@ -33,28 +48,37 @@ export function useMessageAnalysis() {
         return null;
       }
       
+      const requestBody: any = {
+        model: 'gpt-4o-mini',
+        messages: messages, // Use the messages array directly
+        temperature: 0.7,
+      };
+
+      if (tools && tools.length > 0) {
+        requestBody.tools = tools;
+        requestBody.tool_choice = 'auto';
+      }
+
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${apiKey}`,
         },
-        body: JSON.stringify({
-          model: 'gpt-3.5-turbo',
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userMessage }
-          ],
-          temperature: 0.7,
-        }),
+        body: JSON.stringify(requestBody), // Use the constructed body
       });
 
       if (!response.ok) {
-        throw new Error(`OpenAI API error: ${response.status}`);
+        const errorBody = await response.text();
+        throw new Error(`OpenAI API error: ${response.status} - ${errorBody}`);
       }
 
       const data = await response.json();
-      return data.choices[0].message.content;
+      
+      if (data.choices[0].message.tool_calls) {
+        return { tool_calls: data.choices[0].message.tool_calls };
+      }
+      return { content: data.choices[0].message.content };
     } catch (error) {
       console.error('Error calling OpenAI:', error);
       return null;
@@ -75,10 +99,10 @@ export function useMessageAnalysis() {
    * Generate AI response to user message using context
    */
   const generateAIResponse = async (
-    message: string,
-    systemPrompt: string
-  ): Promise<string | null> => {
-    return callOpenAI(systemPrompt, message);
+    messages: Array<{role: string, content: string | null, tool_calls?: OpenAIToolCall[]}>, 
+    tools?: any[] 
+  ): Promise<OpenAIResponse | null> => {
+    return callOpenAI(messages, tools);
   };
 
   return {

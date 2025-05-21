@@ -21,6 +21,25 @@ export interface PlanUpdate {
   new_date?: string;
 }
 
+// Re-define or import ProposeWorkoutAdjustmentArgs if not already available globally
+// For simplicity, defining a relevant subset here. Ensure this matches the one in useMessageProcessing.ts
+interface AdjustmentDetails {
+  new_date?: string; // YYYY-MM-DD
+  new_distance?: number;
+  new_duration_minutes?: number;
+  intensity_change?: 'easier' | 'harder' | 'same';
+  action?: 'update' | 'delete' | 'suggest_new';
+  reason?: string; // For logging or notes
+  // user_query is not directly used for DB update but good for context
+}
+
+interface WorkoutAdjustmentArgs {
+  session_id?: string;
+  original_date?: string; 
+  workout_type?: string; // Made more critical if session_id is absent
+  adjustment_details: AdjustmentDetails;
+}
+
 /**
  * Check if a user has existing training sessions
  */
@@ -255,5 +274,159 @@ export const deleteTrainingPlan = async (userId: string) => {
   } catch (err) {
     console.error('Error in deleteTrainingPlan:', err);
     return false;
+  }
+};
+
+/**
+ * Execute a workout adjustment (update or delete) in the database.
+ */
+export const executeWorkoutAdjustment = async (
+  userId: string,
+  adjustment: WorkoutAdjustmentArgs
+): Promise<{ success: boolean; message: string }> => {
+  const { session_id, original_date, workout_type, adjustment_details } = adjustment;
+  const { action = 'update' } = adjustment_details; 
+
+  console.log('[planService] Attempting to execute adjustment:', JSON.stringify(adjustment, null, 2));
+
+  try {
+    if (action === 'delete') {
+      let deleteQuery = supabase.from('training_plans').delete().eq('user_id', userId);
+      let countToVerify = 0;
+
+      if (session_id) {
+        deleteQuery = deleteQuery.eq('id', session_id);
+        countToVerify = 1; // Expect to delete 1 if ID is correct
+      } else if (original_date && workout_type) { 
+        // If deleting by date and type, first check how many match to avoid ambiguity
+        const { data: matchingSessions, error: findError } = await supabase
+          .from('training_plans')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('date', original_date)
+          .eq('session_type', workout_type);
+
+        if (findError) {
+          console.error('[planService] Error finding sessions to delete:', findError);
+          return { success: false, message: `Error finding workouts to delete: ${findError.message}` };
+        }
+        if (!matchingSessions || matchingSessions.length === 0) {
+          return { success: false, message: "No workout found to delete with the provided date and type." };
+        }
+        if (matchingSessions.length > 1) {
+          return { success: false, message: `Multiple workouts (${matchingSessions.length}) found for ${workout_type} on ${original_date}. Please ask the user to be more specific or use the workout ID.` };
+        }
+        // If exactly one, proceed to delete by its specific ID for safety
+        deleteQuery = deleteQuery.eq('id', matchingSessions[0].id);
+        countToVerify = 1;
+      } else {
+        return { success: false, message: "Cannot delete: session_id, or both original_date and workout_type, are required." };
+      }
+
+      console.log('[planService] Executing delete query for workout.');
+      const { error, count } = await deleteQuery;
+      if (error) {
+        console.error('Error deleting workout:', error);
+        return { success: false, message: `Failed to delete workout: ${error.message}` };
+      }
+      // `count` from delete operation might be null for some providers or configurations.
+      // Relying on prior check (countToVerify) is safer if count is not guaranteed.
+      if (count === 0 && countToVerify > 0) { 
+        console.warn('[planService] Delete query executed but no workout found or deleted despite prior check.', {userId, session_id, original_date, workout_type});
+        return { success: false, message: "Workout to delete was not found (or already deleted)." };
+      }
+      return { success: true, message: "Workout successfully deleted." };
+    }
+
+    if (action === 'update') {
+      let foundSessionToUpdate: any;
+
+      if (session_id) {
+        const { data, error } = await supabase
+          .from('training_plans')
+          .select('id, session_type, notes')
+          .eq('user_id', userId)
+          .eq('id', session_id)
+          .maybeSingle();
+        if (error) throw error; // Let catch block handle
+        foundSessionToUpdate = data;
+      } else if (original_date && workout_type) {
+        const { data: matchingSessions, error: findError } = await supabase
+          .from('training_plans')
+          .select('id, session_type, notes')
+          .eq('user_id', userId)
+          .eq('date', original_date)
+          .eq('session_type', workout_type);
+        
+        if (findError) throw findError;
+        if (!matchingSessions || matchingSessions.length === 0) {
+          return { success: false, message: "Workout to update not found with the provided date and type." };
+        }
+        if (matchingSessions.length > 1) {
+          return { success: false, message: `Multiple workouts (${matchingSessions.length}) found for ${workout_type} on ${original_date}. Please ask the user to be more specific or use the workout ID.` };
+        }
+        foundSessionToUpdate = matchingSessions[0];
+      } else {
+        return { success: false, message: "Cannot update: session_id, or both original_date and workout_type, are required." };
+      }
+
+      if (!foundSessionToUpdate) {
+        console.warn('[planService] No workout found to update with details:', {userId, session_id, original_date, workout_type});
+        return { success: false, message: "Workout to update not found." };
+      }
+
+      console.log('[planService] Found workout to update:', foundSessionToUpdate);
+      const targetSessionId = foundSessionToUpdate.id;
+      const currentSessionType = foundSessionToUpdate.session_type;
+      const currentNotes = foundSessionToUpdate.notes || "";
+
+      // Prevent applying distance/duration to a Rest Day type workout
+      if (currentSessionType && currentSessionType.toLowerCase().includes('rest') && 
+          (adjustment_details.new_distance !== undefined || adjustment_details.new_duration_minutes !== undefined)) {
+        return { success: false, message: `Cannot apply distance or duration to a '${currentSessionType}'. Please change session type first or adjust differently.` };
+      }
+      
+      const updateObject: { [key: string]: any } = { updated_at: new Date().toISOString() };
+      if (adjustment_details.new_date) updateObject.date = adjustment_details.new_date;
+      if (adjustment_details.new_distance !== undefined) updateObject.distance = adjustment_details.new_distance;
+      if (adjustment_details.new_duration_minutes !== undefined) updateObject.time = adjustment_details.new_duration_minutes;
+      
+      if (adjustment_details.intensity_change || adjustment_details.reason) {
+        let newNoteParts = [];
+        if (currentNotes) newNoteParts.push(currentNotes);
+        if (adjustment_details.intensity_change) newNoteParts.push(`Intensity: ${adjustment_details.intensity_change}.`);
+        if (adjustment_details.reason) newNoteParts.push(`Reason for change: ${adjustment_details.reason}.`);
+        updateObject.notes = newNoteParts.join(' | ');
+      }
+
+      if (Object.keys(updateObject).length === 1 && updateObject.updated_at) {
+        return { success: false, message: "No valid changes provided for workout update." };
+      }
+
+      console.log('[planService] Executing update for workout ID:', targetSessionId, 'with object:', updateObject);
+      const { data, error } = await supabase
+        .from('training_plans')
+        .update(updateObject)
+        .eq('id', targetSessionId) // Always update by specific ID now
+        .select(); 
+
+      if (error) {
+        console.error('Error updating workout:', error);
+        return { success: false, message: `Failed to update workout: ${error.message}` };
+      }
+      if (!data || data.length === 0) {
+          console.warn('[planService] Workout update query executed but no record changed.', {targetSessionId});
+          // This case should be rare now since we found the record first.
+          return { success: false, message: "Workout found but no changes were applied during update." };
+      }
+
+      return { success: true, message: "Workout successfully updated." };
+    }
+
+    return { success: false, message: `Unsupported action: ${action}` };
+
+  } catch (err: any) {
+    console.error('Error in executeWorkoutAdjustment:', err);
+    return { success: false, message: `An unexpected error occurred: ${err.message}` };
   }
 }; 

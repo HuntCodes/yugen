@@ -15,7 +15,7 @@ This is an AI-powered run club app. Users choose their coach (Craig, Thomas, Dat
 
 6. The next step is the generation of the initial training plan, which occurs before the user is shown the HomeScreen (user is kept in a loading screen until then). This is in an effort to maximize the user's experience, so that everything is set up for them upon arrival. useOnboardingConversation.ts sets up the onboarding data for the plan. planService.ts orchestrates the process of this initial plan generation, where it calls the AI plan generation function (defined in openai.ts, which uses GPT-4o-mini). 
 
-7. openai.ts then receives the AI's text response and uses a parsing function (from planGeneration.ts) to convert this text into a structured array of training sessions. This structured plan is returned to planService.ts, which then maps these sessions to the database row structure and inserts the plan into the training_plans table in Supabase (using the client from supabase.ts). In case of failure in AI generation or parsing, a fallback plan can be generated (logic for this is also found in planGeneration.ts and called from openai.ts). 
+7. `openai.ts` prompts the AI (GPT-4o-mini) to generate an initial training plan and expects the AI to use its function calling capability to invoke a predefined function (e.g., `save_initial_training_plan`). The arguments of this AI-initiated function call contain the structured training plan data. `openai.ts` receives these arguments and may use utility functions (potentially from `planGeneration.ts`) to process them into a final structured array of training sessions. This structured plan is then returned to `planService.ts`, which maps these sessions to the database row structure and inserts the plan into the `training_plans` table in Supabase (using the client from `supabase.ts`). In case of failure in AI generation or processing of the function call, a fallback plan can be generated (logic for this is also found in `planGeneration.ts` and called from `openai.ts`).
 
 8. Upon onboarding's completion, the user is then pushed to the HomeScreen.ts where the everyday experience begins. There are several actions from here that the user can take. 
 
@@ -106,6 +106,7 @@ This is an AI-powered run club app. Users choose their coach (Craig, Thomas, Dat
 
 ## Parsing Functions
 - Structured data for user onboarding is primarily extracted via OpenAI function calling during the conversation (see App Flow Step 5).
+- Initial training plan data is received via a structured AI function call (see App Flow Step 7), which `openai.ts` processes.
 - Summarize past conversations and workouts (this likely still uses other parsing/summarization techniques).
 - Store summaries with timestamps for lightweight memory
 

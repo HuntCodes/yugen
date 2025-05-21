@@ -291,181 +291,26 @@ export function generateWeeklyFallbackPlan(daysPerWeek: number = 3, weeklyVolume
 }
 
 /**
- * Parse text-based training plan into structured TrainingSession objects
- */
-export function parseTextPlanToSessions(planText: string, defaultUnits: string = 'km'): TrainingSession[] {
-  console.log('Parsing text plan with default units:', defaultUnits);
-
-  const sessions: TrainingSession[] = [];
-  let currentWeekNumber = 0;
-  let currentPhase = 'Base'; // Default phase
-  let columnOrder: string[] = [];
-
-  const lines = planText
-    .replace(/<[^>]*>/g, '') // Remove HTML tags
-    .replace(/\r\n|\r/g, '\n') // Normalize all line breaks to \n
-    .split('\n')
-    .map(line => line.trim())
-    .filter(line => line.length > 0);
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const lowerLine = line.toLowerCase();
-
-    // Detect WEEK block (allows for markdown headers like ### WEEK 1)
-    const weekMatch = lowerLine.match(/(?:^#*\s*)?week\s*(\d+)/i);
-    if (weekMatch && weekMatch[1]) {
-      currentWeekNumber = parseInt(weekMatch[1], 10);
-      columnOrder = []; // Reset column order for new week/table
-      currentPhase = 'Base'; // Reset to default phase for a new week block
-
-      // Attempt to find Phase on the same line or next few lines
-      let phaseFound = false;
-      for (let j = 0; j <= 3 && (i + j) < lines.length; j++) {
-        const searchLine = lines[i+j];
-        // Regex for Phase: case-insensitive, handles optional bolding, extracts phase name before parentheses or commas
-        const phaseMatch = searchLine.match(/(?:\*\*)?Phase:(?:\*\*)?\s*([^\(\[\n,]+)/i);
-        if (phaseMatch && phaseMatch[1]) {
-          currentPhase = phaseMatch[1].trim();
-          phaseFound = true;
-          // If phase is found on a different line than week, advance i to avoid re-processing phase line as something else
-          if (j > 0) i = i + j;
-          break;
-        }
-      }
-      if(phaseFound) console.log(`Detected Week: ${currentWeekNumber}, Phase: ${currentPhase}`);
-      else console.log(`Detected Week: ${currentWeekNumber}, Phase: ${currentPhase} (default)`);
-      continue; // Move to next line after processing week/phase info
-    }
-    
-    // Skip lines that are just "---", decorative, or section summaries that aren't table data
-    if (line.match(/^---+$/) || lowerLine.startsWith('total volume for week') || lowerLine.startsWith('summary:')) {
-        continue;
-    }
-
-    // Detect Markdown table header row (e.g., | Date | Type | ... |)
-    // And then the separator (e.g., |---|---|...|)
-    if (line.startsWith('|') && line.endsWith('|') && lines[i+1] && lines[i+1].startsWith('|') && lines[i+1].includes('---')) {
-      columnOrder = line.split('|').map(header => header.trim().toLowerCase()).filter(h => h);
-      // console.log('Detected table headers:', columnOrder);
-      i++; // Skip the separator line for the next iteration
-      continue;
-    }
-
-    // Process Markdown table data row
-    if (line.startsWith('|') && line.endsWith('|') && columnOrder.length > 0 && currentWeekNumber > 0) {
-      const cells = line.split('|').map(cell => cell.trim()).slice(1, -1); // Get content cells, remove first/last empty from split
-
-      if (cells.length === columnOrder.length) {
-        let sessionData: any = { phase: currentPhase, week: currentWeekNumber };
-        
-        columnOrder.forEach((colName, idx) => {
-          const cellValue = cells[idx];
-          if (colName.includes('date')) sessionData.date = normalizeDate(cellValue);
-          else if (colName.includes('type')) sessionData.type = cellValue;
-          // Ensure distance and time text are captured even if they are just numbers
-          else if (colName.includes('distance')) sessionData.distanceText = cellValue; 
-          else if (colName.includes('time')) sessionData.timeText = cellValue; 
-          else if (colName.includes('notes')) sessionData.notes = cellValue;
-        });
-
-        if (sessionData.date && sessionData.type && sessionData.type.toLowerCase() !== 'rest' && sessionData.type.toLowerCase() !== 'rest day' && !sessionData.type.toLowerCase().includes('total volume')) {
-          try {
-            const dateObj = new Date(sessionData.date);
-            const dayOfWeek = dateObj.getDay() === 0 ? 7 : dateObj.getDay(); // Sunday is 7
-
-            const distance = sessionData.distanceText ? parseDistance(sessionData.distanceText, defaultUnits) : 0;
-            const time = sessionData.timeText ? parseTime(sessionData.timeText) : 0;
-            
-            // Only add session if essential data is present (e.g. type is not empty)
-            if(sessionData.type && sessionData.type.trim() !== '' ){
-              sessions.push(createTrainingSession(
-                currentWeekNumber,
-                sessionData.date,
-                sessionData.type,
-                distance,
-                time,
-                sessionData.notes || '',
-                dayOfWeek,
-                currentPhase
-              ));
-            } else {
-              // console.log('Skipping row due to empty type:', cells);
-            }
-          } catch (err) {
-            console.error('Error creating session from Markdown row:', sessionData, err);
-          }
-        }
-      } else {
-        // console.log('Cell count mismatch. Expected:', columnOrder.length, 'Got:', cells.length, 'Row:', line);
-      }
-    }
-  }
-
-  console.log('Parsed sessions:', sessions.length);
-  return sessions;
-}
-
-/**
- * Generate workout notes based on session type
+ * Generates placeholder notes for a given session type, distance, and units.
+ * This function is kept as it's used by fallback plan generators.
  */
 function generateNotes(sessionType: string, distance: number, units: string): string {
   switch (sessionType) {
-    case 'Easy Run':
-      return `Easy run at comfortable, conversational pace.`;
-    case 'Easy Run + Strides':
-      return `Easy run with 6-8 strides (15-20 seconds) at the end.`;
-    case 'Speed Work':
-      return `Warm up, then ${Math.round(distance * 0.4)} ${units} of intervals at 5K pace, cool down.`;
-    case 'Tempo Run':
-      return `Warm up, then ${Math.round(distance * 0.5)} ${units} at threshold pace, cool down.`;
-    case 'Long Run':
-      return `Long run at easy, comfortable pace.`;
-    case 'Race Pace Run':
-      return `Warm up, then ${Math.round(distance * 0.6)} ${units} at goal race pace, cool down.`;
-    case 'Race Day':
-      return `RACE DAY! Good luck and enjoy the race!`;
+    case "Easy Run":
+      return `Easy conversational pace for ${distance}${units}. Focus on recovery.`;
+    case "Long Run":
+      return `Steady long run of ${distance}${units}. Build endurance.`;
+    case "Tempo Run":
+      return `Tempo run: warm-up, ${Math.max(1, Math.round(distance * 0.6))}${units} at comfortably hard pace, cool-down.`;
+    case "Speed Work": // Generic Speed Work, could be intervals or fartlek
+      return `Speed session: include warm-up, efforts (e.g., repeats of 400m-1km), and cool-down. Total ${distance}${units}.`;
+    case "Easy Run + Strides":
+      return `Easy run of about ${Math.max(1, distance - 0.5)}${units}, followed by 4-6 x 100m strides.`;
+    case "Race Pace Run":
+        return `Run ${distance}${units} at your target race pace. Practice fueling and pacing strategy.`;
+    case "Race Day":
+        return `Race Day! Good luck! Remember your pacing and nutrition strategy.`;
     default:
-      return `${sessionType} at appropriate effort.`;
-  }
-}
-
-/**
- * Convert day name to number (1-7, Monday-Sunday)
- */
-function convertDayToNumber(dayName: string): number {
-  const lowerDay = dayName.toLowerCase();
-  
-  if (lowerDay.startsWith('mon')) return 1;
-  if (lowerDay.startsWith('tue')) return 2;
-  if (lowerDay.startsWith('wed')) return 3;
-  if (lowerDay.startsWith('thu')) return 4;
-  if (lowerDay.startsWith('fri')) return 5;
-  if (lowerDay.startsWith('sat')) return 6;
-  if (lowerDay.startsWith('sun')) return 7;
-  
-  return 1; // Default to Monday
-}
-
-/**
- * Normalize different date formats to YYYY-MM-DD
- */
-function normalizeDate(dateString: string): string {
-  try {
-    // Parse the date directly - JavaScript's Date constructor can handle 
-    // most common formats like YYYY-MM-DD, MM/DD/YYYY, etc.
-    const date = new Date(dateString);
-    
-    // Check if date is valid
-    if (isNaN(date.getTime())) {
-      console.error('Invalid date format:', dateString);
-      return dateString;
-    }
-    
-    // Format as YYYY-MM-DD
-    return date.toISOString().split('T')[0];
-  } catch (err) {
-    console.error('Error normalizing date:', dateString, err);
-    return dateString;
+      return `Workout: ${sessionType}, ${distance}${units}.`;
   }
 } 

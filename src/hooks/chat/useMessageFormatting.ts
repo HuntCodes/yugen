@@ -1,5 +1,6 @@
 import { ChatMessage } from './useMessageTypes';
 import { PlanUpdate } from '../chat/types';
+import { UserTrainingFeedbackData } from '../../services/feedback/feedbackService';
 
 /**
  * Hook for message formatting utilities
@@ -18,14 +19,15 @@ export function useMessageFormatting() {
    * Format the day of week
    */
   const getDayOfWeek = (date: Date) => {
-    return ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][date.getDay()];
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    return days[date.getDay()];
   };
 
   /**
    * Format a date as YYYY-MM-DD
    */
-  const formatDateYMD = (date: Date) => {
-    return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
+  const formatDateYMD = (date: Date): string => {
+    return date.toISOString().split('T')[0];
   };
 
   /**
@@ -36,31 +38,36 @@ export function useMessageFormatting() {
       return 'No training plan available yet.';
     }
 
-    // Sort by date
     const sortedPlan = [...trainingPlan].sort((a, b) => 
       new Date(a.date).getTime() - new Date(b.date).getTime()
     );
       
-    // Format today's date for comparison
     const today = new Date();
     const todayStr = formatDateYMD(today);
       
-    // Get the next 5 workouts for context
-    const upcomingWorkouts = sortedPlan.filter(workout => 
-      workout.date >= todayStr
-    ).slice(0, 5);
+    // Show all upcoming workouts for the current week or next 7 days for better context for AI
+    const upcomingOrCurrentWeek = sortedPlan.filter(workout => {
+      const workoutDate = new Date(workout.date);
+      return workoutDate >= today && workoutDate <= new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+    }).slice(0, 7); // Limit to 7 for brevity if many exist
       
-    if (upcomingWorkouts.length === 0) {
-      return 'No upcoming workouts in the training plan.';
+    if (upcomingOrCurrentWeek.length === 0) {
+      return 'No upcoming workouts in the training plan for the next 7 days.';
     }
       
-    // Add information about which workouts are for today
-    return upcomingWorkouts.map(workout => {
+    return upcomingOrCurrentWeek.map(workout => {
       const date = new Date(workout.date);
       const dayOfWeek = getDayOfWeek(date);
       const isToday = workout.date === todayStr ? " (TODAY)" : "";
+      const sessionIdText = workout.id ? ` (ID: ${workout.id})` : ""; 
         
-      return `Week ${workout.week_number}, ${dayOfWeek}, ${date.toLocaleDateString('en-US', {month: 'short', day: 'numeric'})}: ${workout.session_type}${isToday} - ${workout.distance}km, ${workout.time} minutes, Notes: ${workout.notes}`;
+      let description = `${workout.session_type || 'Workout'}`;
+      if (workout.distance) description += ` ${workout.distance}km`;
+      if (workout.time) description += ` ${workout.time}min`;
+      if (workout.pace) description += ` @ ${workout.pace}`;
+      if (workout.exertion_level) description += ` RPE ${workout.exertion_level}`;
+        
+      return `ID ${workout.id || 'N/A'}: ${dayOfWeek}, ${date.toLocaleDateString('en-US', {month: 'short', day: 'numeric'})} - ${description}${isToday}. Notes: ${workout.notes || 'None'}`;
     }).join('\n');
   };
 
@@ -137,48 +144,144 @@ Would you like me to update your training plan with these changes?`;
   };
 
   /**
-   * Create the system prompt for the AI
+   * Builds the user context string to be provided to the AI.
    */
-  const buildSystemPrompt = (profile: any, trainingPlanText: string, summariesText: string): string => {
-    // Format current date for prompt
+  const buildUserContextString = (
+    profile: any,
+    trainingPlan: any[],
+    recentMessages: ChatMessage[],
+    feedback?: UserTrainingFeedbackData | null
+  ): string => {
+    let context = "--- USER CONTEXT ---\
+";
+
+    // Profile Information
+    context += "\n## Your Profile:\n";
+    context += `- Fitness Level: ${profile?.fitness_level || 'Unknown'}\n`;
+    context += `- Age: ${profile?.age || 'Unknown'}\n`;
+    context += `- Goal: ${profile?.goal_description || 'General fitness'}\n`;
+    // Add other relevant profile fields: units, weekly_mileage, personal_best, constraints, etc.
+    context += `- Preferred Units: ${profile?.units || 'km'}\n`;
+
+    // Training Plan for the Week
+    context += "\n## This Week's Training Plan:\n";
+    context += `${formatTrainingPlanForPrompt(trainingPlan)}\n`;
+
+    // Recent User Feedback/Preferences (from user_training_feedback table)
+    if (feedback) {
+      context += "\n## Your Recent Feedback & Preferences (Week of " + (feedback.week_start_date || 'current') + "):\n";
+      if (feedback.feedback_summary) {
+        context += `- Summary: ${feedback.feedback_summary}\n`;
+      }
+      if (feedback.prefers && Object.keys(feedback.prefers).length > 0) {
+        context += `- Prefers: ${JSON.stringify(feedback.prefers)}\n`;
+      }
+      if (feedback.struggling_with && Object.keys(feedback.struggling_with).length > 0) {
+        context += `- Struggling With: ${JSON.stringify(feedback.struggling_with)}\n`;
+      }
+    }
+
+    // Recent Conversation History (already part of messages array, but could be summarized here if needed)
+    // For now, assuming recentMessages will be passed directly in the API call's messages array.
+    // If we wanted to include it textually here:
+    // context += "\n## Recent Conversation Snippet:\n";
+    // recentMessages.slice(-3).forEach(msg => {
+    //   context += `- ${msg.sender === 'user' ? 'You' : 'Coach'}: ${msg.message}\n`;
+    // });
+
+    context += "\n--- END USER CONTEXT ---\
+";
+    return context;
+  };
+
+  /**
+   * Builds the system prompt for the AI coach.
+   * This version is parameter-less for the Realtime API,
+   * assuming context (plan, profile) is managed or less critical for Realtime API's internal state.
+   */
+  const buildSystemPrompt = (): string => {
     const today = new Date();
     const dayOfWeek = getDayOfWeek(today);
     const formattedDate = `${dayOfWeek}, ${today.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`;
-    
-    // Add date formatting helper for the AI
     const tomorrow = new Date(today);
     tomorrow.setDate(today.getDate() + 1);
     const tomorrowFormatted = `${getDayOfWeek(tomorrow)}, ${tomorrow.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`;
     
-    // Construct the system prompt
-    return `You are an AI running coach with the following details:
+    // Note: The Realtime API will get user profile and plan dynamically if needed via functions or context.
+    // This system prompt focuses on role, capabilities, and tool usage.
+    return `You are an AI running coach. Today is ${formattedDate}. Tomorrow is ${tomorrowFormatted}.
+You are conversational, helpful, and encouraging.
+Answer running-related questions (nutrition, recovery, gear, etc.).
+Explain training sessions and help the user understand their plan.
 
-This conversation is with a runner who has the following profile:
-- Fitness level: ${profile?.fitness_level || 'Unknown'}
-- Age: ${profile?.age || 'Unknown'}
-- Goal: ${profile?.goal_description || 'General fitness'}
-- Preferred distance: ${profile?.preferred_distance || 'Unknown'}
-- Running experience: ${profile?.running_experience || 'Unknown'} 
+INITIAL GREETING:
+When starting a conversation, begin with a friendly, general greeting like "Hi there! How can I help you today?" Offer to chat about their training plan, answer questions, or just check in on how they're doing. DO NOT assume they want to change their training plan in your first message.
 
-IMPORTANT DATE INFORMATION:
-- Today is ${formattedDate}.
-- Tomorrow is ${tomorrowFormatted}.
+IMPORTANT: WORKOUT ADJUSTMENTS & FEEDBACK:
+You have tools to modify workouts and record feedback.
+1. 'execute_workout_adjustment': Use this to change aspects of a scheduled workout (date, distance, duration, intensity, or delete it).
+   - SESSION ID: The user's training plan (which you should have access to or can ask about) contains session IDs. ALWAYS try to get and use the 'session_id' for accuracy.
+   - CLARIFICATION: If ambiguous (e.g., 'change tomorrow\'s run' and there are multiple), ask for clarification (referencing description or ID) BEFORE calling the tool.
+   - PROPOSAL: You will typically propose the change verbally. The system will then call the tool after user confirmation. (This part is slightly different for Realtime API - the API itself calls the tool based on your decision)
+   - SWAPS: If a user asks to "swap" two workouts, explain you'll do it in two steps: confirm moving the first, then confirm moving the second. You will decide to call the 'execute_workout_adjustment' tool for each step.
 
-Their upcoming training plan is:
-${trainingPlanText}
+2. 'add_user_training_feedback': Use this to record the user's training preferences, things they are struggling with, or general feedback. This helps personalize future plans. Specify 'week_start_date' if known, otherwise it defaults to the current week.
 
-${summariesText}
+Engage naturally. Do NOT ask users to phrase requests in specific ways.
+Keep responses concise but informative. Maintain a positive and supportive tone.`;
+  };
 
-Your role is to:
-1. Answer running-related questions
-2. Provide motivation and support
-3. Explain the purpose of different training sessions
-4. Give general advice about nutrition, recovery, and gear
-5. Help them understand their training plan
-
-Respond conversationally in a helpful, encouraging tone. If they ask about adjusting their training plan, suggest they say "I need to adjust my plan because..." for you to assist with specific changes.
-
-Keep responses concise but informative. Use an encouraging, positive tone while remaining honest about training challenges.`;
+  /**
+   * Defines the tools for the OpenAI Realtime API.
+   */
+  const getToolsDefinitionForRealtimeAPI = () => {
+    // The Realtime API requires a different format than the standard Chat API
+    // Format: { name, type: "function", parameters } instead of { type: "function", function: { name, parameters } }
+    return [
+      {
+        name: 'execute_workout_adjustment',
+        type: 'function',
+        description: "Modifies a user's scheduled workout (e.g., change date, distance, duration, intensity, or delete it). Always aim to use a session_id.",
+        parameters: {
+          type: 'object',
+          properties: {
+            session_id: { type: 'string', description: "The ID of the workout session to modify. Highly preferred." },
+            original_date: { type: 'string', format: 'date', description: "The original date (YYYY-MM-DD) of the workout. Used if session_id is unknown." },
+            workout_type: { type: 'string', description: "Type of workout (e.g., 'Easy Run', 'Long Run', 'Rest Day'). Used with original_date if session_id is unknown." },
+            adjustment_details: {
+              type: 'object',
+              properties: {
+                new_date: { type: 'string', format: 'date', description: "New date (YYYY-MM-DD)." },
+                new_distance: { type: 'number', description: "New distance (user's preferred units)." },
+                new_duration_minutes: { type: 'number', description: "New duration in minutes." },
+                intensity_change: { type: 'string', enum: ['easier', 'harder', 'same'], description: "Intensity change." },
+                action: { type: 'string', enum: ['update', 'delete'], description: "Action: 'update' or 'delete'. Default 'update'." },
+                reason: { type: 'string', description: "User's reason for change (optional)." },
+                user_query: {type: 'string', description: "The original user query that led to this adjustment."}
+              },
+              required: ['user_query']
+            }
+          },
+          required: ['adjustment_details']
+        }
+      },
+      {
+        name: 'add_user_training_feedback',
+        type: 'function',
+        description: "Records user's training preferences, struggles, or general feedback to personalize future plans. Can include preferred workout types, times, feelings about intensity, etc.",
+        parameters: {
+          type: 'object',
+          properties: {
+            week_start_date: { type: 'string', format: 'date', description: "Week start date (YYYY-MM-DD) for the feedback. Defaults to current week if not provided." },
+            prefers: { type: 'object', description: "JSON object for preferences (e.g., {'morning_runs': true, 'solo_sessions': false})." },
+            struggling_with: { type: 'object', description: "JSON object for struggles (e.g., {'motivation': 'low', 'hills': 'difficulty'})." },
+            feedback_summary: { type: 'string', description: "A general text summary of the feedback provided by the user." },
+            raw_data: { type: 'object', description: "Any other relevant structured data from the conversation."}
+          },
+          required: ['feedback_summary']
+        }
+      }
+    ];
   };
 
   return {
@@ -188,6 +291,8 @@ Keep responses concise but informative. Use an encouraging, positive tone while 
     formatTrainingPlanForPrompt,
     formatChatSummariesForPrompt,
     formatPlanAdjustmentPrompt,
-    buildSystemPrompt
+    buildUserContextString,
+    buildSystemPrompt,
+    getToolsDefinitionForRealtimeAPI
   };
 } 

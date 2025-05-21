@@ -18,6 +18,7 @@ export interface MessageHandlerParams {
   profile: any;
   trainingPlan: any[];
   onMessageResponse: (message: ChatMessage) => void;
+  onPlanAdjusted?: () => void; // Optional callback to signal a successful plan adjustment
 }
 
 // Time window for considering messages part of the same session (3 days)

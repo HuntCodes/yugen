@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, TouchableOpacity, Image, StyleSheet, ActivityIndicator, Platform, AppState } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { Feather, FontAwesome } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import {
   RTCPeerConnection,
@@ -12,13 +12,19 @@ import {
 import InCallManager from 'react-native-incall-manager';
 import { encode as encodeBase64 } from 'base-64'; // For ArrayBuffer to base64
 import * as Animatable from 'react-native-animatable'; // Added for animations
+import { v4 } from 'uuid';
 
 import { environment } from '../../config/environment';
-import { ChatMessage } from '../../hooks/useChatFlow';
 import { OnboardingProfile as Profile } from '../../types/onboarding';
 import { TrainingSession } from '../../screens/main/training/components/types';
 import { PlanUpdate } from '../../types/planUpdate';
 import { saveMessage } from '../../services/chat/chatService';
+import * as planService from '../../services/plan/planService';
+import * as feedbackService from '../../services/feedback/feedbackService';
+
+// Import the new hooks and types
+import { ChatMessage as CoreChatMessage, MessageHandlerParams } from '../../hooks/chat/useMessageTypes'; // Renamed to avoid conflict
+import { useMessageFormatting } from '../../hooks/chat/useMessageFormatting'; // Import for system prompt
 
 // Constants
 const SUPABASE_URL = environment.supabaseUrl; // Ensure this is correctly configured in your environment
@@ -33,7 +39,7 @@ const glowAnimation = {
 };
 
 // Extended ChatMessage interface with timestamp
-interface TimestampedChatMessage extends ChatMessage {
+interface TimestampedChatMessage extends CoreChatMessage {
   timestamp?: number;
   id?: string;
 }
@@ -48,12 +54,31 @@ interface DailyVoiceChatProps {
   userId: string;
   profile: Profile | null;
   currentTrainingPlan: TrainingSession[] | null;
-  onSessionComplete: (conversationHistory: ChatMessage[], confirmedPlanUpdate?: PlanUpdate) => void;
+  onSessionComplete: (conversationHistory: CoreChatMessage[], confirmedPlanUpdate?: PlanUpdate) => void;
   onError: (error: string) => void;
   onClose: () => void;
   onSpeakingStateChange?: (isSpeaking: boolean, speaker?: 'user' | 'coach') => void;
   isVisible: boolean;
   refreshHomeScreen?: () => void;
+}
+
+// Add explicit types for WebRTC message events
+interface RTCMessageEvent {
+  data: string;
+  target: RTCDataChannel;
+}
+
+interface RTCErrorEvent {
+  error: Error;
+  target: RTCDataChannel;
+}
+
+// Provide dummy event handlers with arguments for TypeScript 
+interface DummyRTCCallbacks {
+  onopen?: (event: Event) => void;
+  onmessage?: (event: RTCMessageEvent) => void;
+  onerror?: (event: RTCErrorEvent) => void;
+  onclose?: (event: Event) => void;
 }
 
 const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
@@ -73,44 +98,100 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
   isVisible,
   refreshHomeScreen,
 }) => {
-  const [isLoading, setIsLoading] = useState(true); // Initial loading/setup phase
-  const [isConnecting, setIsConnecting] = useState(false); // Connecting to WebRTC/Deepgram
-  const [isListening, setIsListening] = useState(false); // Actively listening for user speech
+  // --- STATE ---
+  const [isLoading, setIsLoading] = useState(true);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [isListening, setIsListening] = useState(false);
   const [isCoachSpeakingTTS, setIsCoachSpeakingTTS] = useState(false);
   const [conversationHistory, setConversationHistory] = useState<TimestampedChatMessage[]>([]);
-  const [currentTranscript, setCurrentTranscript] = useState(''); // Real-time transcript from STT
-  const [pendingCoachResponse, setPendingCoachResponse] = useState(''); // Accumulates coach TTS text
+  const [currentTranscript, setCurrentTranscript] = useState('');
+  const [pendingCoachResponse, setPendingCoachResponse] = useState('');
   const [error, setErrorState] = useState<string | null>(null);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [fallbackMode, setFallbackMode] = useState(false);
   const [conversationComplete, setConversationComplete] = useState(false);
   const [userIsActuallySpeaking, setUserIsActuallySpeaking] = useState(false);
   const [isReceivingCoachMessage, setIsReceivingCoachMessage] = useState(false);
-  const [showAnimatedCoachView, setShowAnimatedCoachView] = useState(false); // New state for animation
-  const [userTranscriptJustReceived, setUserTranscriptJustReceived] = useState(false); // Added to track new user input
+  const [showAnimatedCoachView, setShowAnimatedCoachView] = useState(false);
+  const [userTranscriptJustReceived, setUserTranscriptJustReceived] = useState(false);
+  const [isExecutingTool, setIsExecutingTool] = useState(false);
+  const [isInitializedThisSession, setIsInitializedThisSession] = useState(false);
+  const [userFeedback, setUserFeedback] = useState<any>(null);
+  
+  // Track accumulated function call arguments
+  const [pendingFunctionArgs, setPendingFunctionArgs] = useState<{[callId: string]: string}>({});
+  const pendingFunctionArgsRef = useRef<{[callId: string]: string}>({});
+  
+  // Track function names by call_id
+  const [functionNameMap, setFunctionNameMap] = useState<{[callId: string]: string}>({});
+  const functionNameMapRef = useRef<{[callId: string]: string}>({});
 
+  // --- REFS ---
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const dataChannelRef = useRef<any | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const ttsPlayerRef = useRef<Audio.Sound | null>(null);
-  
   const ephemeralKeyRef = useRef<string | null>(null);
   const userSpeakingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const coachResponseCompleterTimerRef = useRef<NodeJS.Timeout | null>(null);
   const responseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
   const cleanupScheduledRef = useRef(false);
   const initializeWebRTCRef = useRef<((token: string) => Promise<void>) | null>(null);
+  const retryCountRef = useRef(0);
+  const maxRetries = 3;
+  const wasVisibleRef = useRef(isVisible);
+  const [needsRefresh, setNeedsRefresh] = useState(false);
 
+  // --- HOOKS ---
+  const { buildSystemPrompt, getToolsDefinitionForRealtimeAPI, buildUserContextString } = useMessageFormatting();
+
+  // --- EFFECT: Show/hide animated coach view based on state ---
   useEffect(() => {
-    // Determine when to show the animated coach view
-    if (!isLoading && !isConnecting && !error && hasPermission && isVisible) {
-      setShowAnimatedCoachView(true);
-    } else {
-      setShowAnimatedCoachView(false);
+    const pc = peerConnectionRef.current;
+    const isConnected = pc?.connectionState === 'connected';
+    
+    // Show the animated coach view if:
+    // 1. Connection is established OR
+    // 2. Not loading and not connecting and no errors and has permission and is visible OR
+    // 3. The coach is speaking/responding
+    const shouldShowCoach = 
+      isConnected ||
+      (!isLoading && !isConnecting && !error && hasPermission && isVisible) ||
+      isCoachSpeakingTTS || 
+      isReceivingCoachMessage;
+    
+    console.log('[DailyVoiceChat] Setting coach visibility to:', shouldShowCoach, 
+      'connection state:', pc?.connectionState || 'no connection');
+      
+    setShowAnimatedCoachView(shouldShowCoach);
+    
+    // If showAnimatedCoachView is being enabled, also ensure loading is set to false
+    if (shouldShowCoach && isLoading) {
+      setIsLoading(false);
     }
-  }, [isLoading, isConnecting, error, hasPermission, isVisible]);
+  }, [isLoading, isConnecting, error, hasPermission, isVisible, isCoachSpeakingTTS, isReceivingCoachMessage]);
 
+  // --- EFFECT: Fetch user feedback when component initializes ---
+  useEffect(() => {
+    if (userId && isVisible) {
+      // Fetch user training feedback
+      const fetchFeedback = async () => {
+        try {
+          const result = await feedbackService.fetchUserTrainingFeedback(userId);
+          if (result.data) {
+            console.log('[DailyVoiceChat] User feedback loaded:', result.data.feedback_summary || 'No summary');
+            setUserFeedback(result.data);
+          }
+        } catch (err) {
+          console.error('[DailyVoiceChat] Error fetching user feedback:', err);
+        }
+      };
+      
+      fetchFeedback();
+    }
+  }, [userId, isVisible]);
+
+  // --- HANDLERS & UTILITY FUNCTIONS ---
   const handleError = useCallback((errorMessage: string, critical = false) => {
     console.error(`[DailyVoiceChat] Error: ${errorMessage}`);
     setErrorState(errorMessage);
@@ -119,66 +200,112 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
     }
     if (critical) {
       console.log("[DailyVoiceChat] Critical error, potentially closing or fallback.");
-      // Consider calling fullCleanupAndClose() or setFallbackMode(true) here if always desired on critical
+      
+      // For critical API errors, enable fallback mode
+      if (errorMessage.includes('API') || 
+          errorMessage.includes('OpenAI') || 
+          errorMessage.includes('404') ||
+          errorMessage.includes('key')) {
+        console.log("[DailyVoiceChat] API-related error, enabling fallback mode");
+        setFallbackMode(true);
+      }
     }
   }, [onError]);
 
-  const buildDailyCheckInPrompt = useCallback(() => {
-    let prompt = `
-    You are ${coachName}, a friendly and supportive running coach. You are speaking with your athlete, ${profile?.nickname || 'the athlete'}.
+  const stopAudioProcessing = useCallback(() => {
+    console.log('[DailyVoiceChat] Stopping audio processing...');
+    setIsListening(false);
+    if (onSpeakingStateChange) onSpeakingStateChange(false, 'user');
+    if(userSpeakingTimerRef.current) clearTimeout(userSpeakingTimerRef.current);
+    userSpeakingTimerRef.current = null;
+  }, [onSpeakingStateChange]);
 
-    🚫 You must NEVER speak as ${profile?.nickname || 'the athlete'} or describe things from their perspective.
-    🚫 You must never say "I felt tired yesterday", "My tempo run was hard", or similar — that would be ${profile?.nickname || 'the athlete'} speaking, and you are NOT them.
-    ✅ Always speak from YOUR perspective — as a coach.
+  const fullCleanup = useCallback(() => {
+    console.log('[DailyVoiceChat] Performing full cleanup...');
+    stopAudioProcessing();
 
-    You are here to help, guide, listen, and encourage.
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(track => track.stop());
+      localStreamRef.current = null;
+    }
+    if (dataChannelRef.current) {
+      dataChannelRef.current.close();
+      dataChannelRef.current = null;
+    }
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
+      peerConnectionRef.current = null;
+    }
+    if (ttsPlayerRef.current) {
+      ttsPlayerRef.current.unloadAsync().catch(e => console.error("Error unloading TTS player:", e));
+      ttsPlayerRef.current = null;
+    }
+    
+    ephemeralKeyRef.current = null;
+    setIsConnecting(false);
+    setIsListening(false);
+    setIsCoachSpeakingTTS(false);
+    setCurrentTranscript('');
+    setPendingCoachResponse('');
+    setErrorState(null);
+    setIsInitializedThisSession(false);
+  }, [stopAudioProcessing]);
+  
+  const fullCleanupAndClose = useCallback(() => {
+    if (cleanupScheduledRef.current) return;
+    cleanupScheduledRef.current = true;
+    console.log('[DailyVoiceChat] Performing full cleanup and close...');
 
-    Your role is fixed. You are ${coachName}, their coach, at all times.
+    fullCleanup();
+    onClose(); 
+    
+    setTimeout(() => {
+        cleanupScheduledRef.current = false;
+    }, 100);
+  }, [fullCleanup, onClose]);
 
-    Have a natural, turn-by-turn voice conversation. Ask ONE clear question at a time. Wait for ${profile?.nickname || 'the athlete'} to answer before proceeding.
-
-    IMPORTANT: Wait for the user to respond after each statement or question you make.
-    Do not continue speaking or ask multiple questions without user input.
-    NEVER continue the conversation without waiting for the user to respond first.
-
-    Start with: "Hey, how are you feeling today?"
-
-    Then:
-    - Ask how training has been going in general
-    - Then ask if they'd like to adjust anything in the plan
-
-    If they suggest changes, you must get explicit verbal confirmation before making them.
-    Ask clearly: "Just to confirm, would you like to change [original workout] to [new workout]?"
-
-    ✅ If they say yes, acknowledge and confirm the change.
-    ❌ If they say no or are unsure, do not change the plan.
-
-    If they say no, ask if they'd like to adjust anything in the plan.
-
-    If they say yes, ask them what they'd like to change.
-
-    If they say no, ask if they'd like to adjust anything in the plan.
-
-      `;
-
-      if (coachPersonalityBlurb) {
-        prompt += `Your personality is: ${coachPersonalityBlurb}\n`;
-      }
-      if (coachVibe) {
-        prompt += `Your vibe is: ${coachVibe}\n`;
-      }
-      if (coachPhilosophy) {
-        prompt += `Your coaching philosophy is: ${coachPhilosophy}\n`;
-      }
-
-      if (currentTrainingPlan && currentTrainingPlan.length > 0) {
-        prompt += `Here is ${profile?.nickname || 'the athlete'}'s upcoming plan:\n`;
-        currentTrainingPlan.slice(0, 3).forEach(s => {
-          prompt += `- ${s.date}: ${s.session_type} - ${s.distance} ${profile?.units || 'km'}\n`;
-        });
-      }
-    return prompt;
-  }, [coachName, profile, currentTrainingPlan, coachPersonalityBlurb, coachVibe, coachPhilosophy]);
+  const handleSwitchToTextChat = useCallback(() => {
+    console.log('[DailyVoiceChat] Switching to text chat');
+    
+    // Clean up all voice resources
+    stopAudioProcessing();
+    
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(track => track.stop());
+      localStreamRef.current = null;
+    }
+    
+    if (dataChannelRef.current) {
+      dataChannelRef.current.close();
+      dataChannelRef.current = null;
+    }
+    
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
+      peerConnectionRef.current = null;
+    }
+    
+    // Clean up audio resources
+    InCallManager.setForceSpeakerphoneOn(false);
+    InCallManager.stop();
+    
+    // Reset state
+    setFallbackMode(false);
+    setIsInitializedThisSession(false);
+    
+    // Clean up TTS if active
+    if (ttsPlayerRef.current) {
+      ttsPlayerRef.current.unloadAsync().catch(e => 
+        console.warn('[DailyVoiceChat] Error unloading TTS player:', e)
+      );
+      ttsPlayerRef.current = null;
+    }
+    
+    // Call onClose to let parent handle switching to text chat
+    if (onClose) {
+      onClose();
+    }
+  }, [onClose, stopAudioProcessing]);
 
   const startAudioProcessing = useCallback(async () => {
     if (!localStreamRef.current || !peerConnectionRef.current || isListening) {
@@ -188,8 +315,7 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
     console.log('[DailyVoiceChat] Starting audio processing / listening...');
     setIsListening(true); 
     if (onSpeakingStateChange) onSpeakingStateChange(true, 'user');
-
-  }, [handleError, onSpeakingStateChange]);
+  }, [isListening, onSpeakingStateChange]);
 
   const playTTSAudio = useCallback(async (base64Audio: string) => {
     try {
@@ -239,6 +365,7 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
     const commonWords = words1.filter(word => words2.includes(word));
     const similarityRatio = commonWords.length / Math.min(words1.length, words2.length);
     console.log(`[DailyVoiceChat] Word similarity: ${commonWords.length}/${Math.min(words1.length, words2.length)} = ${similarityRatio * 100}%`);
+    
     if (similarityRatio >= 0.9) {
       console.log('[DailyVoiceChat] MATCH: Word similarity >= 90%');
       return true;
@@ -248,519 +375,558 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
     return false;
   };
 
-  // Memoize configureAIInstructions - MOVED EARLIER
+  // --- AI CONFIGURATION ---
   const configureAIInstructions = useCallback((dc: any) => { 
     if (dc && dc.readyState === 'open') {
-        const dailyCheckInPrompt = buildDailyCheckInPrompt();
-        const sessionUpdateEvent = {
-            type: 'session.update',
-            session: {
-                instructions: dailyCheckInPrompt, 
-                input_audio_transcription: {
-                    model: "whisper-1" 
-                },
-                input_audio_noise_reduction: {
-                    "type": "near_field"
-                },
-                turn_detection: {
-                    "type": "server_vad",
-                    "threshold": 0.8,
-                    "prefix_padding_ms": 800,
-                    "silence_duration_ms": 800,
-                    "create_response": true,
-                    "interrupt_response": true
-                }
+        // Get basic system instructions
+        const systemInstructions = buildSystemPrompt();
+        
+        // Get tools definition
+        const toolsDefinition = getToolsDefinitionForRealtimeAPI();
+        
+        // Build user context if profile exists
+        let userContext = '';
+        if (profile && currentTrainingPlan) {
+          try {
+            // Use the same context building function as regular chat for consistency
+            userContext = buildUserContextString(
+              profile,
+              currentTrainingPlan,
+              conversationHistory, // Use the conversationHistory state variable
+              userFeedback // User feedback if available
+            );
+            
+            console.log('[DailyVoiceChat] User context prepared, includes training plan with workouts:', 
+              currentTrainingPlan?.length || 0);
+          } catch (err) {
+            console.error('[DailyVoiceChat] Error building user context:', err);
+            userContext = `## Your Profile:\n- Name: ${profile?.nickname || 'Athlete'}\n- Coach: ${coachName}\n`;
+          }
+        }
+        
+        // Combine system instructions and user context
+        const fullPrompt = systemInstructions + '\n\n' + userContext;
+        
+        // Send the basic update event first
+        const basicSessionUpdateEvent = {
+          type: 'session.update',
+          session: {
+            instructions: fullPrompt,
+            input_audio_transcription: { // Enable user input transcription
+              model: 'whisper-1' 
+            },
+            input_audio_noise_reduction: {
+              type: "near_field"
+            },
+            turn_detection: {
+              type: "server_vad",
+              threshold: 0.8,
+              prefix_padding_ms: 800,
+              silence_duration_ms: 800,
+              create_response: true,
+              interrupt_response: true
             }
+          }
         };
-        dc.send(JSON.stringify(sessionUpdateEvent));
-        console.log('[DailyVoiceChat] Sent session.update event with AI configuration including input_audio_transcription.');
-
+        
+        dc.send(JSON.stringify(basicSessionUpdateEvent));
+        console.log('[DailyVoiceChat] Sent basic session.update event with AI configuration.');
+        
+        // Log the exact structure of tools for debugging
+        console.log('[DailyVoiceChat] Tools structure:', JSON.stringify(toolsDefinition));
+        
+        // Now send the tools configuration separately with reduced delay (1000ms → 800ms)
         setTimeout(() => {
-            if (dc.readyState === 'open') {
-                const responseCreateEvent = {
+          if (dc.readyState === 'open') {
+            try {
+              // Send the tools configuration separately
+              const toolsUpdateEvent = {
+                type: 'session.update',
+                session: {
+                  tools: toolsDefinition
+                }
+              };
+              
+              console.log('[DailyVoiceChat] Full tools update event:', JSON.stringify(toolsUpdateEvent));
+              dc.send(JSON.stringify(toolsUpdateEvent));
+              console.log('[DailyVoiceChat] Sent tools configuration separately.');
+              
+              // Make coach speak first with a friendly greeting after a short delay
+              // We'll rely on the system prompt to guide the initial message
+              // Reduced delay (1000ms → 700ms)
+              setTimeout(() => {
+                if (dc.readyState === 'open') {
+                  // Simply use response.create - this is the safe approach that won't break the connection
+                  const responseCreateEvent = {
                     type: 'response.create'
-                };
-                dc.send(JSON.stringify(responseCreateEvent));
-                console.log('[DailyVoiceChat] Sent response.create event to make coach speak first');
-                setIsReceivingCoachMessage(true);
-            } else {
-                 console.warn('[DailyVoiceChat] DataChannel closed before response.create could be sent.');
+                  };
+                  dc.send(JSON.stringify(responseCreateEvent));
+                  console.log('[DailyVoiceChat] Sent response.create event to make coach speak first');
+                  setIsReceivingCoachMessage(true);
+                }
+              }, 700);
+            } catch (e) {
+              console.error('[DailyVoiceChat] Error sending tools configuration:', e);
             }
-        }, 1000);
-
+          }
+        }, 800);
+        
     } else {
         console.error('[DailyVoiceChat] Cannot configure AI: DataChannel not open or not available.');
         handleError('Failed to configure AI: DataChannel not ready.', true);
         setFallbackMode(true);
     }
-  }, [buildDailyCheckInPrompt, handleError, setFallbackMode, setIsReceivingCoachMessage]);
+  }, [buildSystemPrompt, getToolsDefinitionForRealtimeAPI, handleError, profile, currentTrainingPlan, conversationHistory, userFeedback]);
 
+  // --- NETWORK OPERATIONS ---
   const getEphemeralKey = useCallback(async () => {
+    if (!isVisible) {
+      console.log('[DailyVoiceChat] Not visible, skipping ephemeral key request');
+      return;
+    }
+    
+    try {
     console.log('[DailyVoiceChat] Requesting ephemeral key...');
     setIsConnecting(true);
-    setErrorState(null); 
-    setFallbackMode(false);
-    try {
-      const response = await fetch(EPHEMERAL_KEY_ENDPOINT, {
+      
+      // Use direct Supabase URL
+      const supabaseUrl = "https://tdwtacijcmpfnwlovlxh.supabase.co";
+      
+      if (!supabaseUrl) {
+        throw new Error('Supabase URL not configured');
+      }
+      
+      // Add timeout to the fetch for better error handling
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      
+      try {
+        const response = await fetch(`${supabaseUrl}/functions/v1/ephemeral-key`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify({ model: 'gpt-4o-mini-realtime-preview-2024-12-17', voice: 'verse' }), 
-      });
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({
+            model: 'gpt-4o-mini-realtime-preview-2024-12-17',
+            voice: 'verse'
+          }),
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Ephemeral key fetch failed: ${response.status} ${errorText}`);
+          throw new Error(`Failed to get ephemeral key: ${response.status}`);
       }
+        
       const data = await response.json();
+        console.log('[DailyVoiceChat] Ephemeral key received successfully.');
+        
       const key = data.client_secret?.value; 
+        
       if (!key) {
-        console.error('[DailyVoiceChat] No client_secret.value in ephemeral key response. Response data:', data);
-        throw new Error('No ephemeral key (client_secret.value) received from backend');
+          throw new Error('No ephemeral key received from OpenAI');
       }
+        
       ephemeralKeyRef.current = key;
-      console.log('[DailyVoiceChat] Ephemeral key received successfully.');
-      if (initializeWebRTCRef.current) {
+        
+        // Initialize WebRTC only if we're still visible and we have the initializeWebRTC function
+        if (isVisible && initializeWebRTCRef.current) {
+          console.log('[DailyVoiceChat] Calling initializeWebRTC with ephemeral key');
         initializeWebRTCRef.current(key);
       } else {
-        console.error("[DailyVoiceChat] initializeWebRTC is not assigned to ref yet");
-        handleError("Internal error: WebRTC initializer not ready", true);
-      }
-    } catch (err: any) {
-      handleError(`Failed to get ephemeral key: ${err.message}`, true);
-      setFallbackMode(true); 
+          console.log('[DailyVoiceChat] Got key but component state changed, not initializing WebRTC');
       setIsConnecting(false);
     }
-  }, [handleError]);
-
-  const checkMicrophonePermissions = useCallback(async () => {
-    try {
-      const permission = await Audio.requestPermissionsAsync(); // Using Audio.requestPermissionsAsync directly
-      setHasPermission(permission.granted);
-      if (permission.granted) {
-        console.log('[DailyVoiceChat] Microphone permission granted.');
-        getEphemeralKey(); // Call getEphemeralKey which is now defined above
-      } else {
-        handleError('Microphone permission not granted.', true);
-        setFallbackMode(true); // Also set fallback if permissions are denied
-        setIsLoading(false); // Stop loading if permissions are denied
+      } catch (err) {
+        clearTimeout(timeoutId);
+        throw err;
       }
-    } catch (err: any) {
-      handleError(`Permission check error: ${err.message}`, true);
-      setFallbackMode(true);
+    } catch (err) {
+      console.error('[DailyVoiceChat] Error getting ephemeral key:', err);
+      handleError(`Failed to get ephemeral key: ${err instanceof Error ? err.message : 'Unknown error'}`, true);
+      setIsConnecting(false);
       setIsLoading(false);
+      
+      // Consider fallback mode for API-related errors
+      if (err instanceof Error && 
+         (err.message.includes('API') || err.message.includes('key') || err.message.includes('ephemeral'))) {
+        setFallbackMode(true);
     }
-  }, [getEphemeralKey, handleError]);
+    }
+  }, [isVisible, handleError]);
 
   const initializeWebRTC = useCallback(async (token: string) => {
-    console.log('[DailyVoiceChat] Initializing WebRTC with OpenAI Realtime API...');
-    if (!token) {
-        handleError("Cannot initialize WebRTC without an ephemeral key.", true);
-        setFallbackMode(true);
+    try {
+      if (!isVisible) {
+        console.log('[DailyVoiceChat] Component not visible, skipping WebRTC initialization');
         return;
     }
-    setIsConnecting(true); 
-    try {
-      const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-      peerConnectionRef.current = pc;
-
-      // @ts-ignore 
-      pc.onicecandidate = (event: any) => {
-        if (event.candidate) {
-          console.log('[DailyVoiceChat] ICE candidate:', event.candidate); 
-        }
-      };
-
-      // @ts-ignore 
-      pc.onconnectionstatechange = () => {
-        if (!peerConnectionRef.current) return;
-        const connectionState = peerConnectionRef.current.connectionState;
-        console.log(`[DailyVoiceChat] PeerConnection state: ${connectionState}`);
-        if (connectionState === 'connected' && dataChannelRef.current?.readyState === 'open') {
-            // setIsConnecting(false); // Moved to dc.onopen for more precise timing
-            // setIsLoading(false); 
-            console.log('[DailyVoiceChat] WebRTC peer connection connected. DataChannel state:', dataChannelRef.current?.readyState);
-        } else if (connectionState === 'failed' || connectionState === 'disconnected' || connectionState === 'closed') {
-          handleError('WebRTC connection failed or disconnected.', false); 
-          setIsConnecting(false);
-          setIsLoading(false); 
-        }
-      };
-
-      // @ts-ignore 
-      pc.ontrack = (event: any) => {
-        console.log('[DailyVoiceChat] Received track:', event.track.kind);
-        if (event.track.kind === 'audio' && event.streams && event.streams[0]) {
-            console.log('[DailyVoiceChat] Audio track received via ontrack. This is unexpected if TTS is purely via data channel.');
-        }
+      
+      console.log('[DailyVoiceChat] Initializing WebRTC with OpenAI Realtime API...');
+      
+      // Create a session ID for tracking conversation
+      const sessionId = v4(); // Assuming UUID is used
+      
+      // Set up WebRTC connection
+      const configuration = { 
+        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
       };
       
-      const dc = pc.createDataChannel('oai-events', { ordered: true }); 
+      // Create peer connection
+      const pc = new RTCPeerConnection(configuration);
+      peerConnectionRef.current = pc;
+      
+      // Create data channel for sending/receiving events
+      const dc = pc.createDataChannel('oai-events');
       dataChannelRef.current = dc;
 
-      // @ts-ignore 
+      // Set up event handlers for the data channel
+      // @ts-ignore - Using onopen instead of addEventListener for compatibility
       dc.onopen = () => {
-        console.log('[DailyVoiceChat] DataChannel open.');
-        if (dataChannelRef.current && dataChannelRef.current.readyState === 'open') {
-          configureAIInstructions(dataChannelRef.current); 
-          setIsConnecting(false); 
-          setIsLoading(false);
-          startAudioProcessing(); 
-          console.log('[DailyVoiceChat] AI configured and audio processing started.');
-        } else {
-          console.warn('[DailyVoiceChat] DataChannel opened, but ref is not ready or state is not open.');
-          handleError('DataChannel opened but was not ready for configuration.', true);
-          setFallbackMode(true);
+        console.log('[DailyVoiceChat] Data channel opened');
+        
+        // Don't send instructions if component isn't visible anymore
+        if (!isVisible) {
+          console.log('[DailyVoiceChat] Component not visible, skipping AI instructions');
+          return;
+        }
+        
+        // Send instructions when data channel opens
+        if (dc.readyState === 'open') {
+          configureAIInstructions(dc);
         }
       };
-
-      // @ts-ignore 
-      dc.onclose = () => console.log('[DailyVoiceChat] DataChannel closed.');
       
-      // @ts-ignore 
-      dc.onerror = (error: any) => { 
-          handleError(`DataChannel error: ${error?.message || 'Unknown DataChannel error'}`, true);
-          setFallbackMode(true);
-      };
-      
-      // @ts-ignore 
-      dc.onmessage = (event: any) => { 
-        console.log('[DailyVoiceChat] RAW DataChannel Message Received:', event.data); 
+      // @ts-ignore - Using onmessage instead of addEventListener for compatibility
+      dc.onmessage = (event: RTCMessageEvent) => {
+        console.log('[DailyVoiceChat] Data channel message:', 
+          typeof event.data === 'string' ? event.data.substring(0, 100) + '...' : 'Non-string data');
         try {
-            const messageData = JSON.parse(event.data as string);
-            let unhandled = false;
-            console.log('[DailyVoiceChat] Parsed DataChannel Message Type:', messageData.type); 
-
-            switch (messageData.type) {
-                case 'final_transcript': // User's final speech-to-text
-                case 'conversation.item.input_audio_transcription.completed': 
-                    if (isCoachSpeakingTTS) {
-                        console.log('[DailyVoiceChat] Ignoring user transcript as coach is speaking TTS.');
-                        break;
-                    }
-                    const transcriptText = messageData.text || messageData.transcript;
-                    const finalTranscript = transcriptText?.trim();
-                    if (finalTranscript) {
-                        console.log('[DailyVoiceChat] User Utterance (final):', finalTranscript);
-                        
-                        // Check if this transcript closely matches the coach's last message
-                        const lastCoachMessage = conversationHistory.findLast(msg => msg.sender === 'coach')?.message || '';
-                        if (lastCoachMessage && isSimilarText(finalTranscript, lastCoachMessage)) {
-                            console.log('[DailyVoiceChat] Ignoring transcript that closely matches coach\'s last message');
-                            setCurrentTranscript('');
-                            break;
-                        }
-
-                        // Create a timestamp for ordering
-                        const messageTimestamp = Date.now();
-                        const newUserMessage: TimestampedChatMessage = { 
-                            sender: 'user', 
-                            message: finalTranscript,
-                            timestamp: messageTimestamp 
-                        };
-                        console.log('[DailyVoiceChat] Adding user message to history:', finalTranscript);
-                        
-                        // Add the message and sort conversation history by timestamp to ensure correct ordering
-                        setConversationHistory(prev => {
-                            const updated = [...prev, newUserMessage];
-                            // Sort by timestamp if available, otherwise maintain insertion order
-                            return updated.sort((a, b) => {
-                                const timeA = a.timestamp || 0;
-                                const timeB = b.timestamp || 0;
-                                return timeA - timeB;
-                            });
-                        });
-                        
-                        // Set flag that we've received a valid user transcript
-                        setUserTranscriptJustReceived(true);
-                        
-                        if (dataChannelRef.current && dataChannelRef.current.readyState === 'open') {
-                            if (!isReceivingCoachMessage && !isCoachSpeakingTTS && userTranscriptJustReceived) {
-                                console.log('[DailyVoiceChat] User transcript processed. Requesting AI response.');
-                                const responseCreateEvent = {
-                                    type: 'response.create'
-                                };
-                                dataChannelRef.current.send(JSON.stringify(responseCreateEvent));
-                                setIsReceivingCoachMessage(true); // Expecting the coach to speak
-                                setUserTranscriptJustReceived(false); // Clear flag after use
-                            } else {
-                                console.log('[DailyVoiceChat] User transcript processed, but coach is already active or no valid user input. Not sending response.create.');
-                            }
-                        } else {
-                            handleError("Cannot request AI response: DataChannel not open.");
-                        }
-                    }
-                    setCurrentTranscript(''); 
-                    break;
-                case 'partial_transcript': // User's partial speech-to-text (not used by OpenAI Realtime API)
-                    setCurrentTranscript(messageData.text);
-                    break;
-                case 'response.audio_transcript.delta': // Coach speech delta
-                    if (messageData.delta) {
-                        if (!isCoachSpeakingTTS) {
-                            setIsCoachSpeakingTTS(true);
-                            setPendingCoachResponse(''); // Clear for new utterance
-                            if (onSpeakingStateChange) onSpeakingStateChange(true, 'coach');
-                        }
-                        setPendingCoachResponse(prev => prev + messageData.delta);
-                    }
-                    break;
-                case 'response.audio_transcript.done': // Coach speech segment done
-                    if (messageData.transcript) {
-                        // This event provides the full transcript for the segment.
-                        // We can use it to ensure pendingCoachResponse is accurate
-                        // if deltas were missed or if it's a more reliable source.
-                        // However, typically deltas should have built this up already.
-                        // For safety, let's log if it significantly differs from pending.
-                        const segmentTranscript = messageData.transcript.trim();
-                        if (segmentTranscript && pendingCoachResponse.trim() !== segmentTranscript) {
-                            console.warn(`[DailyVoiceChat] response.audio_transcript.done ('${segmentTranscript}') differs from accumulated pending ('${pendingCoachResponse.trim()}'). Using event transcript.`);
-                            // setPendingCoachResponse(segmentTranscript); // Decided against this to trust deltas primarily
-                        }
-                        // No specific action needed here if deltas are reliable and ai_response_ended / response.done is used for finalization.
-                    }
-                    // This event doesn't mean the entire AI turn is over, just a segment of audio.
-                    break;
-
-                case 'speech_started': // User started speaking (VAD event)
-                    if(userSpeakingTimerRef.current) clearTimeout(userSpeakingTimerRef.current);
-                    setUserIsActuallySpeaking(true);
-                    if (onSpeakingStateChange) onSpeakingStateChange(true, 'user');
-                    break;
-                case 'speech_ended': // User stopped speaking (VAD event)
-                case 'vad_speech_end': // User stopped speaking (OpenAI VAD)
-                    setUserIsActuallySpeaking(false);
-                    if (onSpeakingStateChange) onSpeakingStateChange(false, 'user');
-                    break;
-                
-                // OpenAI Realtime API specific events for coach's turn
-                case 'ai_response_started': 
-                    console.log('[DailyVoiceChat] DC Event: ai_response_started');
-                    if (!isCoachSpeakingTTS) {
-                        setIsCoachSpeakingTTS(true);
-                        setPendingCoachResponse(''); // Ensure fresh start for coach's response
-                        if (onSpeakingStateChange) onSpeakingStateChange(true, 'coach');
-                        if(coachResponseCompleterTimerRef.current) clearTimeout(coachResponseCompleterTimerRef.current);
-                    }
-                    setIsReceivingCoachMessage(true); // Explicitly set as we are now sure coach is starting
-                    break;
-
-                case 'ai_response_text_part': // Deprecated by OpenAI, but handle if it appears
-                     console.log('[DailyVoiceChat] DC Event: ai_response_text_part - text:', messageData.text);
-                     if (messageData.text) {
-                        if (!isCoachSpeakingTTS) {
-                            setIsCoachSpeakingTTS(true);
-                            setPendingCoachResponse('');
-                            if (onSpeakingStateChange) onSpeakingStateChange(true, 'coach');
-                        }
-                        setPendingCoachResponse(prev => prev + messageData.text);
-                     }
-                    break;
-
-                case 'ai_response_audio_part': // Base64 audio chunks from coach
-                    console.log('[DailyVoiceChat] DC Event: ai_response_audio_part');
-                    const audioBase64 = messageData.audio; 
-                    if (audioBase64) {
-                        if (!isCoachSpeakingTTS) { // Should be true if ai_response_started fired
-                           setIsCoachSpeakingTTS(true);
-                           if (onSpeakingStateChange) onSpeakingStateChange(true, 'coach');
-                        }
-                        playTTSAudio(audioBase64);
-                    }
-                    break;
-
-                case 'ai_response_ended': 
-                    console.log('[DailyVoiceChat] DC Event: ai_response_ended');
-                    if (isCoachSpeakingTTS) {
-                        setIsCoachSpeakingTTS(false);
-                        if (onSpeakingStateChange) onSpeakingStateChange(false, 'coach');
-                        const finalResponseFromEnded = pendingCoachResponse.trim();
-                        if (finalResponseFromEnded) {
-                           console.log('[DailyVoiceChat] Coach Utterance (via ai_response_ended):', finalResponseFromEnded);
-                           setConversationHistory(prev => [...prev, { sender: 'coach', message: finalResponseFromEnded, id: Date.now().toString() + 'coach_airend'}]);
-                        }
-                        // Don't clear pendingCoachResponse here, response.done might have more complete info or be the sole source.
-                    }
-                    // setIsReceivingCoachMessage(false); // Defer this to response.done for robustness
-                    break;
-
-                case 'response.done': // Definitive end of the AI's response for the current turn.
-                    console.log('[DailyVoiceChat] DC Event: response.done - status:', messageData.response?.status);
-                    setIsCoachSpeakingTTS(false);
-                    if (onSpeakingStateChange) onSpeakingStateChange(false, 'coach');
-                    
-                    // Instead of immediately setting isReceivingCoachMessage to false, add a cooldown period
-                    // This prevents the AI from immediately responding to its own transcripts
-                    // AND requires new user input before coach responds again
-                    setTimeout(() => {
-                        console.log('[DailyVoiceChat] Coach response cooldown period ended, now ready for user input');
-                        setIsReceivingCoachMessage(false); // Now it's safe to accept new user input
-                        // Do NOT automatically trigger a new coach response here
-                    }, 2000); // 2-second cooldown after coach finishes
-
-                    if (messageData.response?.status === 'completed') {
-                        const outputItem = messageData.response.output?.[0];
-                        const contentItem = outputItem?.content?.[0];
-                        let finalTranscriptFromDone = contentItem?.transcript?.trim();
-
-                        if (finalTranscriptFromDone) {
-                            console.log('[DailyVoiceChat] Coach Utterance (via response.done):', finalTranscriptFromDone);
-                            // Create a timestamp for ordering
-                            const messageTimestamp = Date.now();
-                            // Prefer response.done transcript as it's authoritative
-                            setConversationHistory(prev => {
-                                // Avoid duplicates if ai_response_ended already added a very similar message
-                                const lastMessage = prev[prev.length -1];
-                                if (lastMessage && lastMessage.sender === 'coach' && lastMessage.message === finalTranscriptFromDone) {
-                                    console.log("[DailyVoiceChat] response.done transcript matches last message from ai_response_ended. Skipping duplicate.");
-                                    return prev;
-                                }
-                                console.log('[DailyVoiceChat] Adding coach message to history:', finalTranscriptFromDone);
-                                const newCoachMessage: TimestampedChatMessage = { 
-                                    sender: 'coach', 
-                                    message: finalTranscriptFromDone, 
-                                    id: Date.now().toString() + 'coach_respdone',
-                                    timestamp: messageTimestamp
-                                };
-                                const updated = [...prev, newCoachMessage];
-                                // Sort by timestamp if available, otherwise maintain insertion order
-                                return updated.sort((a, b) => {
-                                    const timeA = a.timestamp || 0;
-                                    const timeB = b.timestamp || 0;
-                                    return timeA - timeB;
-                                });
-                            });
-                            setPendingCoachResponse(finalTranscriptFromDone); // Ensure UI shows the most complete version
-                        } else if (pendingCoachResponse.trim()) {
-                            // Fallback to pendingCoachResponse if response.done had no transcript but we accumulated something
-                            console.warn('[DailyVoiceChat] response.done was completed but no transcript. Using accumulated pendingCoachResponse.');
-                            const messageTimestamp = Date.now();
-                            setConversationHistory(prev => {
-                                const newCoachMessage: TimestampedChatMessage = { 
-                                    sender: 'coach', 
-                                    message: pendingCoachResponse.trim(), 
-                                    id: Date.now().toString() + 'coach_pending_fallback',
-                                    timestamp: messageTimestamp
-                                };
-                                const updated = [...prev, newCoachMessage];
-                                return updated.sort((a, b) => {
-                                    const timeA = a.timestamp || 0;
-                                    const timeB = b.timestamp || 0;
-                                    return timeA - timeB;
-                                });
-                            });
-                        }
-                    } else if (messageData.response?.status === 'cancelled') {
-                        console.log('[DailyVoiceChat] Coach response cancelled (e.g., user barge-in). Reason:', messageData.response?.status_details?.reason);
-                        // If cancelled, the pendingCoachResponse might be incomplete or irrelevant.
-                        // Clear it to avoid showing a half-uttered phrase.
-                    }
-                    setPendingCoachResponse(''); // Always clear pending after response.done
-
-                    if (messageData.response?.conversation_is_complete || messageData.conversation_is_complete) { // Check both places
-                        console.log('[DailyVoiceChat] Conversation marked as complete by AI.');
-                        setConversationComplete(true);
-                        
-                        // Add a delay to ensure conversation history state is updated before ending
-                        setTimeout(() => {
-                            console.log('[DailyVoiceChat] Conversation complete, calling handleEndSession');
-                            handleEndSession();
-                        }, 500);
-                    }
-                    break;
-
-                // Deprecated 'message' event structure (for older API or custom setups)
-                // Keep for robustness but prioritize newer events.
-                case 'message':
-                    console.log('[DailyVoiceChat] DC Event: message - role:', messageData.role, 'done:', messageData.done);
-                    if (messageData.role === 'assistant') {
-                        if (messageData.message) { // Assuming 'message' contains text part
-                            if (!isCoachSpeakingTTS) {
-                                setIsCoachSpeakingTTS(true);
-                                setPendingCoachResponse(''); // Clear for new utterance
-                                if (onSpeakingStateChange) onSpeakingStateChange(true, 'coach');
-                            }
-                            setPendingCoachResponse(prev => prev + messageData.message);
-                        }
-                        if (messageData.done) {
-                            setIsCoachSpeakingTTS(false);
-                            if (onSpeakingStateChange) onSpeakingStateChange(false, 'coach');
-                            const completeResponse = pendingCoachResponse.trim();
-                            if (completeResponse) {
-                                console.log('[DailyVoiceChat] Coach Utterance (complete, via legacy message event):', completeResponse);
-                                setConversationHistory(prev => [...prev, { sender: 'coach', message: completeResponse, id: Date.now().toString() + 'coach_legacy'}]);
-                            }
-                            // setPendingCoachResponse(''); // Cleared by response.done or next ai_response_started
-                            setIsReceivingCoachMessage(false); // Coach is done for this turn.
-
-                            if (messageData.conversation_is_complete) {
-                                setConversationComplete(true);
-                            }
-                        } else if (!messageData.done && !isCoachSpeakingTTS) { // If not done, but TTS not active, start it
-                            setIsCoachSpeakingTTS(true);
-                            // setPendingCoachResponse(''); // Should be handled by first message part
-                            if (onSpeakingStateChange) onSpeakingStateChange(true, 'coach');
-                        }
-                    }
-                    break;
-                
-                case 'error':
-                    const errorMessage = messageData.message || messageData.error?.message || 'Unknown voice backend error';
-                    console.error('[DailyVoiceChat] DC Event: error from voice backend:', errorMessage, messageData);
-                    handleError(`Voice backend error: ${errorMessage}`, true);
-                    setFallbackMode(true);
-                    setIsCoachSpeakingTTS(false);
-                    setIsReceivingCoachMessage(false);
-                    break;
-                
-                // Unhandled cases from logs / potentially useful events
-                case 'conversation.item.created': // Logs show this, usually informational
-                case 'response.created': // Logs show this, usually informational
-                case 'rate_limits.updated': // Logs show this, informational
-                case 'response.output_item.added': // Logs show this
-                case 'response.output_item.done': // Logs show this
-                case 'conversation.item.truncated': // Logs show this
-                case 'input_audio_buffer.speech_started': // Not VAD event ('speech_started')
-                case 'input_audio_buffer.speech_stopped':
-                case 'input_audio_buffer.committed':
-                case 'output_audio_buffer.started':
-                case 'output_audio_buffer.cleared':
-                case 'output_audio_buffer.stopped':
-                case 'response.content_part.added': // Should be handled by audio_transcript.delta for text
-                case 'response.content_part.done': // Should be handled by audio_transcript.done for text
-                    // console.log('[DailyVoiceChat] Informational/Handled elsewhere DC Message Type:', messageData.type, messageData);
-                    unhandled = false; // Mark as handled as these are expected but don't require direct action here
-                    break;
-
-                default:
-                    unhandled = true;
-                    console.log('[DailyVoiceChat] Unhandled DC Message Type:', messageData.type, messageData);
-                    break;
+          const data = JSON.parse(event.data);
+          
+          // Log message type for debugging
+          console.log('[DailyVoiceChat] Message type:', data.type);
+          
+          // Handle error messages
+          if (data.type === 'error') {
+            console.error('[DailyVoiceChat] API ERROR:', JSON.stringify(data.error || data));
+            handleError(`OpenAI API error: ${data.error?.message || 'Unknown error'}`, false);
+          }
+          
+          // Handle specific events
+          else if (data.type === 'session.created' || data.type === 'session.updated') {
+            // Session is ready, ensure we're not in loading state
+            console.log('[DailyVoiceChat] Session is ready:', data.type);
+            setIsLoading(false);
+            setIsConnecting(false);
+          }
+          
+          // Handle speech created event (coach is speaking)
+          else if (data.type === 'speech.created') {
+            console.log('[DailyVoiceChat] Speech created event received');
+            setIsCoachSpeakingTTS(true);
+            setShowAnimatedCoachView(true); // Ensure coach is visible when speaking
+            
+            // If there's audio data, play it
+            if (data.speech && data.speech.chunk) {
+              playTTSAudio(data.speech.chunk);
             }
-            if (unhandled) {
-                 // console.log('[DailyVoiceChat] Unhandled DC Message Type:', messageData.type, messageData);
-            } else {
-                 // console.log('[DailyVoiceChat] DC Message Handled:', messageData.type);
+          }
+          
+          // Handle speech completed event
+          else if (data.type === 'speech.completed') {
+            console.log('[DailyVoiceChat] Speech completed event received');
+            setIsCoachSpeakingTTS(false);
+          }
+          
+          // Process response.created event (a new coach response is starting)
+          else if (data.type === 'response.created') {
+            console.log('[DailyVoiceChat] New response is being created');
+            setIsReceivingCoachMessage(true);
+            setShowAnimatedCoachView(true); // Ensure coach is visible when responding
+          }
+          
+          // Process response.done event (coach has completed response)
+          else if (data.type === 'response.done') {
+            console.log('[DailyVoiceChat] Response completed');
+            setIsReceivingCoachMessage(false);
+          }
+          
+          // Handle conversation.item.created which may have undefined content
+          else if (data.type === 'conversation.item.created') {
+            console.log('[DailyVoiceChat] Conversation item created with type:', 
+              data.item?.type || 'unknown type', 'data:', JSON.stringify(data.item || {}));
+              
+            // Check item type and process appropriately
+            if (data.item?.type === 'transcript' && data.item.transcript?.speaker === 'user') {
+              console.log('[DailyVoiceChat] User transcript received:', data.item.transcript.text);
+              
+              // Update UI with transcript
+              setCurrentTranscript(data.item.transcript.text);
+              setUserTranscriptJustReceived(true);
+              
+              // Add message to conversation history
+              const newUserMessage: TimestampedChatMessage = { 
+                sender: 'user', 
+                message: data.item.transcript.text,
+                timestamp: Date.now(),
+                id: v4()
+              };
+              
+              setConversationHistory(prev => [...prev, newUserMessage]);
+              
+              // Set temporary flag to show user is speaking
+              setUserIsActuallySpeaking(true);
+              
+              // Clear any existing speaking timer
+              if (userSpeakingTimerRef.current) {
+                clearTimeout(userSpeakingTimerRef.current);
+              }
+              
+              // Set timer to turn off speaking indicator after a delay
+              userSpeakingTimerRef.current = setTimeout(() => {
+                setUserIsActuallySpeaking(false);
+              }, 1000);
             }
-
-        } catch (err: any) {
-            console.error('[DailyVoiceChat] Error processing DataChannel message:', err);
+            else if (data.item?.type === 'message' && data.item.role === 'assistant') {
+              // Handle different types of content structure
+              let messageContent = '';
+              
+              // Check for string content
+              if (typeof data.item.content === 'string') {
+                messageContent = data.item.content;
+                console.log('[DailyVoiceChat] Assistant message received (string content):', 
+                  messageContent.substring(0, 100) + '...');
+              } 
+              // Check for array of content items
+              else if (Array.isArray(data.item.content)) {
+                // Try to extract text from content array
+                for (const contentItem of data.item.content) {
+                  if (contentItem.type === 'text' && contentItem.text) {
+                    messageContent += contentItem.text;
+                  }
+                }
+                console.log('[DailyVoiceChat] Assistant message received (array content):', 
+                  messageContent ? (messageContent.substring(0, 100) + '...') : 'No text content found');
+              }
+              
+              // Only update UI if there's content
+              if (messageContent) {
+                // Update UI with coach message
+                setPendingCoachResponse(messageContent);
+                
+                // Add to conversation
+                const newCoachMessage: TimestampedChatMessage = {
+                  sender: 'coach',
+                  message: messageContent,
+                  timestamp: Date.now(),
+                  id: v4()
+                };
+                
+                setConversationHistory(prev => [...prev, newCoachMessage]);
+              }
+            }
+            // Handle function calls
+            else if (data.item?.type === 'function_call') {
+              console.log('[DailyVoiceChat] Function call item created:', JSON.stringify(data.item));
+              
+              // Store the function name for later use
+              if (data.item.call_id && data.item.name) {
+                console.log(`[DailyVoiceChat] Storing function name for call ${data.item.call_id}: ${data.item.name}`);
+                functionNameMapRef.current[data.item.call_id] = data.item.name;
+                setFunctionNameMap({...functionNameMapRef.current});
+              }
+              
+              // This will be handled separately by the function call handler
+            }
+            // Handle other item types
+            else {
+              console.log('[DailyVoiceChat] Unhandled conversation item type:', 
+                data.item?.type || 'unknown', JSON.stringify(data.item || {}));
+            }
+          }
+          
+          // Handle response.function_call_arguments.delta events for accumulating function arguments
+          else if (data.type === 'response.function_call_arguments.delta') {
+            try {
+              // Extract the response_id and function call ID from the data
+              const responseId = data.response_id;
+              const callId = data.call_id;
+              
+              if (callId && data.delta) {
+                console.log(`[DailyVoiceChat] Function call args delta for ${callId}:`, data.delta);
+                
+                // Initialize the arguments string if it doesn't exist
+                if (!pendingFunctionArgsRef.current[callId]) {
+                  pendingFunctionArgsRef.current[callId] = '';
+                }
+                
+                // Append the delta to the arguments string
+                pendingFunctionArgsRef.current[callId] += data.delta;
+                
+                // Update the state for components that need it
+                setPendingFunctionArgs({...pendingFunctionArgsRef.current});
+                
+                console.log(`[DailyVoiceChat] Current accumulated args for ${callId}:`, 
+                  pendingFunctionArgsRef.current[callId].length > 100 ? 
+                  pendingFunctionArgsRef.current[callId].substring(0, 100) + '...' : 
+                  pendingFunctionArgsRef.current[callId]);
+              }
+            } catch (e) {
+              console.error('[DailyVoiceChat] Error processing function call arguments delta:', e);
+            }
+          }
+          
+          // Handle response.function_call_arguments.done events
+          else if (data.type === 'response.function_call_arguments.done') {
+            try {
+              const responseId = data.response_id;
+              const callId = data.call_id;
+              
+              if (callId && pendingFunctionArgsRef.current[callId]) {
+                console.log(`[DailyVoiceChat] Function call args complete for ${callId}:`, 
+                  pendingFunctionArgsRef.current[callId].length > 100 ? 
+                  pendingFunctionArgsRef.current[callId].substring(0, 100) + '...' : 
+                  pendingFunctionArgsRef.current[callId]);
+                
+                // Parse the arguments
+                let functionArgs = {};
+                try {
+                  functionArgs = JSON.parse(pendingFunctionArgsRef.current[callId]);
+                } catch (e) {
+                  console.error(`[DailyVoiceChat] Error parsing function arguments for ${callId}:`, e);
+                  functionArgs = {};
+                }
+                
+                // Execute the function using the accumulated arguments
+                executeFunctionCall(callId, functionArgs);
+                
+                // Clear the accumulated arguments
+                delete pendingFunctionArgsRef.current[callId];
+                setPendingFunctionArgs({...pendingFunctionArgsRef.current});
+              }
+            } catch (e) {
+              console.error('[DailyVoiceChat] Error processing function call arguments done:', e);
+            }
+          }
+        } catch (error) {
+          console.error('[DailyVoiceChat] Error processing data channel message:', error);
         }
       };
       
-      const stream = await mediaDevices.getUserMedia({ 
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        } as any, 
-        video: false 
-      });
-      localStreamRef.current = stream;
-      stream.getTracks().forEach(track => pc.addTrack(track, stream));
+      // @ts-ignore - Using onerror instead of addEventListener for compatibility
+      dc.onerror = (event: RTCErrorEvent) => {
+        console.error('[DailyVoiceChat] Data channel error:', event);
+        handleError('WebRTC data channel error', false);
+      };
+      
+      // @ts-ignore - Using onclose instead of addEventListener for compatibility
+      // @ts-expect-error - Argument is optional in our implementation
+      dc.onclose = () => {
+        console.log('[DailyVoiceChat] Data channel closed');
+      };
+      
+      // Setup ICE handling
+      // @ts-ignore - Using onicecandidate instead of addEventListener for compatibility
+      pc.onicecandidate = (event: RTCPeerConnectionIceEvent) => {
+        if (event.candidate) {
+          console.log('[DailyVoiceChat] ICE candidate:', event.candidate);
+        }
+      };
+      
+      // @ts-expect-error - Argument is optional in our implementation
+      pc.onconnectionstatechange = () => {
+        console.log(`[DailyVoiceChat] Connection state changed to: ${pc.connectionState}`);
+        
+        // Handle different connection states
+        switch (pc.connectionState) {
+          case 'connected':
+            console.log('[DailyVoiceChat] WebRTC connection established');
+            setIsConnecting(false);
+            setIsLoading(false); // Ensure loading is set to false when connection is established
+            // Ensure coach animation is shown once connected
+            setShowAnimatedCoachView(true);
+            startAudioProcessing();
+            break;
 
+          case 'connecting':
+            // Update UI while connecting is in progress
+            console.log('[DailyVoiceChat] WebRTC connection in progress');
+            if (isLoading && !isConnecting) {
+              setIsConnecting(true);
+            }
+            break;
+
+          case 'disconnected':
+            console.log('[DailyVoiceChat] WebRTC connection disconnected');
+            if (!conversationComplete) {
+              handleError('Voice connection disconnected. You can try again or use text chat.', false);
+            }
+            setIsConnecting(false);
+            setIsLoading(false);
+            break;
+                
+          case 'failed':
+            console.error('[DailyVoiceChat] WebRTC connection failed');
+            handleError('Voice connection failed. You can try again or use text chat.', true);
+            setIsConnecting(false);
+            setIsLoading(false);
+            // Show fallback mode after connection failure
+            setFallbackMode(true);
+            break;
+                
+          case 'closed':
+            console.log('[DailyVoiceChat] WebRTC connection closed');
+            setIsLoading(false);
+            break;
+
+          default:
+            // Other states: 'new', 'connecting', 'checking' - no action needed
+            break;
+        }
+      };
+      
+      // @ts-ignore - Using onstatechange instead of addEventListener for compatibility
+      dc.onstatechange = () => {
+        console.log(`[DailyVoiceChat] Data channel state changed to: ${dc.readyState}`);
+        
+        // Handle data channel state changes
+        if (dc.readyState === 'closed') {
+          console.log('[DailyVoiceChat] Data channel closed');
+          
+          // If this happens right after sending session.update, it's likely a configuration error
+          if (isConnecting) {
+            handleError('Connection to AI coach was lost. There might be an issue with the OpenAI service.', true);
+            setFallbackMode(true);
+          }
+        }
+      };
+      
+      // Get local media stream
+      try {
+        console.log('[DailyVoiceChat] Getting user media...');
+        const stream = await mediaDevices.getUserMedia({ audio: true, video: false });
+        console.log('[DailyVoiceChat] Got local media stream');
+        
+      localStreamRef.current = stream;
+        
+        // Add tracks from local stream to peer connection
+        stream.getTracks().forEach(track => {
+          if (peerConnectionRef.current) {
+            peerConnectionRef.current.addTrack(track, stream);
+            console.log('[DailyVoiceChat] Added track to peer connection:', track.kind);
+          }
+        });
+        
+        // Create and send offer
       const offer = await pc.createOffer({}); 
       await pc.setLocalDescription(offer);
+        console.log('[DailyVoiceChat] Created and set local offer');
 
-      console.log('[DailyVoiceChat] Sending SDP offer to OpenAI Realtime API...');
+        // Send offer to OpenAI Realtime API - Updated to match VoiceChat.tsx implementation
+        console.log('[DailyVoiceChat] Sending SDP offer to OpenAI...');
       const sdpResponse = await fetch(`https://api.openai.com/v1/realtime?model=gpt-4o-mini-realtime-preview-2024-12-17`, { 
           method: 'POST',
           headers: {
@@ -771,95 +937,111 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
       });
 
       if (!sdpResponse.ok) {
-          const errorBody = await sdpResponse.text();
-          console.error('[DailyVoiceChat] SDP offer to OpenAI failed:', sdpResponse.status, errorBody);
-          throw new Error(`Failed to send SDP offer to OpenAI: ${sdpResponse.status} ${errorBody}`);
+          const errorText = await sdpResponse.text().catch(() => '');
+          console.error(`[DailyVoiceChat] API response error: ${sdpResponse.status} - ${errorText}`);
+          throw new Error(`Failed to send SDP: ${sdpResponse.status}${errorText ? ' - ' + errorText : ''}`);
+        }
+        
+        // Get the answer SDP from OpenAI
+        console.log('[DailyVoiceChat] Received SDP answer from OpenAI');
+      const answerSdp = await sdpResponse.text();
+        
+        // Set the remote description with the answer from OpenAI
+        console.log('[DailyVoiceChat] Setting remote description...');
+        const answer = new RTCSessionDescription({
+          type: 'answer',
+          sdp: answerSdp
+        });
+        
+      await pc.setRemoteDescription(answer);
+        console.log('[DailyVoiceChat] Set remote description');
+        
+        // Connection should now proceed
+        console.log('[DailyVoiceChat] WebRTC setup complete, waiting for connection...');
+      } catch (error) {
+        console.error('[DailyVoiceChat] Error setting up media or signaling:', error);
+        throw error; // Rethrow to be caught by the outer try/catch
       }
       
-      const answerSdp = await sdpResponse.text();
-      console.log('[DailyVoiceChat] Received SDP answer from OpenAI.');
-      
-      const answer = new RTCSessionDescription({ type: 'answer', sdp: answerSdp });
-      await pc.setRemoteDescription(answer);
-      
-      console.log('[DailyVoiceChat] WebRTC setup with OpenAI Realtime API complete.');
-      
-    } catch (err: any) {
-      handleError(`WebRTC Initialization failed: ${err.message}`, true);
-      setFallbackMode(true); 
+    } catch (err) {
+      console.error('[DailyVoiceChat] WebRTC initialization error:', err);
+      handleError(`Failed to set up WebRTC connection: ${err instanceof Error ? err.message : 'Unknown error'}`, true);
       setIsConnecting(false);
       setIsLoading(false);
+      
+      // Consider fallback mode
+      if (err instanceof Error && 
+          (err.message.includes('API') || 
+           err.message.includes('key') || 
+           err.message.includes('model'))) {
+        setFallbackMode(true);
+      }
     }
-  }, [handleError, buildDailyCheckInPrompt, userId, onSpeakingStateChange, playTTSAudio, startAudioProcessing, configureAIInstructions]);
+  }, [isVisible, configureAIInstructions, handleError, playTTSAudio, startAudioProcessing, userId, userFeedback]);
 
-  const stopAudioProcessing = useCallback(() => {
-    console.log('[DailyVoiceChat] Stopping audio processing...');
-    setIsListening(false);
-    if (onSpeakingStateChange) onSpeakingStateChange(false, 'user');
-    if(userSpeakingTimerRef.current) clearTimeout(userSpeakingTimerRef.current);
-    userSpeakingTimerRef.current = null;
-
-  }, [onSpeakingStateChange]);
-
-  const fullCleanup = useCallback(() => {
-    console.log('[DailyVoiceChat] Performing full cleanup...');
-    stopAudioProcessing();
-
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach(track => track.stop());
-      localStreamRef.current = null;
-    }
-    if (dataChannelRef.current) {
-      dataChannelRef.current.close();
-      dataChannelRef.current = null;
-    }
-    if (peerConnectionRef.current) {
-      peerConnectionRef.current.close();
-      peerConnectionRef.current = null;
-    }
-    if (ttsPlayerRef.current) {
-      ttsPlayerRef.current.unloadAsync().catch(e => console.error("Error unloading TTS player:", e));
-      ttsPlayerRef.current = null;
-    }
-    
-    ephemeralKeyRef.current = null;
-    setIsConnecting(false);
-    setIsListening(false);
-    setIsCoachSpeakingTTS(false);
-    setCurrentTranscript('');
-    setPendingCoachResponse('');
-    setErrorState(null);
-    // Don't reset conversationHistory here, it's needed for onSessionComplete
-  }, [stopAudioProcessing]);
-  
-  const fullCleanupAndClose = useCallback(() => {
-    if (cleanupScheduledRef.current) return;
-    cleanupScheduledRef.current = true;
-
-    fullCleanup();
-    onClose(); // Call the original onClose from props
-    
-    // Reset after a short delay to ensure onClose has propagated
-    setTimeout(() => {
-        cleanupScheduledRef.current = false;
-    }, 100);
-  }, [fullCleanup, onClose]);
-
-
-  // --- Main Setup Effect for Visibility Change ---
+  // --- EFFECT: Fix circular reference issue by assigning initializeWebRTC to ref ---
   useEffect(() => {
     initializeWebRTCRef.current = initializeWebRTC;
+    return () => {
+      // Optional cleanup
+    };
+  }, [initializeWebRTC]);
 
-    // Consolidating audio setup and permission logic based on isVisible, similar to VoiceChat.tsx
+  // Update checkMicrophonePermissions to correctly reference getEphemeralKey
+  const finalCheckMicrophonePermissions = useCallback(async () => {
+    try {
+      const permission = await Audio.requestPermissionsAsync();
+      setHasPermission(permission.granted);
+      if (permission.granted) {
+        console.log('[DailyVoiceChat] Microphone permission granted.');
+        // Set initialized BEFORE calling getEphemeralKey to ensure the flag is set
+        setIsInitializedThisSession(true);
+        getEphemeralKey();
+      } else {
+        handleError('Microphone permission not granted.', true);
+        setFallbackMode(true);
+        setIsLoading(false);
+      }
+    } catch (err: any) {
+      handleError(`Permission check error: ${err.message}`, true);
+      setFallbackMode(true);
+      setIsLoading(false);
+    }
+  }, [getEphemeralKey, handleError]);
+
+  // --- EFFECT: MAIN SETUP EFFECT ---
+  useEffect(() => {
+    // Clear retry counter when component mounts or becomes visible
+    if (isVisible && !wasVisibleRef.current) {
+      retryCountRef.current = 0;
+    }
+
     const configureAudioAndPermissions = async () => {
-      if (isVisible) {
+      // Only run full initialization when becoming visible, not on every re-render while visible
+      const becameVisible = isVisible && !wasVisibleRef.current;
+      const stillVisible = isVisible && wasVisibleRef.current;
+      const becameInvisible = !isVisible && wasVisibleRef.current;
+      
+      // Update the ref to track the current visibility state for the next render
+      wasVisibleRef.current = isVisible;
+
+      if (becameVisible || (isVisible && !isInitializedThisSession)) {
+        // If we have retried too many times and failed, don't keep trying
+        if (retryCountRef.current >= maxRetries) {
+          console.log(`[DailyVoiceChat] Already tried ${maxRetries} times, stopping initialization attempts`);
+          setIsLoading(false);
+          setErrorState(`Failed to initialize after ${maxRetries} attempts. Please switch to text chat.`);
+          setFallbackMode(true);
+          return;
+        }
+
+        console.log('[DailyVoiceChat] Session not initialized or becoming visible, performing setup.');
         setIsLoading(true);
-        setConversationHistory([]); // Reset history for new session
+        setConversationHistory([]); 
         setConversationComplete(false);
         setFallbackMode(false);
         setErrorState(null);
         
-        // Configure InCallManager and Audio Mode
         try {
           console.log('[DailyVoiceChat] Configuring audio and InCallManager...');
           InCallManager.start({ media: 'audio' });
@@ -873,53 +1055,72 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
           console.log('[DailyVoiceChat] Audio mode configured.');
         } catch (e) {
           handleError(`Audio system configuration failed: ${(e as Error).message}`, true);
-          return; // Stop if audio system fails
+          setIsLoading(false);
+          return; 
         }
         
-        // Check permissions (which then calls getEphemeralKey -> initializeWebRTC)
-        await checkMicrophonePermissions(); // Ensure this is robust
-        // setIsLoading will be set to false within initializeWebRTC or its error handling
-
+        try {
+          // Use finalCheckMicrophonePermissions instead of checkMicrophonePermissions
+          // Do NOT set isInitializedThisSession here, that's now done in finalCheckMicrophonePermissions
+          await finalCheckMicrophonePermissions();
+          // Successfully initialized
+          retryCountRef.current = 0;
+        } catch (e) {
+          // Increment retry counter on failure
+          retryCountRef.current++;
+          
+          // Implement exponential backoff for retries
+          const retryDelay = Math.min(1000 * Math.pow(2, retryCountRef.current - 1), 10000);
+          console.log(`[DailyVoiceChat] Initialization attempt ${retryCountRef.current} failed. Retrying in ${retryDelay}ms...`);
+          
+          // Schedule retry after delay if we haven't exceeded max retries
+          if (retryCountRef.current < maxRetries) {
+            setTimeout(() => {
+              console.log(`[DailyVoiceChat] Retrying initialization (attempt ${retryCountRef.current + 1}/${maxRetries})...`);
+              setIsInitializedThisSession(false);
+            }, retryDelay);
       } else {
-        // Cleanup when not visible
+            console.log(`[DailyVoiceChat] Max retries (${maxRetries}) reached. Giving up on initialization.`);
+            setErrorState(`Failed to initialize after ${maxRetries} attempts. Please switch to text chat.`);
+            setFallbackMode(true);
+          }
+          
+          setIsLoading(false);
+          return;
+        }
+      } else if (stillVisible) {
+        // Already initialized and still visible - do nothing
+        console.log('[DailyVoiceChat] Session already initialized, still visible, no action needed.');
+      } else if (becameInvisible) {
+        // Cleanup when becoming invisible
+        console.log('[DailyVoiceChat] Became invisible, performing cleanup and resetting init flag.');
         fullCleanup(); 
-        console.log('[DailyVoiceChat] Cleaning up InCallManager and audio mode...');
-        InCallManager.setForceSpeakerphoneOn(false); // Attempt to turn off speaker
-        InCallManager.stop();
-        Audio.setAudioModeAsync({ // Reset audio mode
-            allowsRecordingIOS: false, playsInSilentModeIOS: false, staysActiveInBackground: false,
-            interruptionModeIOS: 1, 
-            interruptionModeAndroid: 1, 
-        }).catch(e => console.warn("Failed to reset audio mode on hiding:", (e as Error).message));
+        // Reset for next time it becomes visible
+        setIsInitializedThisSession(false);
+        retryCountRef.current = 0;
       }
     };
 
+    // Execute the configuration function
     configureAudioAndPermissions();
 
     const appStateSubscription = AppState.addEventListener('change', nextAppState => {
         if (nextAppState !== 'active' && isVisible && !cleanupScheduledRef.current) {
             console.log('[DailyVoiceChat] App became inactive, performing full cleanup and closing.');
-            fullCleanupAndClose(); // Ensures modal closes etc.
+        fullCleanupAndClose(); 
         }
     });
 
     return () => {
-      console.log('[DailyVoiceChat] Cleanup on unmount / isVisible change.');
+      console.log('[DailyVoiceChat] Main useEffect cleanup triggered.');
       appStateSubscription.remove();
-      if (!isVisible || cleanupScheduledRef.current) { // Ensure cleanup runs if component unmounts while visible
-        fullCleanup();
-        console.log('[DailyVoiceChat] Unmount: Cleaning up InCallManager and audio mode...');
-        InCallManager.setForceSpeakerphoneOn(false);
-        InCallManager.stop();
-        Audio.setAudioModeAsync({
-            allowsRecordingIOS: false, playsInSilentModeIOS: false, staysActiveInBackground: false,
-            interruptionModeIOS: 1,
-            interruptionModeAndroid: 1,
-        }).catch(e => console.warn("Failed to reset audio mode on unmount:", (e as Error).message));
+      
+      // Only clean up if we're not already handling cleanup elsewhere
+      if (!cleanupScheduledRef.current) {
+        stopAudioProcessing();
       }
     };
-  }, [isVisible, checkMicrophonePermissions, initializeWebRTC, fullCleanup, fullCleanupAndClose, handleError]); // Added handleError
-
+  }, [isVisible, isInitializedThisSession, finalCheckMicrophonePermissions, fullCleanupAndClose, fullCleanup, handleError, stopAudioProcessing]);
 
   const handleEndSession = async () => {
     console.log('[DailyVoiceChat] Ending session manually or on completion.');
@@ -1004,9 +1205,10 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
     }
     
     // Refresh the home screen to show updated messages
-    if (refreshHomeScreen) {
+    if (refreshHomeScreen && needsRefresh) {
       console.log('[DailyVoiceChat] Refreshing home screen...');
       refreshHomeScreen();
+      setNeedsRefresh(false);
     }
 
     // Call the onClose prop to notify parent (e.g., HomeScreen)
@@ -1017,39 +1219,79 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
     console.log('[DailyVoiceChat] Session cleanup complete.');
   };
 
-  const reconnect = () => {
+  const reconnect = useCallback(() => {
     console.log('[DailyVoiceChat] Attempting to reconnect...');
-    // Reset crucial states before attempting to get a new key and initialize
-    setErrorState(null);
-    setIsConnecting(false); // Will be set true by getEphemeralKey
-    setIsLoading(true); // Show loading state
-    setConversationHistory([]); // Clear previous history
-    setCurrentTranscript('');
-    setPendingCoachResponse('');
-    setShowAnimatedCoachView(false);
-    setHasPermission(null); // Re-check permissions
-
-    // Clean up existing resources before reconnecting
-    if (ttsPlayerRef.current) {
-      ttsPlayerRef.current.unloadAsync();
-      ttsPlayerRef.current = null;
-    }
+    
+    // First, clean up existing connections/resources
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach(track => track.stop());
       localStreamRef.current = null;
     }
-    if (peerConnectionRef.current) {
-      peerConnectionRef.current.close();
-      peerConnectionRef.current = null;
-    }
+    
     if (dataChannelRef.current) {
       dataChannelRef.current.close();
       dataChannelRef.current = null;
     }
     
-    // Restart the connection process
-    checkMicrophonePermissions(); // This function should encapsulate permission check & getEphemeralKey
-  };
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
+      peerConnectionRef.current = null;
+    }
+    
+    if (ttsPlayerRef.current) {
+      ttsPlayerRef.current.unloadAsync().catch(e => console.warn('[DailyVoiceChat] Error unloading TTS player:', e));
+      ttsPlayerRef.current = null;
+    }
+    
+    // Release audio resources before reinitializing
+    InCallManager.setForceSpeakerphoneOn(false);
+    InCallManager.stop();
+    
+    // Reset all state variables
+    setIsInitializedThisSession(false);
+    setErrorState(null);
+    setIsConnecting(false);
+    setIsLoading(true);
+    setConversationHistory([]);
+    setCurrentTranscript('');
+    setPendingCoachResponse('');
+    setShowAnimatedCoachView(false);
+    setHasPermission(null);
+    setUserIsActuallySpeaking(false);
+    setIsCoachSpeakingTTS(false);
+    setFallbackMode(false);
+    ephemeralKeyRef.current = null;
+    retryCountRef.current = 0;
+    
+    // Allow a small delay before restarting the initialization process
+    setTimeout(() => {
+      if (isVisible) {
+        console.log('[DailyVoiceChat] Restarting initialization process after cleanup...');
+        
+        // Reset audio mode and InCallManager
+        InCallManager.start({ media: 'audio' });
+        InCallManager.setForceSpeakerphoneOn(true);
+        Audio.setAudioModeAsync({
+          allowsRecordingIOS: true,
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: true,
+          interruptionModeIOS: 1,
+          interruptionModeAndroid: 1,
+          playThroughEarpieceAndroid: false,
+          shouldDuckAndroid: true,
+        }).catch(e => console.warn('[DailyVoiceChat] Error setting audio mode on reconnect:', e));
+        
+        // Directly start the permission check to trigger the initialization process
+        finalCheckMicrophonePermissions().catch(e => {
+          console.error('[DailyVoiceChat] Error checking permissions on reconnect:', e);
+          handleError('Failed to reconnect: ' + (e instanceof Error ? e.message : 'Unknown error'));
+        });
+      } else {
+        console.log('[DailyVoiceChat] Component not visible, waiting for visibility change to reinitialize.');
+        setIsLoading(false);
+      }
+    }, 1000);
+  }, [isVisible, finalCheckMicrophonePermissions, handleError]);
 
   // Function to save conversation to Supabase
   const saveConversationToSupabase = async (history: TimestampedChatMessage[]) => {
@@ -1070,7 +1312,7 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
         .filter(chatMessage => chatMessage.message.trim() !== '') 
         .map(chatMessage => {
           const messageSender: 'user' | 'coach' = chatMessage.sender === 'user' ? 'user' : 'coach';
-          const messagePayload: ChatMessage = {
+          const messagePayload: CoreChatMessage = {
             sender: messageSender,
             message: chatMessage.message,
           };
@@ -1090,95 +1332,303 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
     }
   };
 
+  // Helper function to execute function calls
+  const executeFunctionCall = useCallback((callId: string, functionArgs: any) => {
+    console.log(`[DailyVoiceChat] Executing function call ${callId} with args:`, functionArgs);
+    
+    setIsExecutingTool(true);
+    
+    try {
+      // Get the function name from our map instead of from arguments
+      const functionName = functionNameMapRef.current[callId];
+      
+      if (!functionName) {
+        console.error(`[DailyVoiceChat] No function name found in map for call ${callId}`);
+        setIsExecutingTool(false);
+        return;
+      }
+      
+      console.log(`[DailyVoiceChat] Executing function ${functionName} with call_id ${callId}`);
+      
+      // Execute functions based on name
+      if (functionName === 'execute_workout_adjustment') {
+        // Handle workout adjustment
+        if (functionArgs.adjustment_details) {
+          try {
+            const sessionId = functionArgs.session_id;
+            const details = functionArgs.adjustment_details;
+            
+            console.log('[DailyVoiceChat] Executing workout adjustment:', {
+              sessionId,
+              details
+            });
+            
+            // Use executeWorkoutAdjustment
+            planService.executeWorkoutAdjustment(userId, {
+              session_id: sessionId,
+              adjustment_details: {
+                action: details.action || 'update',
+                new_date: details.new_date,
+                new_distance: details.new_distance,
+                new_duration_minutes: details.new_duration_minutes,
+                reason: details.reason,
+                ...(details.user_query ? { user_query: details.user_query } : { user_query: 'Voice command' })
+              } as any
+            }).then(result => {
+              console.log(`[DailyVoiceChat] Workout adjustment result:`, result);
+              
+              // Add a confirmation message back to the conversation
+              if (dataChannelRef.current?.readyState === 'open') {
+                try {
+                  // Based on OpenAI community forums, directly send the function output first
+                  const functionOutputEvent = {
+                    type: 'conversation.item.create',
+                    item: {
+                      type: 'function_call_output',
+                      call_id: callId,
+                      output: JSON.stringify({status: 'success', message: 'Workout adjustment saved successfully'})
+                    }
+                  };
+                  console.log('[DailyVoiceChat] Sending direct function output result:', JSON.stringify(functionOutputEvent));
+                  dataChannelRef.current.send(JSON.stringify(functionOutputEvent));
+                  
+                  // Set flag to refresh after chat ends
+                  if (refreshHomeScreen) {
+                    setNeedsRefresh(true);
+                    console.log('[DailyVoiceChat] Training plan updated. Will refresh after chat ends.');
+                  }
+                  
+                  // Wait a very short moment before requesting a new response
+                  setTimeout(() => {
+                    if (dataChannelRef.current?.readyState === 'open') {
+                      console.log('[DailyVoiceChat] Requesting new response after function output');
+                      dataChannelRef.current.send(JSON.stringify({
+                        type: 'response.create'
+                      }));
+                    }
+                  }, 50);
+                } catch (e) {
+                  console.error('[DailyVoiceChat] Error sending function result:', e);
+                }
+              }
+            }).catch(e => {
+              console.error('[DailyVoiceChat] Error executing workout adjustment:', e);
+            });
+          } catch (e) {
+            console.error('[DailyVoiceChat] Error executing workout adjustment:', e);
+          }
+        } else {
+          console.error('[DailyVoiceChat] Missing adjustment_details in function args');
+        }
+      }
+      // Handle feedback collection
+      else if (functionName === 'add_user_training_feedback') {
+        // Similar handling for feedback
+        try {
+          console.log('[DailyVoiceChat] Adding user training feedback:', functionArgs);
+          
+          // Use the feedback service
+          feedbackService.addOrUpdateUserTrainingFeedback(userId, {
+            week_start_date: functionArgs.week_start_date || null,
+            prefers: functionArgs.prefers || {},
+            struggling_with: functionArgs.struggling_with || {},
+            feedback_summary: functionArgs.feedback_summary,
+            raw_data: functionArgs.raw_data || {}
+          }).then(result => {
+            console.log('[DailyVoiceChat] Feedback saved:', result.data ? 'success' : 'failed');
+            
+            // Send result back to conversation
+            if (dataChannelRef.current?.readyState === 'open') {
+              try {
+                // Based on OpenAI community forums, directly send the function output first
+                const functionOutputEvent = {
+                  type: 'conversation.item.create',
+                  item: {
+                    type: 'function_call_output',
+                    call_id: callId,
+                    output: JSON.stringify({status: 'success', message: 'Training feedback saved successfully'})
+                  }
+                };
+                console.log('[DailyVoiceChat] Sending direct function output result:', JSON.stringify(functionOutputEvent));
+                dataChannelRef.current.send(JSON.stringify(functionOutputEvent));
+                
+                // Wait a very short moment before requesting a new response
+                setTimeout(() => {
+                  if (dataChannelRef.current?.readyState === 'open') {
+                    console.log('[DailyVoiceChat] Requesting new response after function output');
+                    dataChannelRef.current.send(JSON.stringify({
+                      type: 'response.create'
+                    }));
+                  }
+                }, 50);
+              } catch (e) {
+                console.error('[DailyVoiceChat] Error sending function result:', e);
+              }
+            }
+          });
+        } catch (e) {
+          console.error('[DailyVoiceChat] Error executing function call:', e);
+        }
+      } else {
+        console.error(`[DailyVoiceChat] Unknown function name: ${functionName}`);
+      }
+    } catch (e) {
+      console.error('[DailyVoiceChat] Error executing function call:', e);
+    }
+    
+    // Turn off the tool execution indicator after a delay
+    setTimeout(() => {
+      setIsExecutingTool(false);
+    }, 2000);
+  }, [userId, refreshHomeScreen]);
+
   if (!isVisible) return null;
 
   const renderContent = () => {
-    if (error) {
       return (
-        <View style={styles.centeredContent}>
-          <Text style={styles.errorText}>{error}</Text>
-          <View style={{ flexDirection: 'row', marginTop: 10 }}>
-            <TouchableOpacity onPress={handleEndSession} style={[styles.buttonBase, { marginRight: 10, backgroundColor: '#FF6347'}]}>
-              <Text style={styles.buttonText}>Close</Text>
+      <View className="flex-1 flex-col">
+        {/* Error State */}
+        {error ? (
+          <View className="items-center justify-center py-4">
+            <Text className="text-red-500 mb-3 text-center">{error}</Text>
+            <View className="flex-row">
+              <TouchableOpacity 
+                className="bg-purple-500 px-4 py-2 rounded-lg mr-2" 
+                onPress={fallbackMode ? handleSwitchToTextChat : onClose}
+              >
+                <Text className="text-white font-semibold">
+                  {fallbackMode ? "Switch to Text Chat" : "Close"}
+                </Text>
             </TouchableOpacity>
+              
             {!fallbackMode && (
-              <TouchableOpacity onPress={reconnect} style={[styles.buttonBase, {backgroundColor: '#4CAF50'}]}>
-                <Text style={styles.buttonText}>Retry</Text>
+                <TouchableOpacity 
+                  className="bg-green-500 px-4 py-2 rounded-lg" 
+                  onPress={() => {
+                    // Reset retry counter and attempt reconnection
+                    retryCountRef.current = 0;
+                    setIsInitializedThisSession(false); // Force complete re-initialization
+                    reconnect();
+                  }}
+                >
+                  <Text className="text-white font-semibold">Retry</Text>
               </TouchableOpacity>
             )}
           </View>
         </View>
-      );
-    }
-
-    if (isLoading || isConnecting) {
-      return (
-        <View style={styles.centeredContent}>
+        ) : isLoading || isConnecting ? (
+          /* Loading State */
+          <View className="items-center justify-center py-8">
           <ActivityIndicator size="large" color="#8B5CF6" />
-          <Text style={styles.infoText}>
-            {isLoading ? 'Initializing...' : 'Connecting to your coach...'}
+            <Text className="mt-4 text-gray-600 text-center">
+              {isConnecting ? "Connecting to coach..." : "Setting up voice chat..."}
           </Text>
-        </View>
-      );
-    }
-
-    if (showAnimatedCoachView) {
-      // This is the new animated view
-      return (
-        <View style={styles.animatedCoachContainer}>
-          <View style={styles.coachImageWrapper}>
-            <Animatable.Image
-              source={coachAvatar}
-              animation="pulse"
-              iterationCount="infinite"
-              duration={1000}
-              easing="ease-in-out"
-              style={styles.coachImage}
-            />
-            <Animatable.View 
-              animation="pulse" 
-              iterationCount="infinite" 
-              duration={1500}
-              style={styles.animatedBorder}
-            />
-            <Animatable.View 
-              animation={glowAnimation} 
-              iterationCount="infinite" 
-              duration={1200}
-              style={styles.glowOverlay}
-            />
-            {isCoachSpeakingTTS && (
-                 <View style={styles.speakingIndicator}>
-                   <Animatable.View 
-                     animation="pulse" 
-                     iterationCount="infinite" 
-                     duration={700}
-                     style={styles.speakingDot}
-                   />
-                 </View>
-            )}
+            
+            {/* Cancel button during loading */}
+            <TouchableOpacity 
+              className="bg-gray-300 px-4 py-2 rounded-lg mt-4" 
+              onPress={onClose}
+            >
+              <Text className="text-gray-800 font-semibold">Cancel</Text>
+            </TouchableOpacity>
           </View>
-          <Text style={styles.coachNameText}>{isListening ? `Listening to you...` : (isCoachSpeakingTTS ? `${coachName} is speaking...` : `Connected to ${coachName}`)}</Text>
-          {currentTranscript && !isCoachSpeakingTTS && (
-            <Text style={styles.transcriptText}>You: {currentTranscript}</Text>
-          )}
-          <TouchableOpacity 
-            onPress={handleEndSession} 
-            style={[styles.buttonBase, styles.endCheckInButton]}
-          >
-            <Text style={styles.buttonText}>End Check-in</Text>
-          </TouchableOpacity>
-        </View>
-      );
-    }
-    
-    // Fallback or other states (though showAnimatedCoachView should cover the main "active" state)
-    return (
-      <View style={styles.centeredContent}>
-        <Text style={styles.infoText}>Waiting for voice interaction...</Text>
+        ) : fallbackMode ? (
+          /* Fallback Mode */
+          <View className="items-center justify-center py-8">
+            <FontAwesome name="comment-o" size={40} color="#8B5CF6" />
+            <Text className="text-gray-800 mb-4 mt-4 text-center">
+              Voice chat is currently unavailable.{"\n"}Would you like to switch to text chat instead?
+            </Text>
+            <View className="flex-row">
+              <TouchableOpacity 
+                className="bg-purple-500 px-4 py-2 rounded-lg mr-2" 
+                onPress={handleSwitchToTextChat}
+              >
+                <Text className="text-white font-semibold">Switch to Text Chat</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                className="bg-gray-300 px-4 py-2 rounded-lg" 
+                onPress={onClose}
+              >
+                <Text className="text-gray-800 font-semibold">Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          /* Connected/Ready State - Coach Animation */
+          renderConnectedState()
+        )}
       </View>
     );
   };
+
+  /* Connected/Ready State - Coach Animation */
+  const renderConnectedState = () => (
+    <View className="items-center justify-center">
+      {showAnimatedCoachView && (
+        <View className="items-center mb-4">
+          <Animatable.View 
+            animation={isCoachSpeakingTTS ? "pulse" : "fadeIn"}
+            iterationCount={isCoachSpeakingTTS ? "infinite" : 1}
+            className="w-32 h-32 rounded-full items-center justify-center mb-2 overflow-hidden"
+          >
+            <Image 
+              source={coachAvatar} 
+              className="w-full h-full rounded-full"
+              resizeMode="cover"
+            />
+          </Animatable.View>
+          
+          <Text className="text-center font-medium text-lg mb-1">
+            {coachName}
+          </Text>
+          
+          <View className="flex-row items-center">
+            <FontAwesome 
+              name={isCoachSpeakingTTS ? "volume-up" : userIsActuallySpeaking ? "microphone" : "microphone-slash"} 
+              size={16} 
+              color={isCoachSpeakingTTS || userIsActuallySpeaking ? "#8B5CF6" : "#718096"} 
+              style={{marginRight: 6}}
+            />
+            <Text className="text-sm text-gray-500">
+              {isCoachSpeakingTTS ? "Speaking..." : userIsActuallySpeaking ? "Listening..." : "Ready"}
+            </Text>
+          </View>
+        </View>
+      )}
+      
+      {/* Coach Response */}
+      {pendingCoachResponse ? (
+        <View className="rounded-lg bg-purple-100 p-3 mb-2 max-w-[90%]">
+          <Text className="text-gray-800">{pendingCoachResponse}</Text>
+        </View>
+      ) : null}
+      
+      {/* User Transcript */}
+      {currentTranscript ? (
+        <View className="rounded-lg bg-gray-100 p-3 mb-4 max-w-[90%] self-end">
+          <Text className="text-gray-800">{currentTranscript}</Text>
+        </View>
+      ) : null}
+
+      {/* Tool Execution Indicator */}
+      {isExecutingTool && (
+        <View className="flex-row items-center justify-center my-2">
+          <ActivityIndicator size="small" color="#8B5CF6" />
+          <Text className="ml-2 text-gray-600">Processing request...</Text>
+        </View>
+      )}
+      
+      {/* End Chat Button */}
+      <TouchableOpacity 
+          className="bg-purple-500 px-4 py-2 rounded-lg mt-4" 
+        onPress={handleEndSession} 
+      >
+          <Text className="text-white font-semibold">End Chat</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
   return renderContent();
 };
 
