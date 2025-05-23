@@ -77,7 +77,7 @@ export function GearScreen() {
 
   return (
     <Screen className="py-4 px-6" style={{ backgroundColor: '#FBF7F6', flex: 1 }}>
-      <HeaderBar title="Gear Recommendations" />
+      <HeaderBar title="Gear" />
 
       <CategoryFilter 
         categories={categories}
@@ -92,14 +92,25 @@ export function GearScreen() {
           <Text className="mt-2">Loading recommendations...</Text>
         </View>
       ) : (
-        <FlatList
-          data={products}
-          renderItem={renderProduct}
-          keyExtractor={item => item.id}
-          ItemSeparatorComponent={() => <View className="h-4" />}
-          contentContainerStyle={{ paddingBottom: 16, paddingHorizontal: 24 }}
-          showsVerticalScrollIndicator={false}
-        />
+        <View className="flex-1">
+          <FlatList
+            data={products}
+            renderItem={renderProduct}
+            keyExtractor={item => item.id}
+            ItemSeparatorComponent={() => <View className="h-4" />}
+            contentContainerStyle={{ paddingBottom: 16, paddingHorizontal: 24 }}
+            showsVerticalScrollIndicator={false}
+          />
+          
+          {/* Owned Section */}
+          <View className="px-4 pt-2 pb-6">
+            <Text className="font-bold text-xl mb-3">Owned</Text>
+            <View className="bg-white rounded-lg p-4">
+              <Text className="text-gray-500 text-center">No gear added yet.</Text>
+              <Text className="text-gray-400 text-center text-sm mt-1">Track your running shoes, apparel, and accessories here.</Text>
+            </View>
+          </View>
+        </View>
       )}
 
       {/* Product Detail Modal */}

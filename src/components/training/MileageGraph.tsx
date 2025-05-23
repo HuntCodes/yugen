@@ -42,9 +42,6 @@ export function MileageGraph({ weeklyData, preferredUnit, font }: MileageGraphPr
     value: convertMileage(data.actualMileage),
   }));
 
-  console.log('[MileageGraph] plannedData:', JSON.stringify(plannedData, null, 2));
-  console.log('[MileageGraph] actualData:', JSON.stringify(actualData, null, 2));
-
   // Calculate max value for Y-axis scaling
   const allValues = [...plannedData.map(d => d.value), ...actualData.map(d => d.value)];
   const maxValue = allValues.length > 0 ? Math.max(...allValues) : 0;

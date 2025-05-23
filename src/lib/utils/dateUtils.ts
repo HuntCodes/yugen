@@ -5,15 +5,15 @@
 /**
  * Format a date string for display in the UI
  * @param dateString - ISO date string to format
- * @returns Formatted date string (e.g., "Jan 1, 2023")
+ * @returns Formatted date string (e.g., "Monday, Jan 1")
  */
 export const formatDate = (dateString: string): string => {
   try {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
+      weekday: 'long',
       month: 'short',
-      day: 'numeric',
-      year: 'numeric'
+      day: 'numeric'
     });
   } catch (err) {
     console.error('Error formatting date:', dateString, err);

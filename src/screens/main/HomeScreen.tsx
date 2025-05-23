@@ -604,8 +604,8 @@ export function HomeScreen() {
           )}
         </View>
         
-        <View className="px-4 mt-6">
-          <Text className="text-2xl font-bold text-text-primary mb-1">Mileage Overview</Text>
+        <View className="px-4 mt-6 pt-2">
+          <Text className="font-bold text-xl mb-3">Your Progress</Text>
           {!graphFont ? (
             <View style={{ height: 340, justifyContent: 'center', alignItems: 'center' }} className="bg-white rounded-lg p-4 shadow-sm">
               <MinimalSpinner />

@@ -1,7 +1,42 @@
         // supabase/functions/_shared/feedbackService.ts
-        import type { SupabaseClient, PostgrestError } from 'https://esm.sh/@supabase/supabase-js@2';
-        import { arqué } from './arquéClient.ts'; // Assuming arqué is your Supabase client tailored for Deno
         import { type ChatCompletionRequestMessage, Configuration, OpenAIApi } from "https://esm.sh/openai@3.2.1";
+
+        // Define proper type for Supabase client (similar to planServiceDeno.ts)
+        interface SupabaseQueryBuilder {
+          eq: (column: string, value: string) => SupabaseQueryBuilder;
+          gte: (column: string, value: string) => SupabaseQueryBuilder;
+          lte: (column: string, value: string) => SupabaseQueryBuilder;
+          lt: (column: string, value: string) => SupabaseQueryBuilder;
+          order: (column: string, options: { ascending: boolean }) => SupabaseQueryBuilder;
+          select: (columns: string) => SupabaseQueryBuilder;
+          single: () => Promise<{ data: unknown; error: { message?: string } | null }>;
+        }
+
+        interface SupabaseInsertBuilder {
+          select: () => SupabaseInsertBuilder;
+          single: () => Promise<{ data: unknown; error: { message?: string } | null }>;
+        }
+
+        interface SupabaseClient {
+          from: (table: string) => {
+            select: (columns: string) => SupabaseQueryBuilder & Promise<{ data: unknown; error: { message?: string } | null }>;
+            insert: (data: unknown[]) => SupabaseInsertBuilder;
+          };
+        }
+
+        interface TrainingPlanItem {
+          date: string;
+          session_type?: string;
+          notes?: string;
+          post_session_notes?: string;
+          status?: string;
+        }
+
+        interface ChatMessage {
+          created_at: string;
+          message: string;
+          sender: string;
+        }
 
         // --- Type Definitions ---
         interface UserProfile {
@@ -47,22 +82,23 @@
 
         // --- Feedback Fetching Logic ---
         // Fetches workout notes from training_plans table for a given week
-        async function getWorkoutNotesForWeekDeno(arquéClient: any, userId: string, startDateString: string, endDateString: string): Promise<WorkoutNoteForFeedback[]> {
+        async function getWorkoutNotesForWeekDeno(arquéClient: SupabaseClient, userId: string, startDateString: string, endDateString: string): Promise<WorkoutNoteForFeedback[]> {
           console.log(`[feedbackService] Fetching workout notes for user ${userId} from training_plans between ${startDateString} and ${endDateString}`);
-          const { data, error } = await arquéClient
+          const queryResult = await (arquéClient
             .from('training_plans')
             .select('date, session_type, notes, post_session_notes, status')
             .eq('user_id', userId)
             .gte('date', startDateString) // Assuming date is timestamptz, YYYY-MM-DD will work
             .lte('date', endDateString)   // Assuming date is timestamptz, YYYY-MM-DD will work for end of day
-            .order('date', { ascending: true });
+            .order('date', { ascending: true }) as unknown as Promise<{ data: TrainingPlanItem[] | null; error: { message?: string } | null }>);
 
+          const { data, error } = queryResult;
           if (error) {
             console.error('[feedbackService] Error fetching workout notes from training_plans:', error);
             throw new Error(`Failed to fetch workout notes: ${error.message}`);
           }
 
-          const notesForFeedback: WorkoutNoteForFeedback[] = (data || []).map((plan_item: any) => {
+          const notesForFeedback: WorkoutNoteForFeedback[] = (data || []).map((plan_item: TrainingPlanItem) => {
             let userNotes = '';
             if (plan_item.notes) userNotes += plan_item.notes + ' ';
             if (plan_item.post_session_notes) userNotes += plan_item.post_session_notes;
@@ -78,22 +114,23 @@
           return notesForFeedback;
         }
 
-        async function getChatMessagesForWeekDeno(arquéClient: any, userId: string, startDateISO: string, endDateISO: string): Promise<ChatMessageForFeedback[]> {
+        async function getChatMessagesForWeekDeno(arquéClient: SupabaseClient, userId: string, startDateISO: string, endDateISO: string): Promise<ChatMessageForFeedback[]> {
           console.log(`[feedbackService] Fetching chat messages for user ${userId} from coach_messages between ${startDateISO} and ${endDateISO}`);
-          const { data, error } = await arquéClient
+          const queryResult = await (arquéClient
             .from('coach_messages') // Changed from 'chat_messages' to 'coach_messages'
             .select('created_at, message, sender') // Selected schema fields
             .eq('user_id', userId)
             .gte('created_at', startDateISO)
             .lt('created_at', endDateISO)
-            .order('created_at', { ascending: true });
+            .order('created_at', { ascending: true }) as unknown as Promise<{ data: ChatMessage[] | null; error: { message?: string } | null }>);
 
+          const { data, error } = queryResult;
           if (error) {
             console.error('[feedbackService] Error fetching chat messages:', error);
             throw new Error(`Failed to fetch chat messages: ${error.message}`);
           }
           
-          const messagesForFeedback: ChatMessageForFeedback[] = (data || []).map((msg: any) => ({
+          const messagesForFeedback: ChatMessageForFeedback[] = (data || []).map((msg: ChatMessage) => ({
             created_at: msg.created_at,
             message_content: msg.message,
             sender_role: msg.sender,
@@ -113,7 +150,7 @@
             return "OpenAI analysis skipped due to missing API key or client initialization failure.";
           }
 
-          let promptContent = `Analyze the following user interactions for the past week to understand their workout progress, challenges, and overall sentiment. Provide a concise summary.
+          const promptContent = `Analyze the following user interactions for the past week to understand their workout progress, challenges, and overall sentiment. Provide a concise summary.
 
 Workout Notes:
 ${workoutNotes.length > 0 ? workoutNotes.map(note => `- Note on ${note.date} (${note.session_type || 'general'}, status: ${note.status || 'unknown'}): "${note.user_notes}"`).join('\n') : 'No workout notes logged.'}
@@ -138,16 +175,22 @@ Summary:`;
               return "Failed to generate summary from OpenAI: Empty response.";
             }
             return summary;
-          } catch (error: any) {
-            let errorMessage = error.message;
-            if (error.response?.data?.error) errorMessage = error.response.data.error.message;
-            console.error("[feedbackService] Error calling OpenAI for feedback analysis:", errorMessage);
-            throw new Error(`OpenAI API request failed: ${errorMessage}`);
+          } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            let detailedError = errorMessage;
+            if (error && typeof error === 'object' && 'response' in error) {
+              const errorResponse = error as { response?: { data?: { error?: { message?: string } } } };
+              if (errorResponse.response?.data?.error) {
+                detailedError = errorResponse.response.data.error.message || errorMessage;
+              }
+            }
+            console.error("[feedbackService] Error calling OpenAI for feedback analysis:", detailedError);
+            throw new Error(`OpenAI API request failed: ${detailedError}`);
           }
         }
 
         // --- Feedback Storage Logic ---
-        async function storeProcessedFeedback(arquéClient: any, feedbackData: ProcessedFeedback): Promise<ProcessedFeedback> {
+        async function storeProcessedFeedback(arquéClient: SupabaseClient, feedbackData: ProcessedFeedback): Promise<ProcessedFeedback> {
           console.log(`[feedbackService] Storing processed feedback for user ${feedbackData.user_id} for week starting ${feedbackData.week_start_date}`);
           // Map to user_training_feedback schema
           const { data, error } = await arquéClient
@@ -172,17 +215,18 @@ Summary:`;
           }
           console.log('[feedbackService] Processed feedback stored successfully.');
           // Return in the ProcessedFeedback structure expected by the calling function (index.ts)
+          const storedData = data as { user_id: string; week_start_date: string; feedback_summary: string; raw_data: { chat_messages: ChatMessageForFeedback[]; workout_notes: WorkoutNoteForFeedback[]; } };
           return {
-            user_id: data.user_id,
-            week_start_date: data.week_start_date,
-            feedback_summary: data.feedback_summary,
-            raw_data: data.raw_data as { chat_messages: ChatMessageForFeedback[]; workout_notes: WorkoutNoteForFeedback[]; },
+            user_id: storedData.user_id,
+            week_start_date: storedData.week_start_date,
+            feedback_summary: storedData.feedback_summary,
+            raw_data: storedData.raw_data,
           };
         }
 
         // --- Main Service Function ---
         export async function processUserWeeklyFeedbackDeno(
-          arquéClient: any,
+          arquéClient: SupabaseClient,
           userId: string,
           feedbackWeekStartDate: Date, // Monday of the week for which to process feedback
           feedbackWeekEndDate: Date    // Sunday of the week (inclusive)

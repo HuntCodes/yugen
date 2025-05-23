@@ -31,6 +31,17 @@ const phaseColors: Record<TrainingPhase, { color: string; textColor: string }> =
   [TrainingPhase.None]: { color: appColors.background, textColor: appColors.text.primary }
 };
 
+// Define explanations for each training phase
+const phaseExplanations: Record<TrainingPhase, string> = {
+  [TrainingPhase.Base]: 'Develop aerobic fitness with steady mileage',
+  [TrainingPhase.Build]: 'Increase intensity & volume to boost fitness',
+  [TrainingPhase.Peak]: 'Sharpen with race-specific workouts',
+  [TrainingPhase.Taper]: 'Reduce load to freshen up before racing',
+  [TrainingPhase.RaceWeek]: 'Final preparations before competition',
+  [TrainingPhase.Recovery]: 'Active recovery with easy runs and rest ',
+  [TrainingPhase.None]: ''
+};
+
 // Updated interface for what 'period' marking expects, based on user-provided documentation
 interface PeriodMarkingData {
   startingDay?: boolean;
@@ -56,21 +67,29 @@ const TrainingOutlookView: React.FC = () => {
   const [initialCalendarDate, setInitialCalendarDate] = React.useState<string>(
     CalendarUtils.getCalendarDateString(new Date().toISOString())
   );
+  const [currentCalendarMonth, setCurrentCalendarMonth] = React.useState<string>(
+    CalendarUtils.getCalendarDateString(new Date().toISOString())
+  );
 
   React.useEffect(() => {
     const today = LocalDate.now();
     let newMinCalDateStr: string;
-    let newMaxCalDateStr = CalendarUtils.getCalendarDateString(today.plusMonths(2).with(TemporalAdjusters.lastDayOfMonth()).toString());
+    let newMaxCalDateStr: string;
     let initialViewDateStr = CalendarUtils.getCalendarDateString(today.toString());
+
+    // Max date is always today + 3 months
+    newMaxCalDateStr = CalendarUtils.getCalendarDateString(today.plusMonths(3).with(TemporalAdjusters.lastDayOfMonth()).toString());
 
     if (outlookData && outlookData.planStartDate) {
       const planStartActualDate = LocalDate.parse(outlookData.planStartDate);
       newMinCalDateStr = CalendarUtils.getCalendarDateString(planStartActualDate.withDayOfMonth(1).toString());
+      
       const planStartMonthInitial = planStartActualDate.withDayOfMonth(1);
       if (today.isBefore(planStartMonthInitial)) {
         initialViewDateStr = CalendarUtils.getCalendarDateString(planStartMonthInitial.toString());
       }
     } else {
+      // Fallback: if no planStartDate, show from today's month
       newMinCalDateStr = CalendarUtils.getCalendarDateString(today.withDayOfMonth(1).toString());
     }
 
@@ -135,6 +154,7 @@ const TrainingOutlookView: React.FC = () => {
     setMinCalendarDate(newMinCalDateStr);
     setMaxCalendarDate(newMaxCalDateStr);
     setInitialCalendarDate(initialViewDateStr);
+    setCurrentCalendarMonth(initialViewDateStr);
 
   }, [outlookData]);
 
@@ -158,8 +178,54 @@ const TrainingOutlookView: React.FC = () => {
         maxDate={maxCalendarDate}
         markingType={'period'} 
         markedDates={markedDates} 
-        onMonthChange={(month: DateData) => {}}
+        onMonthChange={(month: DateData) => {
+          setCurrentCalendarMonth(CalendarUtils.getCalendarDateString(month.dateString));
+        }}
         firstDay={1} 
+        // Disable arrow navigation when at min/max dates
+        disableArrowLeft={(() => {
+          if (!minCalendarDate || !currentCalendarMonth) return false;
+          const currentDate = new Date(currentCalendarMonth);
+          const minDate = new Date(minCalendarDate);
+          // Disable if current month is at or before the minimum month
+          return currentDate.getFullYear() <= minDate.getFullYear() && 
+                 currentDate.getMonth() <= minDate.getMonth();
+        })()}
+        disableArrowRight={(() => {
+          if (!maxCalendarDate || !currentCalendarMonth) return false;
+          const currentDate = new Date(currentCalendarMonth);
+          const maxDate = new Date(maxCalendarDate);
+          // Disable if current month is at or after the maximum month
+          return currentDate.getFullYear() >= maxDate.getFullYear() && 
+                 currentDate.getMonth() >= maxDate.getMonth();
+        })()}
+        // Custom arrow handlers to prevent navigation outside bounds
+        onPressArrowLeft={(subtractMonth) => {
+          if (!minCalendarDate || !currentCalendarMonth) {
+            subtractMonth();
+            return;
+          }
+          const currentDate = new Date(currentCalendarMonth);
+          const minDate = new Date(minCalendarDate);
+          // Only allow navigation if we're not at the minimum month
+          if (currentDate.getFullYear() > minDate.getFullYear() || 
+              (currentDate.getFullYear() === minDate.getFullYear() && currentDate.getMonth() > minDate.getMonth())) {
+            subtractMonth();
+          }
+        }}
+        onPressArrowRight={(addMonth) => {
+          if (!maxCalendarDate || !currentCalendarMonth) {
+            addMonth();
+            return;
+          }
+          const currentDate = new Date(currentCalendarMonth);
+          const maxDate = new Date(maxCalendarDate);
+          // Only allow navigation if we're not at the maximum month
+          if (currentDate.getFullYear() < maxDate.getFullYear() || 
+              (currentDate.getFullYear() === maxDate.getFullYear() && currentDate.getMonth() < maxDate.getMonth())) {
+            addMonth();
+          }
+        }}
         theme={{
           backgroundColor: appColors.background, 
           calendarBackground: appColors.background, 
@@ -188,22 +254,28 @@ const TrainingOutlookView: React.FC = () => {
         style={styles.calendarStyle}
       />
       <View style={styles.legendOuterContainer}>
-        <ScrollView contentContainerStyle={styles.legendContainer}>
-          <Text style={styles.legendTitle}>Phase Legend</Text>
+        <View style={styles.legendContainer}>
+          <Text style={styles.legendTitle}>Training Phases</Text>
           {Object.entries(phaseColors).map(([phaseName, { color, textColor }]) => {
             if (phaseName === TrainingPhase.None) return null;
             let legendItemTextColor = textColor;
             if (textColor === appColors.text.light && appColors.background === '#FFFFFF') {
               legendItemTextColor = appColors.text.primary;
             }
+            const explanation = phaseExplanations[phaseName as TrainingPhase];
             return (
               <View key={phaseName} style={styles.legendItem}>
                 <View style={[styles.legendColorBox, { backgroundColor: color }]} />
-                <Text style={[styles.legendItemText, { color: legendItemTextColor }]}>{phaseName}</Text>
+                <View style={styles.legendTextContainer}>
+                  <Text style={[styles.legendItemText, { color: legendItemTextColor }]}>
+                    <Text style={styles.legendPhaseText}>{phaseName}</Text>
+                    <Text style={styles.legendDescriptionText}> - {explanation}</Text>
+                  </Text>
+                </View>
               </View>
             );
           })}
-        </ScrollView>
+        </View>
       </View>
     </View>
   );
@@ -212,7 +284,7 @@ const TrainingOutlookView: React.FC = () => {
 const styles = StyleSheet.create({
   flexView: {
     flex: 1,
-    backgroundColor: appColors.background,
+    backgroundColor: '#FBF7F6', // Same as TrainingPlanScreen header and legend
     paddingTop: 10,
   },
   centeredContainer: {
@@ -240,10 +312,11 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderColor: appColors.border, 
     marginTop: 10,
+    backgroundColor: '#FBF7F6', // Same as TrainingPlanScreen header
   },
   legendContainer: {
     paddingHorizontal: 16,
-    paddingVertical:10,
+    paddingVertical: 10,
   },
   legendTitle: {
     fontSize: 18,
@@ -254,7 +327,7 @@ const styles = StyleSheet.create({
   legendItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 8,
   },
   legendColorBox: {
     width: 14,
@@ -264,8 +337,17 @@ const styles = StyleSheet.create({
     borderWidth: 1, 
     borderColor: appColors.text.disabled, 
   },
+  legendTextContainer: {
+    flex: 1,
+  },
   legendItemText: {
     fontSize: 14,
+  },
+  legendPhaseText: {
+    fontWeight: '600',
+  },
+  legendDescriptionText: {
+    fontWeight: '300',
   },
 });
 

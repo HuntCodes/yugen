@@ -21,10 +21,15 @@ export function ChatMini({ coachName, coachId, imageMap, onMessageSend, isTyping
   const lastMessageCount = useRef(messages.length);
   const hiddenInputRef = useRef<TextInput>(null);
   const [isKeyboardVisibleForIOS, setIsKeyboardVisibleForIOS] = useState(false);
+  
+  // State for suggestion messages
+  const [suggestions, setSuggestions] = useState([
+    "How's my training looking this week?",
+    "What do i have for training today?",
+    "Can you adjust today's workout?"
+  ]);
 
   useEffect(() => {
-    console.log('[ChatMini] hiddenInputRef.current (on mount):', hiddenInputRef.current);
-
     if (Platform.OS === 'ios') {
       const keyboardDidShowListener = Keyboard.addListener(
         'keyboardDidShow',
@@ -44,10 +49,14 @@ export function ChatMini({ coachName, coachId, imageMap, onMessageSend, isTyping
 
   useEffect(() => {
     if (scrollViewRef.current) {
-      scrollViewRef.current.scrollToEnd({ animated: messages.length > lastMessageCount.current });
+      // Only auto-scroll if there are no suggestions visible
+      const shouldAutoScroll = suggestions.length === 0 || messages.length > lastMessageCount.current;
+      if (shouldAutoScroll) {
+        scrollViewRef.current.scrollToEnd({ animated: messages.length > lastMessageCount.current });
+      }
     }
     lastMessageCount.current = messages.length;
-  }, [messages]);
+  }, [messages, suggestions.length]);
 
   // New useEffect to scroll to end when keyboard is hidden on iOS
   useEffect(() => {
@@ -65,6 +74,14 @@ export function ChatMini({ coachName, coachId, imageMap, onMessageSend, isTyping
       onMessageSend(message);
       setMessage('');
     }
+  };
+
+  // Handle suggestion tap
+  const handleSuggestionTap = (suggestionText: string) => {
+    console.log('Suggestion tapped:', suggestionText);
+    onMessageSend(suggestionText);
+    // Remove the suggestion after sending
+    setSuggestions(prev => prev.filter(s => s !== suggestionText));
   };
 
   const renderIOSInputAccessoryView = () => (
@@ -103,9 +120,7 @@ export function ChatMini({ coachName, coachId, imageMap, onMessageSend, isTyping
     <TouchableOpacity
       className="flex-row items-center bg-white border-2 border-black rounded-full px-4 h-12"
       onPress={() => {
-        console.log("[ChatMini] iOS Static Placeholder TAPPED!");
         setTimeout(() => {
-          console.log("[ChatMini] Attempting to focus hiddenInputRef.current");
           hiddenInputRef.current?.focus();
         }, 50);
       }}
@@ -193,6 +208,23 @@ export function ChatMini({ coachName, coachId, imageMap, onMessageSend, isTyping
             <View className="max-w-[80%] py-3 px-4 rounded-lg bg-gray-100">
               <Text>Typing...</Text>
             </View>
+          </View>
+        )}
+
+        {/* Suggestion Messages - At bottom of scrollable content */}
+        {suggestions.length > 0 && (
+          <View className="mt-4 items-end">
+            <Text className="text-xs text-gray-400 mb-2 px-1 self-end">Message suggestions:</Text>
+            {suggestions.map((suggestion, index) => (
+              <TouchableOpacity
+                key={index}
+                className="mb-2 bg-white border border-gray-200 rounded-3xl px-4 py-3 self-end"
+                onPress={() => handleSuggestionTap(suggestion)}
+                activeOpacity={0.7}
+              >
+                <Text className="text-gray-500 text-sm">{suggestion}</Text>
+              </TouchableOpacity>
+            ))}
           </View>
         )}
       </ScrollView>
