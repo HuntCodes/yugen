@@ -25,7 +25,8 @@ export function useChatFlow() {
     userId: string, 
     profile: any,
     trainingPlan: any[],
-    onMessageResponse: (message: ChatMessage) => void
+    onMessageResponse: (message: ChatMessage) => void,
+    onPlanAdjusted?: () => Promise<void>
   ) => {
     try {
       // Log the user message to the terminal
@@ -53,7 +54,8 @@ export function useChatFlow() {
         userId,
         profile,
         trainingPlan,
-        onMessageResponse
+        onMessageResponse,
+        onPlanAdjusted
       });
       
       // After getting a response, create chat summaries occasionally

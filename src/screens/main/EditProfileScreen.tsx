@@ -8,6 +8,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { ProfileStackParamList } from '../../navigation/ProfileNavigator';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { SegmentedControl } from '../../components/ui/SegmentedControl';
+import { MinimalSpinner } from '../../components/ui/MinimalSpinner';
 
 export function EditProfileScreen() {
   const { session } = useAuth();
@@ -130,11 +131,8 @@ export function EditProfileScreen() {
 
   if (loading) {
     return (
-      <Screen>
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color="#000" />
-          <Text className="mt-2">Loading profile data...</Text>
-        </View>
+      <Screen style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <MinimalSpinner size={48} color="#000000" thickness={3} />
       </Screen>
     );
   }
@@ -231,7 +229,7 @@ export function EditProfileScreen() {
             disabled={saving}
           >
             {saving ? (
-              <ActivityIndicator color="#fff" size="small" />
+              <MinimalSpinner size={20} color="#FFFFFF" thickness={2} />
             ) : (
               <Text className="text-white text-center font-medium">Save Changes</Text>
             )}

@@ -196,10 +196,9 @@ Would you like me to update your training plan with these changes?`;
 
   /**
    * Builds the system prompt for the AI coach.
-   * This version is parameter-less for the Realtime API,
-   * assuming context (plan, profile) is managed or less critical for Realtime API's internal state.
+   * This version can optionally accept a training plan to include today's and tomorrow's workouts.
    */
-  const buildSystemPrompt = (): string => {
+  const buildSystemPrompt = (trainingPlan?: any[]): string => {
     const today = new Date();
     const dayOfWeek = getDayOfWeek(today);
     const formattedDate = `${dayOfWeek}, ${today.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`;
@@ -207,15 +206,69 @@ Would you like me to update your training plan with these changes?`;
     tomorrow.setDate(today.getDate() + 1);
     const tomorrowFormatted = `${getDayOfWeek(tomorrow)}, ${tomorrow.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`;
     
+    // Add current time for time-sensitive conversations
+    const currentTime = today.toLocaleTimeString('en-US', { 
+      hour: 'numeric', 
+      minute: '2-digit', 
+      hour12: true 
+    });
+    const currentHour = today.getHours();
+    
+    // Determine time of day for contextual conversation guidance
+    let timeOfDay = '';
+    if (currentHour >= 5 && currentHour < 12) {
+      timeOfDay = 'morning';
+    } else if (currentHour >= 12 && currentHour < 17) {
+      timeOfDay = 'afternoon';
+    } else if (currentHour >= 17 && currentHour < 21) {
+      timeOfDay = 'evening';
+    } else {
+      timeOfDay = 'night';
+    }
+    
+    // Extract today's and tomorrow's workouts if training plan is provided
+    let todayWorkout = '';
+    let tomorrowWorkout = '';
+    
+    if (trainingPlan && trainingPlan.length > 0) {
+      const todayStr = formatDateYMD(today);
+      const tomorrowStr = formatDateYMD(tomorrow);
+      
+      const todaySession = trainingPlan.find(workout => workout.date === todayStr);
+      const tomorrowSession = trainingPlan.find(workout => workout.date === tomorrowStr);
+      
+      if (todaySession) {
+        todayWorkout = `\n\nTODAY'S TRAINING: ${todaySession.session_type || 'Workout'}`;
+        if (todaySession.distance) todayWorkout += ` - ${todaySession.distance}km`;
+        if (todaySession.time) todayWorkout += ` for ${todaySession.time} minutes`;
+        if (todaySession.notes) todayWorkout += `. Notes: ${todaySession.notes}`;
+        todayWorkout += ` (ID: ${todaySession.id || 'N/A'})`;
+      } else {
+        todayWorkout = '\n\nTODAY\'S TRAINING: Rest day or no scheduled workout';
+      }
+      
+      if (tomorrowSession) {
+        tomorrowWorkout = `\nTOMORROW'S TRAINING: ${tomorrowSession.session_type || 'Workout'}`;
+        if (tomorrowSession.distance) tomorrowWorkout += ` - ${tomorrowSession.distance}km`;
+        if (tomorrowSession.time) tomorrowWorkout += ` for ${tomorrowSession.time} minutes`;
+        if (tomorrowSession.notes) tomorrowWorkout += `. Notes: ${tomorrowSession.notes}`;
+        tomorrowWorkout += ` (ID: ${tomorrowSession.id || 'N/A'})`;
+      } else {
+        tomorrowWorkout = '\nTOMORROW\'S TRAINING: Rest day or no scheduled workout';
+      }
+    }
+    
     // Note: The Realtime API will get user profile and plan dynamically if needed via functions or context.
     // This system prompt focuses on role, capabilities, and tool usage.
-    return `You are an AI running coach. Today is ${formattedDate}. Tomorrow is ${tomorrowFormatted}.
+    const systemPrompt = `You are an AI running coach. Today is ${formattedDate}. Tomorrow is ${tomorrowFormatted}. It's currently ${currentTime} (${timeOfDay}).${todayWorkout}${tomorrowWorkout}
 You are conversational, helpful, and encouraging.
 Answer running-related questions (nutrition, recovery, gear, etc.).
 Explain training sessions and help the user understand their plan.
 
 INITIAL GREETING:
-When starting a conversation, begin with a friendly, general greeting like "Hi there! How can I help you today?" Offer to chat about their training plan, answer questions, or just check in on how they're doing. DO NOT assume they want to change their training plan in your first message.
+When starting a conversation, begin with a friendly, time-appropriate greeting. Consider the time of day for your conversation starters, you might ask how they slept in the morning, or if they had a chance to finish their run if its the evening.
+
+DO NOT assume they want to change their training plan in your first message. Offer to chat about their training plan, answer questions, or just check in on how they're doing.
 
 IMPORTANT: WORKOUT ADJUSTMENTS & FEEDBACK:
 You have tools to modify workouts and record feedback.
@@ -229,6 +282,14 @@ You have tools to modify workouts and record feedback.
 
 Engage naturally. Do NOT ask users to phrase requests in specific ways.
 Keep responses concise but informative. Maintain a positive and supportive tone.`;
+
+    // Log the system prompt for debugging
+    console.log('[useMessageFormatting] System Prompt Generated:');
+    console.log('=====================================');
+    console.log(systemPrompt);
+    console.log('=====================================');
+    
+    return systemPrompt;
   };
 
   /**

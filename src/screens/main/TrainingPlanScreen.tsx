@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { View, ActivityIndicator, TouchableOpacity, Alert, ScrollView, LayoutChangeEvent, StyleSheet } from 'react-native';
+import { View, ActivityIndicator, TouchableOpacity, Alert, ScrollView, LayoutChangeEvent, StyleSheet, Animated, Easing } from 'react-native';
 import { Text } from '../../components/ui/StyledText';
 import { supabase } from '../../lib/supabase';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -15,6 +15,7 @@ import { fetchTrainingPlan, generateAndSavePlan, refreshWeeklyPlan, checkNeedsRe
 import { fetchProfile } from '../../services/profile/profileService';
 import TrainingOutlookView from './training/components/TrainingOutlookView';
 import { formatDate as formatDateUtil, getDayOfWeek as getDayOfWeekUtil } from '../../lib/utils/dateUtils';
+import { MinimalSpinner } from '../../components/ui/MinimalSpinner';
 
 // Add this type definition for layout storage
 type SessionLayout = { y: number; height: number };
@@ -49,14 +50,14 @@ const CompactHeaderBar = ({ title }: { title: string }) => {
 const compactHeaderStyles = StyleSheet.create({
   header: {
     backgroundColor: '#FBF7F6',
-    paddingTop: 4,
-    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingHorizontal: 24,
     paddingBottom: 4,
-    minHeight: 38,
+    minHeight: 46,
   },
   headerTitle: {
-    fontSize: 18,
-    lineHeight: 24,
+    fontSize: 24,
+    lineHeight: 32,
     fontWeight: 'bold',
     color: '#333333',
   },
@@ -84,6 +85,8 @@ export default function TrainingPlanScreen() {
   const [scrollToTargetNeeded, setScrollToTargetNeeded] = useState(false);
 
   const [activeTab, setActiveTab] = useState<TabView>('Schedule');
+  const [tabContainerWidth, setTabContainerWidth] = useState(0); // For slider animation
+  const slideAnim = useRef(new Animated.Value(0)).current; // Initial position for Schedule
 
   useScrollToTop(scrollViewRef); // For tapping tab bar to scroll to top
 
@@ -447,8 +450,8 @@ export default function TrainingPlanScreen() {
   };
   
   let content;
-  if (loading) {
-    content = <View style={styles.centeredMessageContainer}><ActivityIndicator size="large" /></View>;
+  if (loading && !retrying) {
+    content = <View style={styles.centeredMessageContainer}><MinimalSpinner size={48} thickness={3} /></View>;
   } else if (error && sessions.length === 0) {
     content = (
       <View style={styles.centeredMessageContainer}>
@@ -500,26 +503,55 @@ export default function TrainingPlanScreen() {
     content = <TrainingOutlookView />;
   }
 
+  useEffect(() => {
+    if (tabContainerWidth > 0) {
+      const targetValue = activeTab === 'Schedule' ? 0 : tabContainerWidth / 2;
+      Animated.spring(slideAnim, {
+        toValue: targetValue,
+        stiffness: 150, // Adjust for springiness
+        damping: 20,    // Adjust for springiness
+        useNativeDriver: true, // translateX is supported
+      }).start();
+    }
+  }, [activeTab, tabContainerWidth, slideAnim]);
+
   return (
     <Screen style={{ backgroundColor: '#FBF7F6' }}>
-      <SafeAreaView edges={['top']} style={styles.flexOne}>
+      <View style={styles.flexOne}>
         <CompactHeaderBar title="Training Plan" />
-        <View style={styles.tabBarContainer}>
+        <View 
+          style={styles.tabBarContainer}
+          onLayout={(event) => {
+            const { width } = event.nativeEvent.layout;
+            setTabContainerWidth(width);
+          }}
+        >
+          {tabContainerWidth > 0 && (
+            <Animated.View
+              style={[
+                styles.activeTabSlider, // New style for the sliding pill
+                {
+                  width: tabContainerWidth / 2,
+                  transform: [{ translateX: slideAnim }],
+                },
+              ]}
+            />
+          )}
           <TouchableOpacity 
-            style={[styles.tabButton, activeTab === 'Schedule' && styles.activeTabButton]}
+            style={styles.tabButton} // Simplified style
             onPress={() => setActiveTab('Schedule')}
           >
-            <Text style={[styles.tabText, activeTab === 'Schedule' && styles.activeTabText]}>Schedule</Text>
+            <Text style={[styles.tabText, activeTab === 'Schedule' ? styles.activeTabText : styles.inactiveTabText]}>Schedule</Text>
           </TouchableOpacity>
           <TouchableOpacity 
-            style={[styles.tabButton, activeTab === 'Outlook' && styles.activeTabButton]}
+            style={styles.tabButton} // Simplified style
             onPress={() => setActiveTab('Outlook')}
           >
-            <Text style={[styles.tabText, activeTab === 'Outlook' && styles.activeTabText]}>Outlook</Text>
+            <Text style={[styles.tabText, activeTab === 'Outlook' ? styles.activeTabText : styles.inactiveTabText]}>Outlook</Text>
           </TouchableOpacity>
         </View>
         {content}
-      </SafeAreaView>
+      </View>
     </Screen>
   );
 }
@@ -528,29 +560,49 @@ const styles = StyleSheet.create({
   flexOne: { flex: 1 },
   tabBarContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-    backgroundColor: '#F3F4F6', // neutral-100ish
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB', // neutral-200
+    padding: 4, // Adjusted padding for the container to house the pill correctly
+    backgroundColor: '#FBF7F6', // Match screen background, or a very light gray like #F0F0F0
+    borderRadius: 9999,
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 12,
+    position: 'relative', // For absolute positioning of the slider
+    height: 44, // Define a fixed height for the container, e.g., py-1.5 + text. Adjust as needed.
+  },
+  activeTabSlider: { 
+    position: 'absolute',
+    top: 4, // Corresponds to parent padding
+    bottom: 4, // Corresponds to parent padding
+    // height is implicitly (parentHeight - top - bottom)
+    backgroundColor: '#FFFFFF',
+    borderRadius: 9999,
+    borderWidth: 1,
+    borderColor: '#000000',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1.5, // Slightly smaller shadow
+    elevation: 2,      // Slightly smaller elevation
   },
   tabButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 8,
+    flex: 1,             
+    alignItems: 'center',
+    justifyContent: 'center',
+    // paddingVertical: 10, // Padding is now on the container and slider implicitly defines height
+    borderRadius: 9999, // For touch ripple if any
+    zIndex: 1, // Ensure buttons are clickable over the slider background (if it had no text)
   },
-  activeTabButton: {
-    backgroundColor: '#3B82F6', // blue-500
-  },
-  tabText: {
+  tabText: { // General style for tab text, color will be overridden
     fontSize: 16,
-    fontWeight: '500',
-    color: '#4B5563', // neutral-600
+    textAlign: 'center',
   },
   activeTabText: {
-    color: '#FFFFFF', // white
+    color: '#000000',
     fontWeight: '600',
+  },
+  inactiveTabText: {
+    color: '#000000', // Or a more muted color like '#4B5563' if desired
+    fontWeight: '500',
   },
   centeredMessageContainer: {
     flex: 1,
@@ -560,18 +612,18 @@ const styles = StyleSheet.create({
   },
   errorText: {
     textAlign: 'center',
-    color: '#EF4444', // red-500
+    color: '#EF4444', 
     fontSize: 16,
     marginBottom: 16,
   },
   infoText: {
     textAlign: 'center',
-    color: '#6B7280', // neutral-500
+    color: '#6B7280', 
     fontSize: 16,
     marginBottom: 16,
   },
   button: {
-    backgroundColor: '#3B82F6', // blue-500
+    backgroundColor: '#3B82F6', 
     paddingVertical: 10,
     paddingHorizontal: 20,
     borderRadius: 8,

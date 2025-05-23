@@ -9,10 +9,10 @@
 /* Begin PBXBuildFile section */
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
-		4914809C36B968EC883968DD /* libPods-Yugen.a in Frameworks */ = {isa = PBXBuildFile; fileRef = EDFF8984F6A3F976CA864ED7 /* libPods-Yugen.a */; };
-		760173A834967EDFEFD233CA /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CCF54CD5975C3A154EDD6E8 /* ExpoModulesProvider.swift */; };
-		9FCBAEF4C4B62C2E8860BCEC /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A8D2CAE6A14C34C59E51BEB0 /* PrivacyInfo.xcprivacy */; };
+		6ECD66A00C5048C0387AAA97 /* libPods-Yugen.a in Frameworks */ = {isa = PBXBuildFile; fileRef = C7BC88DB38B3DC50DC34544E /* libPods-Yugen.a */; };
+		ABE2B596AF0EA3C5ACD590F0 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 9C45A0B7E8FC10DA733B109F /* PrivacyInfo.xcprivacy */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
+		E3051D29C8629D08B2AF4FDA /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F0AD9E79CCC6C99ED529160 /* ExpoModulesProvider.swift */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 /* End PBXBuildFile section */
 
@@ -20,16 +20,16 @@
 		13B07F961A680F5B00A75B9A /* Yugen.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Yugen.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = Yugen/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = Yugen/Info.plist; sourceTree = "<group>"; };
-		1CCF54CD5975C3A154EDD6E8 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-Yugen/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
-		A8D2CAE6A14C34C59E51BEB0 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = Yugen/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		5F0AD9E79CCC6C99ED529160 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-Yugen/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
+		7398A7C0DB4AB12ACE213ACE /* Pods-Yugen.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Yugen.debug.xcconfig"; path = "Target Support Files/Pods-Yugen/Pods-Yugen.debug.xcconfig"; sourceTree = "<group>"; };
+		9C45A0B7E8FC10DA733B109F /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = Yugen/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		A92EE65C74FD9DC15CAE4659 /* Pods-Yugen.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Yugen.release.xcconfig"; path = "Target Support Files/Pods-Yugen/Pods-Yugen.release.xcconfig"; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = Yugen/SplashScreen.storyboard; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
-		EC1C88FE7B81B6009648806D /* Pods-Yugen.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Yugen.release.xcconfig"; path = "Target Support Files/Pods-Yugen/Pods-Yugen.release.xcconfig"; sourceTree = "<group>"; };
+		C7BC88DB38B3DC50DC34544E /* libPods-Yugen.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Yugen.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
-		EDFF8984F6A3F976CA864ED7 /* libPods-Yugen.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Yugen.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = Yugen/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* Yugen-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "Yugen-Bridging-Header.h"; path = "Yugen/Yugen-Bridging-Header.h"; sourceTree = "<group>"; };
-		FEBD309A58B10E63EA7872DD /* Pods-Yugen.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Yugen.debug.xcconfig"; path = "Target Support Files/Pods-Yugen/Pods-Yugen.debug.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -37,21 +37,13 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				4914809C36B968EC883968DD /* libPods-Yugen.a in Frameworks */,
+				6ECD66A00C5048C0387AAA97 /* libPods-Yugen.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		067071BC5B996566C7C929B0 /* ExpoModulesProviders */ = {
-			isa = PBXGroup;
-			children = (
-				C6B0D0E75B3CD58821182835 /* Yugen */,
-			);
-			name = ExpoModulesProviders;
-			sourceTree = "<group>";
-		};
 		13B07FAE1A68108700A75B9A /* Yugen */ = {
 			isa = PBXGroup;
 			children = (
@@ -61,7 +53,15 @@
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
-				A8D2CAE6A14C34C59E51BEB0 /* PrivacyInfo.xcprivacy */,
+				9C45A0B7E8FC10DA733B109F /* PrivacyInfo.xcprivacy */,
+			);
+			name = Yugen;
+			sourceTree = "<group>";
+		};
+		273EBC44CBE708CB1D63FDD6 /* Yugen */ = {
+			isa = PBXGroup;
+			children = (
+				5F0AD9E79CCC6C99ED529160 /* ExpoModulesProvider.swift */,
 			);
 			name = Yugen;
 			sourceTree = "<group>";
@@ -70,18 +70,9 @@
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				EDFF8984F6A3F976CA864ED7 /* libPods-Yugen.a */,
+				C7BC88DB38B3DC50DC34544E /* libPods-Yugen.a */,
 			);
 			name = Frameworks;
-			sourceTree = "<group>";
-		};
-		726382F33FFEF09548C3D678 /* Pods */ = {
-			isa = PBXGroup;
-			children = (
-				FEBD309A58B10E63EA7872DD /* Pods-Yugen.debug.xcconfig */,
-				EC1C88FE7B81B6009648806D /* Pods-Yugen.release.xcconfig */,
-			);
-			path = Pods;
 			sourceTree = "<group>";
 		};
 		832341AE1AAA6A7D00B99B32 /* Libraries */ = {
@@ -98,8 +89,8 @@
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
-				726382F33FFEF09548C3D678 /* Pods */,
-				067071BC5B996566C7C929B0 /* ExpoModulesProviders */,
+				CCFE13A6E89BD91E755E14A4 /* Pods */,
+				E0B911122E3C1918BAAC41F6 /* ExpoModulesProviders */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -123,12 +114,22 @@
 			path = Yugen/Supporting;
 			sourceTree = "<group>";
 		};
-		C6B0D0E75B3CD58821182835 /* Yugen */ = {
+		CCFE13A6E89BD91E755E14A4 /* Pods */ = {
 			isa = PBXGroup;
 			children = (
-				1CCF54CD5975C3A154EDD6E8 /* ExpoModulesProvider.swift */,
+				7398A7C0DB4AB12ACE213ACE /* Pods-Yugen.debug.xcconfig */,
+				A92EE65C74FD9DC15CAE4659 /* Pods-Yugen.release.xcconfig */,
 			);
-			name = Yugen;
+			name = Pods;
+			path = Pods;
+			sourceTree = "<group>";
+		};
+		E0B911122E3C1918BAAC41F6 /* ExpoModulesProviders */ = {
+			isa = PBXGroup;
+			children = (
+				273EBC44CBE708CB1D63FDD6 /* Yugen */,
+			);
+			name = ExpoModulesProviders;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -139,13 +140,13 @@
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "Yugen" */;
 			buildPhases = (
 				08A4A3CD28434E44B6B9DE2E /* [CP] Check Pods Manifest.lock */,
-				E4CDCD49A077C40BA3311E2F /* [Expo] Configure project */,
+				0E26D74D8BDA8C805A4AC790 /* [Expo] Configure project */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */,
-				32372B61EA7AB47E48A91B34 /* [CP] Embed Pods Frameworks */,
+				43F40B875EFCBF8791D26F15 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -195,7 +196,7 @@
 				BB2F792D24A3F905000567C9 /* Expo.plist in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
-				9FCBAEF4C4B62C2E8860BCEC /* PrivacyInfo.xcprivacy in Resources */,
+				ABE2B596AF0EA3C5ACD590F0 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -239,7 +240,26 @@
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
-		32372B61EA7AB47E48A91B34 /* [CP] Embed Pods Frameworks */ = {
+		0E26D74D8BDA8C805A4AC790 /* [Expo] Configure project */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "[Expo] Configure project";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-Yugen/expo-configure-project.sh\"\n";
+		};
+		43F40B875EFCBF8791D26F15 /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -301,25 +321,6 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Yugen/Pods-Yugen-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
-		E4CDCD49A077C40BA3311E2F /* [Expo] Configure project */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			name = "[Expo] Configure project";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-Yugen/expo-configure-project.sh\"\n";
-		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -328,7 +329,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
-				760173A834967EDFEFD233CA /* ExpoModulesProvider.swift in Sources */,
+				E3051D29C8629D08B2AF4FDA /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -337,7 +338,7 @@
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = FEBD309A58B10E63EA7872DD /* Pods-Yugen.debug.xcconfig */;
+			baseConfigurationReference = 7398A7C0DB4AB12ACE213ACE /* Pods-Yugen.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -374,7 +375,7 @@
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = EC1C88FE7B81B6009648806D /* Pods-Yugen.release.xcconfig */;
+			baseConfigurationReference = A92EE65C74FD9DC15CAE4659 /* Pods-Yugen.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;

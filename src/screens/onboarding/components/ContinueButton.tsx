@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, TouchableOpacity, Text, ActivityIndicator } from 'react-native';
+import { MinimalSpinner } from '../../../components/ui/MinimalSpinner';
 
 interface ContinueButtonProps {
   onContinue: () => void;
@@ -23,7 +24,9 @@ export function ContinueButton({ onContinue, isLoading = false }: ContinueButton
       >
         {isLoading ? (
           <>
-            <ActivityIndicator size="small" color="white" style={{ marginRight: 8 }} />
+            <View style={{ marginRight: 8 }}>
+              <MinimalSpinner size={20} color="#FFFFFF" thickness={2} />
+            </View>
             <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16 }}>Generating Plan...</Text>
           </>
         ) : (

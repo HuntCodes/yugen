@@ -25,6 +25,7 @@ import * as feedbackService from '../../services/feedback/feedbackService';
 // Import the new hooks and types
 import { ChatMessage as CoreChatMessage, MessageHandlerParams } from '../../hooks/chat/useMessageTypes'; // Renamed to avoid conflict
 import { useMessageFormatting } from '../../hooks/chat/useMessageFormatting'; // Import for system prompt
+import { MinimalSpinner } from '../ui/MinimalSpinner';
 
 // Constants
 const SUPABASE_URL = environment.supabaseUrl; // Ensure this is correctly configured in your environment
@@ -378,8 +379,8 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
   // --- AI CONFIGURATION ---
   const configureAIInstructions = useCallback((dc: any) => { 
     if (dc && dc.readyState === 'open') {
-        // Get basic system instructions
-        const systemInstructions = buildSystemPrompt();
+        // Get basic system instructions with today's and tomorrow's training
+        const systemInstructions = buildSystemPrompt(currentTrainingPlan || undefined);
         
         // Get tools definition
         const toolsDefinition = getToolsDefinitionForRealtimeAPI();
@@ -1519,7 +1520,7 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
         ) : isLoading || isConnecting ? (
           /* Loading State */
           <View className="items-center justify-center py-8">
-          <ActivityIndicator size="large" color="#8B5CF6" />
+          <MinimalSpinner size={48} color="#8B5CF6" thickness={3} />
             <Text className="mt-4 text-gray-600 text-center">
               {isConnecting ? "Connecting to coach..." : "Setting up voice chat..."}
           </Text>
@@ -1613,9 +1614,9 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
 
       {/* Tool Execution Indicator */}
       {isExecutingTool && (
-        <View className="flex-row items-center justify-center my-2">
-          <ActivityIndicator size="small" color="#8B5CF6" />
-          <Text className="ml-2 text-gray-600">Processing request...</Text>
+        <View style={styles.toolExecutionIndicator}>
+          <MinimalSpinner size={20} color="#8B5CF6" thickness={2} />
+          <Text style={styles.toolExecutionText}>Processing request...</Text>
         </View>
       )}
       
@@ -1773,7 +1774,29 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
     paddingHorizontal: 20,
-  }
+  },
+  loadingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    flex: 1,
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#555',
+    textAlign: 'center',
+  },
+  toolExecutionIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+  },
+  toolExecutionText: {
+    marginLeft: 10,
+    fontSize: 14,
+    color: '#555',
+  },
 });
 
 export default DailyVoiceChat; 

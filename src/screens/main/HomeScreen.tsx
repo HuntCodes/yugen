@@ -10,7 +10,7 @@ import { useAuth } from '../../context/AuthContext';
 import { Coach } from '../../types/coach';
 import { TrainingCardMini } from './components/TrainingCardMini';
 import { ChatMini } from './components/ChatMini';
-import { MileageGraph } from '../../components/training/MileageGraph';
+import { MileageGraphCard } from './components/MileageGraphCard';
 import { TrainingSession } from './training/components/types';
 import { COACHES } from '../../lib/constants/coaches';
 import { useChatFlow, ChatMessage } from '../../hooks/useChatFlow';
@@ -19,6 +19,9 @@ import { fetchTrainingPlan, applyPlanUpdate } from '../../services/plan/planServ
 import { fetchChatHistory } from '../../services/chat/chatService';
 import { PlanUpdate } from '../../types/planUpdate';
 import { Feather } from '@expo/vector-icons';
+import { MinimalSpinner } from '../../components/ui/MinimalSpinner';
+import { useFont, SkFont } from '@shopify/react-native-skia';
+import interMedium from '../../assets/fonts/Inter-Medium.ttf';
 
 // Import js-joda for robust local date handling
 import { LocalDate, DayOfWeek, TemporalAdjusters, ZoneId } from '@js-joda/core';
@@ -26,6 +29,7 @@ import '@js-joda/timezone'; // Required for ZoneId.systemDefault() and other tim
 
 // Import the actual DailyVoiceChat component
 import DailyVoiceChat from '../../components/chat/DailyVoiceChat';
+import { VoiceCheckIn } from './components/VoiceCheckIn';
 
 // Map of coach IDs to images
 const coachImages = {
@@ -72,6 +76,7 @@ export function HomeScreen() {
   const [waitingForResponse, setWaitingForResponse] = useState(false);
   const [joinDate, setJoinDate] = useState<Date | null>(null);
   const [isDailyVoiceModeActive, setIsDailyVoiceModeActive] = useState(false);
+  const graphFont = useFont(interMedium, 10);
   
   const { isTyping, error: chatError, processUserMessage } = useChatFlow();
   const weeklyMileage = useMileageData(upcomingSessions);
@@ -280,7 +285,6 @@ export function HomeScreen() {
           messageForUser = "Current week's plan missing. Generating...";
         } else {
           console.log('[checkIfPlanUpdateNeeded] Plan for current week is (at least partially) in place.');
-          relevantWeekStatusMessage = "Plan for the current week is in place.";
         }
       }
 
@@ -300,7 +304,7 @@ export function HomeScreen() {
            setPlanUpdateStatus({
             needsUpdate: false,
              isLoading: false,
-             message: relevantWeekStatusMessage, // Update message if plan is in place
+             message: '', // Don't set the message to the label
             targetDateForGeneration: null,
            });
         }
@@ -456,7 +460,8 @@ export function HomeScreen() {
         session.user.id, 
         profile, 
         upcomingSessions,
-        handleCoachResponse
+        handleCoachResponse,
+        fetchUserData
       );
     } catch (error) {
       console.error('Error processing message:', error);
@@ -496,19 +501,29 @@ export function HomeScreen() {
     console.log('[HomeScreen] Refreshing home data...');
     if (session?.user) {
       try {
+        // Refresh all user data
+        await fetchUserData();
         // Refresh chat history
         await loadChatHistory(session.user.id);
-        console.log('[HomeScreen] Chat history refreshed successfully.');
+        console.log('[HomeScreen] All data refreshed successfully.');
       } catch (error) {
         console.error('[HomeScreen] Error refreshing home data:', error);
       }
     }
-  }, [session, loadChatHistory]);
+  }, [session, loadChatHistory, fetchUserData]);
+
+  // Add useFocusEffect to refresh data when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      console.log('[HomeScreen] Screen focused, refreshing data...');
+      refreshHomeData();
+    }, [refreshHomeData])
+  );
 
   if (loading) {
     return (
       <SafeAreaView className="flex-1 bg-[#FBF7F6] px-6 justify-center items-center">
-        <ActivityIndicator size="large" color="#000000" />
+        <MinimalSpinner size={48} color="#BDBDBD" thickness={3} />
       </SafeAreaView>
     );
   }
@@ -522,7 +537,7 @@ export function HomeScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#F3F4F6' }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#FBF7F6' }}>
       <ScrollView ref={scrollRef} contentContainerStyle={{ paddingBottom: 20 }}>
         <View style={{ marginBottom: 32, marginTop: 16 }}>
           <View className="px-6 pt-4 pb-2">
@@ -571,27 +586,13 @@ export function HomeScreen() {
             />
           ) : (
             <View>
-              <View style={styles.voiceModeToggleContainer}>
-                {coach && coachImages[coach.id as keyof typeof coachImages] && (
-                  <View className="relative mb-2">
-                    <Image source={coachImages[coach.id as keyof typeof coachImages]} style={styles.coachAvatarSmall} />
-                    <View 
-                      className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white"
-                    />
-                  </View>
-                )}
-                <TouchableOpacity 
-                  className="flex-row items-center bg-purple-500 py-3 px-5 rounded-full shadow-md mb-2.5" 
-                  onPress={() => setIsDailyVoiceModeActive(true)}
-                >
-                  <Feather name="mic" size={24} color="white" />
-                  <Text className="text-white ml-2 text-base font-bold font-inter">Check in with your coach</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => {/* This will switch to text chat, which is the default when isDailyVoiceModeActive is false */ setIsDailyVoiceModeActive(false);}}>
-                   {/* Text chat is the default, so this button might not be needed if voice is overlay or separate section */}
-                </TouchableOpacity>
-              </View>
-               <ChatMini 
+              <VoiceCheckIn
+                coachId={coach.id}
+                coachName={coach.name}
+                imageMap={coachImages as Record<string, any>}
+                onActivateVoice={() => setIsDailyVoiceModeActive(true)}
+              />
+              <ChatMini 
                 coachName={coach.name}
                 coachId={coach.id}
                 imageMap={coachImages as Record<string, any>}
@@ -599,29 +600,30 @@ export function HomeScreen() {
                 isTyping={isTyping || waitingForResponse} 
                 messages={chatMessages}
               />
-              {/* <TouchableOpacity onPress={() => setIsDailyVoiceModeActive(true)} style={styles.switchToVoiceMessageButton}> 
-                  <Text style={styles.switchToVoiceMessageText}>Or, talk to your coach instead</Text>
-              </TouchableOpacity> */}
             </View>
           )}
         </View>
         
-        <View className="px-6 pt-2 pb-4">
-          <Text className="font-bold text-xl mb-3">Your Progress</Text>
-          {weeklyMileage && weeklyMileage.length > 0 ? (
-            <MileageGraph 
-              weeklyData={weeklyMileage} 
-              preferredUnit={profile?.preferred_unit || 'km'}
-            />
+        <View className="px-4 mt-6">
+          <Text className="text-2xl font-bold text-text-primary mb-1">Mileage Overview</Text>
+          {!graphFont ? (
+            <View style={{ height: 340, justifyContent: 'center', alignItems: 'center' }} className="bg-white rounded-lg p-4 shadow-sm">
+              <MinimalSpinner />
+              <Text className="text-sm text-text-secondary mt-2">Loading graph...</Text>
+            </View>
           ) : (
-            <Text className="text-gray-500 text-center py-4">No mileage data yet.</Text>
+            <MileageGraphCard 
+              weeklyData={weeklyMileage} 
+              preferredUnit={profile?.units || 'km'} 
+              font={graphFont}
+            />
           )}
         </View>
 
         {/* Plan Update UI */}
         {planUpdateStatus.isLoading && (
           <View style={styles.planUpdateContainer}>
-            <ActivityIndicator size="small" color="#007AFF" />
+            <MinimalSpinner size={24} color="#BDBDBD" thickness={2} />
             <Text style={styles.planUpdateText}>{planUpdateStatus.message}</Text>
           </View>
         )}
@@ -639,16 +641,8 @@ export function HomeScreen() {
 // Add styles for the new elements
 const styles = StyleSheet.create({
   chatSectionContainer: {
-    marginHorizontal: 16,
-    // marginTop: 24, // Will be controlled by inline style
-    // backgroundColor: 'white', // ChatMini might have its own background
-    // borderRadius: 12,
-    // padding: 16,
-    // shadowColor: '#000',
-    // shadowOffset: { width: 0, height: 1 },
-    // shadowOpacity: 0.05,
-    // shadowRadius: 2,
-    // elevation: 2,
+    marginHorizontal: 24,
+    paddingHorizontal: 0,
   },
   voiceModeToggleContainer: {
     flexDirection: 'column',
@@ -657,6 +651,13 @@ const styles = StyleSheet.create({
     padding: 12,
     backgroundColor: 'white',
     borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
   },
   coachAvatarSmall: {
     width: 60,

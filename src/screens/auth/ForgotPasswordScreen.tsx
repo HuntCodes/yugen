@@ -4,6 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 import { supabase } from '../../lib/api/supabase';
+import { MinimalSpinner } from '../../components/ui/MinimalSpinner';
 
 type ForgotPasswordScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'ForgotPassword'>;
 
@@ -128,7 +129,7 @@ export function ForgotPasswordScreen() {
           disabled={loading}
         >
           {loading ? (
-            <ActivityIndicator color="white" size="small" />
+            <MinimalSpinner size={20} color="#FFFFFF" thickness={2} />
           ) : (
             <Text style={{ color: 'white', fontWeight: '500', fontSize: 16 }}>
               Send Reset Instructions

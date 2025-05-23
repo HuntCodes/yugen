@@ -31,18 +31,39 @@ export function useSessionCard(
   // Helper function to get color for session type
   const getSessionTypeColor = (sessionType: string) => {
     const type = sessionType.toLowerCase();
+    
+    // Easy/Recovery runs
     if (type.includes('easy') || type.includes('recovery')) {
       return colors.easy;
-    } else if (type.includes('interval') || type.includes('speed') || type.includes('tempo')) {
+    }
+    // Speed/Power work
+    else if (type.includes('interval') || type.includes('speed') || type.includes('track') || 
+             type.includes('hill') || type.includes('strides')) {
       return colors.interval;
-    } else if (type.includes('long')) {
+    }
+    // Threshold/Tempo work
+    else if (type.includes('tempo') || type.includes('threshold') || type.includes('fartlek') ||
+             type.includes('progressive') || type.includes('race pace')) {
+      return colors.interval;
+    }
+    // Long runs and time trials
+    else if (type.includes('long') || type.includes('time trial')) {
       return colors.long;
-    } else if (type.includes('cross') || type.includes('strength')) {
+    }
+    // Cross training and strength
+    else if (type.includes('cross') || type.includes('strength')) {
       return colors.cross;
-    } else if (type.includes('rest')) {
+    }
+    // Rest and recovery
+    else if (type.includes('rest')) {
       return colors.rest;
     }
-    return colors.interval; // Default
+    // Race day
+    else if (type.includes('race day')) {
+      return colors.long; // Use long run color for race day
+    }
+    // Default for any unmatched types
+    return colors.interval;
   };
 
   // Get status display info

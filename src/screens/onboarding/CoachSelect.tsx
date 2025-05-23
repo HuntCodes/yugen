@@ -6,6 +6,7 @@ import { RootStackParamList } from '../../navigation/AppNavigator';
 import { supabase } from '../../lib/supabase';
 import { COACHES } from '../../lib/constants/coaches';
 import { checkProfileExists, createProfile, updateCoachSelection } from '../../services/profile';
+import { MinimalSpinner } from '../../components/ui/MinimalSpinner';
 
 type CoachSelectNavigationProp = NativeStackNavigationProp<RootStackParamList, 'CoachSelect'>;
 
@@ -105,7 +106,7 @@ export function CoachSelect() {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: 'white' }}>
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <ActivityIndicator size="large" color="#000000" />
+          <MinimalSpinner size={48} color="#000000" thickness={3} />
           <Text style={{ marginTop: 16, color: '#757575' }}>
             Loading...
           </Text>
@@ -205,7 +206,7 @@ export function CoachSelect() {
           disabled={!selectedCoach || loading}
         >
           {loading ? (
-            <ActivityIndicator color="white" size="small" />
+            <MinimalSpinner size={20} color="#FFFFFF" thickness={2} />
           ) : (
             <Text style={{ color: 'white', fontWeight: '500', fontSize: 16 }}>
               Continue with Coach

@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, ActivityIndicator, StyleSheet, Dimensions } from 'react-native';
+import { MinimalSpinner } from './MinimalSpinner';
 
 // Get screen dimensions
 const { width, height } = Dimensions.get('window');
@@ -16,7 +17,7 @@ export function LoadingOverlay({ visible, message, progress = 0 }: LoadingOverla
   return (
     <View style={styles.container}>
       <View style={styles.card}>
-        <ActivityIndicator size="large" color="#3B82F6" />
+        <MinimalSpinner size={48} color="#3B82F6" thickness={3} />
         
         <View style={{ height: 16 }} />
         

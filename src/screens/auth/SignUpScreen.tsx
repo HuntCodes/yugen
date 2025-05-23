@@ -4,6 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 import { useAuth } from '../../context/AuthContext';
+import { MinimalSpinner } from '../../components/ui/MinimalSpinner';
 
 type SignUpScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'SignUp'>;
 
@@ -146,7 +147,7 @@ export function SignUpScreen() {
           disabled={loading}
         >
           {loading ? (
-            <ActivityIndicator color="white" size="small" />
+            <MinimalSpinner size={20} color="#FFFFFF" thickness={2} />
           ) : (
             <Text style={{ color: 'white', fontWeight: '500', fontSize: 16 }}>Create Account</Text>
           )}

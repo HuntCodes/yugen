@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { TrainingSession } from '../../types/training';
 
-interface WeeklyMileage {
+export interface WeeklyMileage {
   weekNumber: number;
   plannedMileage: number;
   actualMileage: number;

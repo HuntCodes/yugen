@@ -12,7 +12,11 @@ interface TrainingCardMiniProps {
   navigation: BottomTabNavigationProp<TabParamList>;
 }
 
-export function TrainingCardMini({ sessions, onSessionUpdate, navigation }: TrainingCardMiniProps) {
+export function TrainingCardMini({ 
+  sessions = [], 
+  onSessionUpdate, 
+  navigation 
+}: TrainingCardMiniProps) {
   // Scroll state & dimensions
   const [scrollX, setScrollX] = useState(0);
   const spacing = 16; // space between cards
@@ -106,14 +110,19 @@ export function TrainingCardMini({ sessions, onSessionUpdate, navigation }: Trai
         </View>
         
         <View className="flex-row mb-2">
-          <Text className="bg-gray-100 px-2 py-1 rounded mr-2">{item.distance}km</Text>
-          <Text className="bg-gray-100 px-2 py-1 rounded mr-2">{item.time} min</Text>
+          <Text className="bg-gray-100 px-2 py-1 rounded mr-2">{item.distance === null || item.distance === 0 ? '0km' : `${item.distance}km`}</Text>
+          <Text className="bg-gray-100 px-2 py-1 rounded mr-2">{item.time === null || item.time === 0 ? '0 min' : `${item.time} min`}</Text>
           <Text className={`px-2 py-1 rounded ${statusInfo.bgColor} ${statusInfo.textColor}`}>
             {statusInfo.text}
           </Text>
         </View>
         
-        <Text numberOfLines={2} className="text-gray-700 text-sm mb-2">{item.notes}</Text>
+        {/* Fixed height container for notes with right padding to avoid arrow overlap */}
+        <View className="h-[48px] mb-2 pr-12"> 
+          <Text numberOfLines={2} className="text-gray-700 text-sm">
+            {item.notes || ' '}
+          </Text>
+        </View>
         
         <View className="flex-row items-center">
           <Text className="text-xs text-gray-600 mr-1">Suggested shoe:</Text>
@@ -128,63 +137,73 @@ export function TrainingCardMini({ sessions, onSessionUpdate, navigation }: Trai
     );
   };
 
+  // Slider indicator rendering function
+  const renderSliderIndicator = () => {
+    const num = displaySessions.length;
+    const segmentWidth = containerWidth / num;
+    const pageWidth = cardWidth + spacing;
+    // Calculate indicator left offset within container
+    const left = Math.min(
+      Math.max((scrollX / pageWidth) * segmentWidth, 0),
+      containerWidth - segmentWidth
+    );
+    
+    return (
+      <View
+        style={{
+          height: 2,
+          backgroundColor: '#E5E5E5',
+          width: containerWidth,
+          marginVertical: 8,
+          position: 'relative',
+        }}
+      >
+        <View
+          style={{
+            position: 'absolute',
+            height: 2,
+            backgroundColor: '#000',
+            width: segmentWidth,
+            left,
+          }}
+        />
+      </View>
+    );
+  };
+
+  // Main render
+  if (displaySessions.length === 0) {
+    return (
+      <View className="pl-6 pr-0 pt-2 pb-2">
+        <Text className="font-bold text-xl mb-3">Upcoming Sessions</Text>
+        <Text className="text-gray-500 text-center py-4">No upcoming sessions.</Text>
+      </View>
+    );
+  }
+
   return (
-    <View className="pl-6 pr-0 pt-2 pb-2" style={{ overflow: 'visible' }}>
+    <View className="pl-6 pr-0 pt-2" style={{ overflow: 'visible' }}>
       <Text className="font-bold text-xl mb-3">Upcoming Sessions</Text>
       
-      {displaySessions.length > 0 && (
-        <>
-          <ScrollView
-            horizontal
-            snapToInterval={cardWidth + spacing}
-            snapToAlignment="start"
-            decelerationRate="fast"
-            showsHorizontalScrollIndicator={false}
-            onScroll={({ nativeEvent }) => setScrollX(nativeEvent.contentOffset.x)}
-            scrollEventThrottle={16}
-            style={{ overflow: 'visible' }}
-            contentContainerStyle={{ paddingRight: spacing, overflow: 'visible' }}
-          >
-            {displaySessions.map(item => (
-              <View key={item.id} style={{ width: cardWidth, marginRight: spacing }}>
-                {renderSession(item)}
-              </View>
-            ))}
-          </ScrollView>
-          {/* Sliding segment indicator */}
-          {displaySessions.length > 1 && (() => {
-            const num = displaySessions.length;
-            const segmentWidth = containerWidth / num;
-            const pageWidth = cardWidth + spacing;
-            // Calculate indicator left offset within container
-            const left = Math.min(
-              Math.max((scrollX / pageWidth) * segmentWidth, 0),
-              containerWidth - segmentWidth
-            );
-            return (
-              <View
-                style={{
-                  height: 2,
-                  backgroundColor: '#E5E5E5',
-                  width: containerWidth,
-                  marginVertical: 8,
-                  position: 'relative',
-                }}
-              >
-                <View
-                  style={{
-                    position: 'absolute',
-                    height: 2,
-                    backgroundColor: '#000',
-                    width: segmentWidth,
-                    left,
-                  }}
-                />
-              </View>
-            );
-          })()}
-        </>
-      )}
+      <ScrollView
+        horizontal
+        snapToInterval={cardWidth + spacing}
+        snapToAlignment="start"
+        decelerationRate="fast"
+        showsHorizontalScrollIndicator={false}
+        onScroll={({ nativeEvent }) => setScrollX(nativeEvent.contentOffset.x)}
+        scrollEventThrottle={16}
+        style={{ overflow: 'visible' }}
+        contentContainerStyle={{ paddingRight: spacing, overflow: 'visible' }}
+      >
+        {displaySessions.map(item => (
+          <View key={item.id} style={{ width: cardWidth, marginRight: spacing }}>
+            {renderSession(item)}
+          </View>
+        ))}
+      </ScrollView>
+      
+      {displaySessions.length > 1 ? renderSliderIndicator() : null}
     </View>
   );
 } 

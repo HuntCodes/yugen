@@ -2,6 +2,7 @@ import React, { useEffect } from 'react'; // Import React and useEffect
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { NavigationContainer } from '@react-navigation/native'; // Restore NavigationContainer
 import { AuthProvider, useAuth } from './src/context/AuthContext'; // Import useAuth here
 import { AppNavigator } from './src/navigation/AppNavigator';
 import {
@@ -57,12 +58,14 @@ export default function App() {
 
   return (
     // Apply className directly to the base component
-    <GestureHandlerRootView className="flex-1 font-sans">
+    <GestureHandlerRootView className="flex-1">
       <SafeAreaProvider>
-        {/* AuthProvider now wraps AppContent */}
-        <AuthProvider>
-          <AppContent />
-        </AuthProvider>
+        {/* Changed nesting order: NavigationContainer -> AuthProvider */}
+        <NavigationContainer>
+          <AuthProvider>
+            <AppContent />
+          </AuthProvider>
+        </NavigationContainer>
         <StatusBar style="auto" />
       </SafeAreaProvider>
     </GestureHandlerRootView>

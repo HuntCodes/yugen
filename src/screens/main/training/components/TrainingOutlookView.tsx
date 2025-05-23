@@ -6,6 +6,7 @@ import { colors as appColors } from '../../../../styles/colors';
 import { Calendar, CalendarUtils, DateData } from 'react-native-calendars';
 import { LocalDate, TemporalAdjusters } from '@js-joda/core';
 import '@js-joda/locale_en-us'; // Ensure locale data is loaded for formatting
+import { MinimalSpinner } from '../../../../components/ui/MinimalSpinner';
 // import CustomDayForOutlook from '../../../../screens/main/training/components/CustomDayForOutlook'; // Temporarily remove custom day component
 
 // Define TrainingPhase enum locally as it's not exported from planAnalysis.ts
@@ -138,7 +139,7 @@ const TrainingOutlookView: React.FC = () => {
   }, [outlookData]);
 
   if (profileLoading) {
-    return <View style={styles.centeredContainer}><ActivityIndicator size="large" color={appColors.text.primary} /></View>;
+    return <View style={styles.centeredContainer}><MinimalSpinner size={48} color={appColors.text.primary} thickness={3} /></View>;
   }
 
   if (profileError) {

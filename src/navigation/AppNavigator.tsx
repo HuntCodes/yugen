@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, ActivityIndicator } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+// import { NavigationContainer } from '@react-navigation/native'; // Removed: No longer needed here
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { EntryScreen } from '../screens/entry/EntryScreen';
 import { LoginScreen } from '../screens/auth/LoginScreen';
@@ -13,6 +13,7 @@ import { TabNavigator } from './TabNavigator';
 import { supabase } from '../lib/supabase';
 import { ChatMessage } from '../types/chat';
 import { Session } from '@supabase/supabase-js';
+import { MinimalSpinner } from '../components/ui/MinimalSpinner';
 
 export type RootStackParamList = {
   Entry: undefined;
@@ -125,7 +126,7 @@ export function AppNavigator({ authLoading, session }: AppNavigatorProps) {
     console.log('AppNavigator Render: Showing Loading Indicator');
     return (
       <View className="flex-1 items-center justify-center bg-white">
-        <ActivityIndicator size="large" color="#3B82F6" />
+        <MinimalSpinner size={48} color="#3B82F6" thickness={3} />
       </View>
     );
   }
@@ -155,7 +156,7 @@ export function AppNavigator({ authLoading, session }: AppNavigatorProps) {
   console.log(`AppNavigator Render: Rendering Navigator with initialRouteName=${initialRouteName}`);
 
   return (
-    <NavigationContainer>
+    // <NavigationContainer> // This line and its closing tag are removed
       <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName={initialRouteName}>
         <Stack.Screen name="Entry" component={EntryScreen} />
         <Stack.Screen name="Login" component={LoginScreen} />
@@ -170,6 +171,6 @@ export function AppNavigator({ authLoading, session }: AppNavigatorProps) {
         <Stack.Screen name="Onboarding" component={OnboardingChat} />
         <Stack.Screen name="MainApp" component={TabNavigator} />
       </Stack.Navigator>
-    </NavigationContainer>
+    // </NavigationContainer> // This line is removed
   );
 } 

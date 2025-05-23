@@ -1,5 +1,6 @@
 import React from 'react';
 import { TouchableOpacity, Text, ActivityIndicator, StyleProp, ViewStyle, TextStyle } from 'react-native';
+import { MinimalSpinner } from './MinimalSpinner';
 
 interface ButtonProps {
   onPress: () => void;
@@ -11,6 +12,9 @@ interface ButtonProps {
   style?: StyleProp<ViewStyle>;
   textStyle?: StyleProp<TextStyle>;
   fullWidth?: boolean;
+  textColor?: string;
+  activityIndicatorSize?: 'small' | 'medium' | 'large';
+  iconLeft?: boolean;
 }
 
 /**
@@ -26,6 +30,9 @@ export function Button({
   style,
   textStyle,
   fullWidth = false,
+  textColor,
+  activityIndicatorSize,
+  iconLeft,
 }: ButtonProps) {
   const getVariantStyle = () => {
     switch (variant) {
@@ -91,9 +98,10 @@ export function Button({
       accessibilityState={{ disabled }}
     >
       {loading ? (
-        <ActivityIndicator
-          size="small"
-          color={variant === 'primary' ? 'white' : 'black'}
+        <MinimalSpinner 
+          size={activityIndicatorSize === 'large' ? 36 : 20} 
+          color={textColor ? textColor : '#FFFFFF'} 
+          thickness={2}
         />
       ) : (
         <Text

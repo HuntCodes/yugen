@@ -11,6 +11,7 @@ import type { ProfileStackParamList } from '../../navigation/ProfileNavigator';
 import { LinearGradient } from 'expo-linear-gradient';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { SegmentedControl } from '../../components/ui/SegmentedControl';
+import { MinimalSpinner } from '../../components/ui/MinimalSpinner';
 
 // Helper function to get coach images (moved outside component for clarity)
 function getCoachImage(coachId: string) {
@@ -204,7 +205,7 @@ export function ProfileScreen() {
     return (
       <Screen style={{ backgroundColor: '#FFFFFF' }}>
         <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color="#000" />
+          <MinimalSpinner size={48} color="#000000" thickness={3} />
           <Text className="mt-2">Loading profile...</Text>
         </View>
       </Screen>
@@ -215,11 +216,11 @@ export function ProfileScreen() {
     <Screen style={{ backgroundColor: '#FFFFFF' }}>
       <ScrollView className="px-6">
         {/* Purple Gradient Banner Wrapper */}
-        <View className="rounded-lg mt-4 mb-4 overflow-hidden shadow-sm"> 
+        <View className="rounded-lg mt-4 mb-8 overflow-hidden shadow-sm"> 
           <LinearGradient
-            colors={['#a77bf3', '#7448c8']}
+            colors={['#a587e4', '#38418D']}
             start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
+            end={{ x: 1, y: 1 }}
           >
             <View className="p-6">
               <View className="flex-row items-center mb-4">
@@ -239,7 +240,7 @@ export function ProfileScreen() {
         </View>
 
         {coach && (
-          <View className="p-4 bg-[#FBF7F6] rounded-lg mb-4">
+          <View className="p-4 bg-[#FBF7F6] rounded-lg mb-8">
             <Text className="font-bold mb-2">Your Coach</Text>
             <View className="flex-row items-center">
               {coach.image ? (
@@ -260,7 +261,7 @@ export function ProfileScreen() {
         )}
 
         {/* Profile Section */}
-        <View className="p-4 bg-[#FBF7F6] rounded-lg">
+        <View className="p-4 bg-[#FBF7F6] rounded-lg mb-8">
           <Text className="font-bold mb-4">Running Profile</Text>
           
           {/* Collapsed profile summary (show when not expanded) */}

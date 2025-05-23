@@ -10,6 +10,7 @@ import { ProductCard } from '../../components/gear/ProductCard';
 import { ProductDetail } from '../../components/gear/ProductDetail';
 import { CategoryFilter } from '../../components/gear/CategoryFilter';
 import { HeaderBar } from './training/components/HeaderBar';
+import { MinimalSpinner } from '../../components/ui/MinimalSpinner';
 
 export function GearScreen() {
   const { session } = useAuth();
@@ -75,7 +76,7 @@ export function GearScreen() {
   );
 
   return (
-    <Screen className="py-4 px-6" style={{ backgroundColor: '#FBF7F6' }}>
+    <Screen className="py-4 px-6" style={{ backgroundColor: '#FBF7F6', flex: 1 }}>
       <HeaderBar title="Gear Recommendations" />
 
       <CategoryFilter 
@@ -87,7 +88,7 @@ export function GearScreen() {
 
       {loading ? (
         <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color="#000" />
+          <MinimalSpinner size={48} color="#000000" thickness={3} />
           <Text className="mt-2">Loading recommendations...</Text>
         </View>
       ) : (

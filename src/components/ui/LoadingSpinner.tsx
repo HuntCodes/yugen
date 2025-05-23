@@ -1,12 +1,13 @@
 import React from 'react';
 import { View, ActivityIndicator, Text, StyleProp, ViewStyle } from 'react-native';
+import { MinimalSpinner } from './MinimalSpinner';
 
 interface LoadingSpinnerProps {
   size?: 'small' | 'large';
   color?: string;
   text?: string;
-  fullscreen?: boolean;
-  style?: StyleProp<ViewStyle>;
+  tailwindClassName?: string;
+  fullScreen?: boolean;
 }
 
 /**
@@ -16,16 +17,17 @@ export function LoadingSpinner({
   size = 'large',
   color = '#000000',
   text,
-  fullscreen = false,
-  style,
+  tailwindClassName,
+  fullScreen = false,
 }: LoadingSpinnerProps) {
-  const containerStyle = fullscreen
-    ? 'flex-1 items-center justify-center bg-white'
-    : 'items-center justify-center py-4';
+  const numericSize = size === 'large' ? 48 : 24;
+  
+  const defaultTwClasses = fullScreen ? "flex-1 items-center justify-center bg-white" : "items-center justify-center py-4";
+  const finalTwClasses = tailwindClassName || defaultTwClasses;
 
   return (
-    <View style={style} className={containerStyle}>
-      <ActivityIndicator size={size} color={color} />
+    <View className={finalTwClasses}>
+      <MinimalSpinner size={numericSize} color={color} thickness={size === 'large' ? 3 : 2} />
       {text && (
         <Text className="text-gray-500 mt-4 text-center">{text}</Text>
       )}

@@ -42,7 +42,7 @@ export const fetchChatHistory = async (userId: string, limit = 50): Promise<Chat
       .from('coach_messages')
       .select('*')
       .eq('user_id', userId)
-      .order('created_at', { ascending: true })
+      .order('created_at', { ascending: false })
       .limit(limit);
       
     if (fetchError) {
@@ -52,8 +52,9 @@ export const fetchChatHistory = async (userId: string, limit = 50): Promise<Chat
     // Map the database format to our ChatMessage format
     const formattedMessages: ChatMessage[] = data.map(item => ({
       sender: item.sender,
-      message: item.message
-    }));
+      message: item.message,
+      timestamp: item.created_at
+    })).sort((a, b) => new Date(a.timestamp!).getTime() - new Date(b.timestamp!).getTime());
     
     return formattedMessages;
   } catch (err) {

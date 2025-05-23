@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Modal, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 import { Text } from '../../../../components/ui/StyledText';
+import { MinimalSpinner } from '../../../../components/ui/MinimalSpinner';
 
 export interface UpdateSessionModalProps {
   isVisible: boolean;
@@ -32,7 +33,7 @@ export const UpdateSessionModal: React.FC<UpdateSessionModalProps> = ({
       
           <View style={styles.buttonContainer}>
             {isUpdating ? (
-              <ActivityIndicator size="small" color="#007AFF" />
+              <MinimalSpinner size={20} color="#007AFF" thickness={2} />
             ) : (
               <>
         <TouchableOpacity

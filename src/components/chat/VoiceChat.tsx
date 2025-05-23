@@ -24,6 +24,7 @@ import { coachStyles } from '../../config/coachingGuidelines';
 // Import the saveMessage function
 import { saveMessage } from '../../services/chat/chatService';
 import * as Animatable from 'react-native-animatable'; // Import Animatable
+import { MinimalSpinner } from '../ui/MinimalSpinner';
 
 // Create a Logger helper for debugging audio issues
 const AudioDebugLogger = {
@@ -1088,7 +1089,7 @@ Provide specific, actionable advice tailored to the athlete's needs.`;
             <View className="items-center justify-center my-2">
                 {isConnecting ? (
                   <>
-                  <ActivityIndicator size="large" color="#8B5CF6" />
+                  <MinimalSpinner size={48} color="#8B5CF6" thickness={3} />
                   <Text className="mt-2 text-gray-600">Connecting to your coach...</Text>
                   </>
                 ) : isListening ? (
