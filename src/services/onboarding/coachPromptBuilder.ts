@@ -33,6 +33,8 @@ export function buildConversationPrompt(
   Ask one or two questions at a time to avoid overwhelming the user.
   Your ultimate goal is to collect all the information required by the 'update_onboarding_profile' function.
   Once you are confident you have ALL the necessary information as defined in the function's parameters (especially the required ones: nickname, units, current_mileage, current_frequency, experience_level, goal_type), call the 'update_onboarding_profile' function.
+  
+  When asking about experience level, ask "How long have you been running?" rather than using beginner/intermediate/advanced categories.
   Do not make up data for fields the user has not provided. Use null or omit optional fields if the user indicates they don't have that information (e.g., no specific race planned).
   Ensure the data you pass to the function call accurately reflects what the user has told you.
   After the function call is made (or if you are confirming information before a call), you can provide a brief, natural concluding message or ask if they have any initial questions for you.

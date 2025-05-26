@@ -1,6 +1,5 @@
 import React from 'react';
 import { View, Dimensions, Text } from 'react-native';
-import { LineChart } from 'react-native-gifted-charts';
 import { colors } from '../../styles/colors';
 
 interface WeeklyMileage {
@@ -31,20 +30,9 @@ export function MileageGraph({ weeklyData, preferredUnit, font }: MileageGraphPr
     );
   }
 
-  // Convert data for gifted-charts - planned mileage as primary data
-  const plannedData = weeklyData.map((data, index) => ({
-    value: convertMileage(data.plannedMileage),
-    label: `Week ${data.weekNumber}`,
-  }));
-
-  // Actual mileage as secondary data
-  const actualData = weeklyData.map((data, index) => ({
-    value: convertMileage(data.actualMileage),
-  }));
-
   // Calculate max value for Y-axis scaling
-  const allValues = [...plannedData.map(d => d.value), ...actualData.map(d => d.value)];
-  const maxValue = allValues.length > 0 ? Math.max(...allValues) : 0;
+  const allPlannedValues = weeklyData.map(d => convertMileage(d.plannedMileage));
+  const maxValue = allPlannedValues.length > 0 ? Math.max(...allPlannedValues) : 0;
 
   // Determine the top tick value for the Y-axis - round up to next 10
   let topTickValue: number;
@@ -67,21 +55,10 @@ export function MileageGraph({ weeklyData, preferredUnit, font }: MileageGraphPr
     yAxisLabelTexts.push(`${value} ${preferredUnit === 'km' ? 'km' : 'mi'}`);
   }
 
-  // Chart dimensions with proper spacing for labels and better space utilization
-  const yAxisLabelWidth = 50; // Space for y-axis labels
-  const rightPadding = 0; // Increased padding to accommodate full "Week X" label width
-  const leftPadding = 20; // Padding on the left for Week 1 label visibility
-  const chartWidth = screenWidth - 110; // Reduced chart width to prevent spillover naturally
+  // Chart dimensions
+  const yAxisLabelWidth = 50;
   const chartHeight = 220;
-  
-  // Better spacing calculation to prevent cramped labels
-  const availableWidth = chartWidth - yAxisLabelWidth - leftPadding - rightPadding;
-  const minSpacing = 60; // Minimum spacing to prevent cramped labels
-  const idealSpacing = weeklyData.length > 1 ? availableWidth / (weeklyData.length - 1) : minSpacing;
-  const spacing = Math.max(minSpacing, idealSpacing);
-  
-  // Set Week 1 at x=0 with padding for label visibility
-  const initialSpacing = leftPadding;
+  const chartPadding = 20;
 
   return (
     <View className="bg-white rounded-lg p-4" style={{ minHeight: 330 }}>
@@ -89,84 +66,112 @@ export function MileageGraph({ weeklyData, preferredUnit, font }: MileageGraphPr
       <View className="flex-row justify-center items-center mb-6">
         <View className="flex-row items-center mr-12">
           <View 
-            className="w-3 h-3 rounded-full mr-3" 
-            style={{ backgroundColor: colors.primary }}
+            className="w-3 h-3 rounded mr-3" 
+            style={{ backgroundColor: '#D1D5DB' }}
           />
           <Text className="text-text-primary font-medium">Planned</Text>
         </View>
         <View className="flex-row items-center">
           <View 
-            className="w-3 h-3 rounded-full mr-3" 
+            className="w-3 h-3 rounded mr-3" 
             style={{ backgroundColor: colors.success }}
           />
-          <Text className="text-text-primary font-medium">Actual</Text>
+          <Text className="text-text-primary font-medium">Completed</Text>
         </View>
       </View>
 
-      {/* Single Chart with both data series */}
-      <View style={{ height: 260 }}>
-        <LineChart
-          data={plannedData}
-          data2={actualData}
-          height={chartHeight}
-          width={chartWidth}
-          initialSpacing={initialSpacing}
-          spacing={spacing}
-          endSpacing={rightPadding}
-          
-          // Y-axis configuration
-          maxValue={topTickValue}
-          noOfSections={4}
-          yAxisLabelTexts={yAxisLabelTexts}
-          yAxisLabelWidth={yAxisLabelWidth}
-          yAxisColor={colors.text.secondary}
-          yAxisThickness={1}
-          yAxisTextStyle={{
-            color: colors.text.secondary,
-            fontSize: 12,
-            paddingRight: 8, // Add padding between labels and axis line
-          }}
-          
-          // X-axis configuration
-          xAxisColor={colors.text.secondary}
-          xAxisThickness={1}
-          xAxisLabelTextStyle={{
-            color: colors.text.secondary,
-            fontSize: 12,
-            textAlign: 'center',
-          }}
-          
-          // Grid lines
-          rulesType="solid"
-          rulesColor="#f3f4f6"
-          
-          // Planned line styling (primary data)
-          color={colors.primary}
-          thickness={2.5}
-          curved={true}
-          areaChart={true}
-          startFillColor={colors.primary}
-          endFillColor={colors.primary}
-          startOpacity={0.15}
-          endOpacity={0.05}
-          dataPointsColor={colors.primary}
-          dataPointsRadius={4}
-          
-          // Actual line styling (secondary data) - only basic properties
-          color2={colors.success}
-          thickness2={2.5}
-          dataPointsColor2={colors.success}
-          dataPointsRadius2={4}
-          
-          // Additional styling
-          backgroundColor="transparent"
-          hideDataPoints={false}
-          hideDataPoints2={false}
-          
-          // Animation
-          animateOnDataChange={true}
-          animationDuration={800}
-        />
+      {/* Custom Bar Chart */}
+      <View style={{ height: 280, paddingLeft: yAxisLabelWidth, paddingRight: chartPadding }}>
+        {/* Y-axis labels and grid lines - positioned together */}
+        <View className="absolute left-0 right-5 top-2 bottom-8" style={{ height: chartHeight }}>
+          {yAxisLabelTexts.reverse().map((label, index) => {
+            const positionRatio = index / (yAxisLabelTexts.length - 1);
+            const topPosition = positionRatio * chartHeight - 6; // Subtract half text height for centering
+            
+            return (
+              <View key={index}>
+                {/* Y-axis label */}
+                <View 
+                  className="absolute items-end pr-2"
+                  style={{ 
+                    width: yAxisLabelWidth,
+                    top: topPosition,
+                  }}
+                >
+                  <Text className="text-xs text-gray-600">
+                    {label}
+                  </Text>
+                </View>
+                
+                {/* Grid line */}
+                <View 
+                  className="absolute border-t border-gray-200"
+                  style={{ 
+                    left: yAxisLabelWidth + 2,
+                    right: 0,
+                    top: topPosition + 6, // Add back the offset for grid line
+                    height: 1
+                  }}
+                />
+              </View>
+            );
+          })}
+        </View>
+
+        {/* Bars container - aligned with chart area */}
+        <View className="absolute left-12 right-5 top-2 bottom-8" style={{ height: chartHeight }}>
+          <View className="flex-1 flex-row justify-between items-end">
+            {weeklyData.map((data, index) => {
+              const plannedValue = convertMileage(data.plannedMileage);
+              const actualValue = convertMileage(data.actualMileage);
+              const barHeight = (plannedValue / topTickValue) * chartHeight;
+              const actualHeight = (actualValue / topTickValue) * chartHeight;
+              
+              return (
+                <View key={data.weekNumber} className="items-center flex-1">
+                  {/* Bar container - positioned relative to the chart baseline */}
+                  <View className="relative" style={{ width: 32, height: barHeight > 0 ? barHeight : 2 }}>
+                    {/* Background grey bar (planned) */}
+                    <View 
+                      className="absolute bottom-0 w-full"
+                      style={{ 
+                        height: '100%',
+                        backgroundColor: '#D1D5DB',
+                        borderRadius: 4,
+                      }}
+                    />
+                    {/* Green fill (actual) */}
+                    {actualHeight > 0 && (
+                      <View 
+                        className="absolute bottom-0 w-full"
+                        style={{ 
+                          height: `${Math.min(100, (actualHeight / Math.max(barHeight, 1)) * 100)}%`,
+                          backgroundColor: colors.success,
+                          borderRadius: 4,
+                        }}
+                      />
+                    )}
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+        
+
+        
+        {/* Week labels positioned closer to chart area */}
+        <View className="absolute left-12 right-5 bottom-4" style={{ height: 20 }}>
+          <View className="flex-row justify-between">
+            {weeklyData.map((data, index) => (
+              <View key={data.weekNumber} className="flex-1 items-center">
+                <Text className="text-xs text-gray-600 text-center">
+                  Week {data.weekNumber}
+                </Text>
+              </View>
+            ))}
+          </View>
+        </View>
       </View>
     </View>
   );

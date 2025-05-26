@@ -30,6 +30,7 @@ import '@js-joda/timezone'; // Required for ZoneId.systemDefault() and other tim
 // Import the actual DailyVoiceChat component
 import DailyVoiceChat from '../../components/chat/DailyVoiceChat';
 import { VoiceCheckIn } from './components/VoiceCheckIn';
+import { getSuggestedShoe } from '../../lib/utils/training/shoeRecommendations';
 
 // Map of coach IDs to images
 const coachImages = {
@@ -46,21 +47,6 @@ const DEFAULT_COACH: Coach = {
   philosophy: 'Run fast, rest hard. Recovery is key.',
   personalityBlurb: 'Aussie legend. Straight talker. Big on consistency.',
   image: 'craig.jpg'
-};
-
-// Function to suggest shoe based on session type
-const getSuggestedShoe = (sessionType: string): string => {
-  const type = sessionType.toLowerCase();
-  // Cloudmonster for easy runs, strength training, long runs
-  if (type.includes('easy') || type.includes('strength') || type.includes('long')) {
-    return 'Cloudmonster';
-  }
-  // Cloudboom Echo 4 for speed intervals, hills, fartlek
-  else if (type.includes('interval') || type.includes('hill') || type.includes('fartlek') || type.includes('speed')) {
-    return 'Cloudboom Echo 4';
-  }
-  // Default
-  return 'Cloudmonster';
 };
 
 export function HomeScreen() {
@@ -166,7 +152,7 @@ export function HomeScreen() {
         if (trainingPlan && trainingPlan.length > 0) {
           const updatedPlan = trainingPlan.map(session => ({
             ...session,
-            suggested_shoe: session.suggested_shoe || getSuggestedShoe(session.session_type),
+            suggested_shoe: session.suggested_shoe || getSuggestedShoe(session.session_type) || undefined,
             status: session.status || 'not_completed' as const
           }));
           setUpcomingSessions(updatedPlan as TrainingSession[]);
@@ -478,13 +464,31 @@ export function HomeScreen() {
     setWaitingForResponse(false);
   };
 
-  const handleDailyVoiceSessionComplete = useCallback((conversationHistory: ChatMessage[], confirmedPlanUpdate?: PlanUpdate) => {
+  const handleDailyVoiceSessionComplete = useCallback(async (conversationHistory: ChatMessage[], confirmedPlanUpdate?: PlanUpdate) => {
     console.log('Daily voice session complete. History:', conversationHistory);
     if (confirmedPlanUpdate) {
       console.log('Plan update confirmed:', confirmedPlanUpdate);
     }
-    setIsDailyVoiceModeActive(false); 
-  }, []);
+    
+    // Close voice mode first
+    setIsDailyVoiceModeActive(false);
+    
+    // Add a small delay to ensure Supabase operations complete before refreshing
+    setTimeout(async () => {
+      // Refresh chat history to show the new voice conversation in ChatMini
+      if (session?.user) {
+        try {
+          console.log('[HomeScreen] Refreshing chat history after voice session...');
+          console.log('[HomeScreen] Current chat messages count before refresh:', chatMessages.length);
+          await loadChatHistory(session.user.id);
+          console.log('[HomeScreen] Chat history refreshed successfully.');
+          console.log('[HomeScreen] Expected new chat messages count:', conversationHistory.length);
+        } catch (error) {
+          console.error('[HomeScreen] Error refreshing chat history after voice session:', error);
+        }
+      }
+    }, 500); // 500ms delay to ensure database operations complete
+  }, [session, loadChatHistory]);
 
   const handleDailyVoiceError = useCallback((errorMessage: string) => {
     console.error('Daily voice chat error:', errorMessage);

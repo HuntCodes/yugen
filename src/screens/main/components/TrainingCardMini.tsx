@@ -5,6 +5,7 @@ import { TrainingSession, SessionStatus } from '../training/components/types';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { TabParamList } from '../../../navigation/TabNavigator';
 import { Feather } from '@expo/vector-icons';
+import { getSuggestedShoe } from '../../../lib/utils/training/shoeRecommendations';
 
 interface TrainingCardMiniProps {
   sessions: TrainingSession[];
@@ -26,7 +27,7 @@ export function TrainingCardMini({
   const cardWidth = containerWidth - spacing;
   // Filter and sort sessions to only show upcoming ones
   const today = new Date();
-  today.setHours(0, 0, 0, 0); // Set to start of day
+  today.setHours(0, 0, 0, 0); // Set to start of day for timezone-aware comparison
 
   const upcomingSessions = sessions
     .filter(session => {
@@ -61,21 +62,6 @@ export function TrainingCardMini({
     } catch (err) {
       return dateString;
     }
-  };
-
-  // Get suggested shoe based on session type
-  const getSuggestedShoe = (sessionType: string) => {
-    const type = sessionType.toLowerCase();
-    // Cloudmonster for easy runs, strength training, long runs
-    if (type.includes('easy') || type.includes('strength') || type.includes('long')) {
-      return 'Cloudmonster';
-    }
-    // Cloudboom Echo 4 for speed intervals, hills, fartlek
-    else if (type.includes('interval') || type.includes('hill') || type.includes('fartlek') || type.includes('speed')) {
-      return 'Cloudboom Echo 4';
-    }
-    // Default
-    return 'Cloudmonster';
   };
 
   // Get status display information
@@ -124,10 +110,12 @@ export function TrainingCardMini({
           </Text>
         </View>
         
-        <View className="flex-row items-center">
-          <Text className="text-xs text-gray-600 mr-1">Suggested shoe:</Text>
-          <Text className="text-xs font-medium">{suggestedShoe}</Text>
-        </View>
+        {suggestedShoe && (
+          <View className="flex-row items-center">
+            <Text className="text-xs text-gray-600 mr-1">Suggested shoe:</Text>
+            <Text className="text-xs font-medium">{suggestedShoe}</Text>
+          </View>
+        )}
 
         {/* Right arrow indicator centered vertically */}
         <View style={{ position: 'absolute', right: 16, top: 0, bottom: 0, justifyContent: 'center' }}>

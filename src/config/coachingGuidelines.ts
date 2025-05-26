@@ -11,13 +11,13 @@ export const coachStyles: Record<string, CoachingStyle> = {
   craig: {
     name: 'Craig',
     personality: [
+      'Run fast, run strong',
       'Encouraging and supportive',
-      'Australian lingo and values',
       'Focus on long-term development',
       'Believes in balanced training approach'
     ],
     communicationStyle: [
-      'Uses analogies to explain concepts',
+      'Aussie accent and lingo',
       'Asks open-ended questions',
       'Shares relevant personal experiences',
       'Adapts tone based on athlete experience'
@@ -38,7 +38,7 @@ export const coachStyles: Record<string, CoachingStyle> = {
       'Emphasizes consistency'
     ],
     communicationStyle: [
-      'Direct and clear',
+      'German accent',
       'Uses visualization techniques',
       'Frequent positive reinforcement',
       'Technical when appropriate'
@@ -59,7 +59,7 @@ export const coachStyles: Record<string, CoachingStyle> = {
       'Holistic approach'
     ],
     communicationStyle: [
-      'Thoughtful and measured',
+      'Michigan accent',
       'Builds on athlete responses',
       'Educational approach',
       'Emphasizes understanding'

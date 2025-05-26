@@ -14,26 +14,12 @@ import { UpdateSessionModal, UpdateSessionModalProps } from './training/componen
 import { fetchTrainingPlan, generateAndSavePlan, refreshWeeklyPlan, checkNeedsRefresh } from '../../services/plan';
 import { fetchProfile } from '../../services/profile/profileService';
 import TrainingOutlookView from './training/components/TrainingOutlookView';
-import { formatDate as formatDateUtil, getDayOfWeek as getDayOfWeekUtil } from '../../lib/utils/dateUtils';
+import { formatDate as formatDateUtil, getDayOfWeek as getDayOfWeekUtil, getTodayYMD } from '../../lib/utils/dateUtils';
 import { MinimalSpinner } from '../../components/ui/MinimalSpinner';
+import { getSuggestedShoe } from '../../lib/utils/training/shoeRecommendations';
 
 // Add this type definition for layout storage
 type SessionLayout = { y: number; height: number };
-
-// Function to suggest shoe based on session type
-const getSuggestedShoe = (sessionType: string): string => {
-  const type = sessionType.toLowerCase();
-  // Cloudmonster for easy runs, strength training, long runs
-  if (type.includes('easy') || type.includes('strength') || type.includes('long')) {
-    return 'Cloudmonster';
-  }
-  // Cloudboom Echo 4 for speed intervals, hills, fartlek
-  else if (type.includes('interval') || type.includes('hill') || type.includes('fartlek') || type.includes('speed')) {
-    return 'Cloudboom Echo 4';
-  }
-  // Default
-  return 'Cloudmonster';
-};
 
 type TabView = 'Schedule' | 'Outlook';
 
@@ -246,9 +232,9 @@ export default function TrainingPlanScreen() {
       setSessions(processedSessions);
 
       // --- Find Target Session for Scrolling ---
-      const today = new Date();
-      const todayStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}-${today.getDate().toString().padStart(2, '0')}`;
-      // console.log(`[AutoScroll Debug] Today's date string: ${todayStr}`);
+      const todayStr = getTodayYMD(); // Use timezone-aware date formatting with js-joda
+      console.log(`[AutoScroll Debug] Today's date string (local timezone): ${todayStr}`);
+      console.log(`[AutoScroll Debug] Compare with UTC approach: ${new Date().toISOString().split('T')[0]}`);
 
       let targetSession: TrainingSession | null = null;
       let isFirst = false;
@@ -360,7 +346,8 @@ export default function TrainingPlanScreen() {
   // Auto-scroll to current day or first upcoming session
   useEffect(() => {
     if (sessions && sessions.length > 0 && scrollViewRef.current && sessionLayoutsRef.current) {
-      const todayISO = new Date().toISOString().split('T')[0];
+      const todayISO = getTodayYMD(); // Use js-joda for consistent timezone-aware formatting
+      console.log(`[AutoScroll Debug 2] Today's date string (local timezone): ${todayISO}`);
       let targetSessionId: string | null = null;
       let firstUpcomingSessionY: number | null = null;
       let currentDaySessionY: number | null = null;

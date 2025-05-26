@@ -76,11 +76,17 @@ export function ChatMini({ coachName, coachId, imageMap, onMessageSend, isTyping
     }
   };
 
-  // Handle suggestion tap
+    // Handle suggestion tap
   const handleSuggestionTap = (suggestionText: string) => {
     console.log('Suggestion tapped:', suggestionText);
     onMessageSend(suggestionText);
     // Remove the suggestion after sending
+    setSuggestions(prev => prev.filter(s => s !== suggestionText));
+  };
+
+  // Handle suggestion dismiss
+  const handleSuggestionDismiss = (suggestionText: string) => {
+    console.log('Suggestion dismissed:', suggestionText);
     setSuggestions(prev => prev.filter(s => s !== suggestionText));
   };
 
@@ -216,14 +222,25 @@ export function ChatMini({ coachName, coachId, imageMap, onMessageSend, isTyping
           <View className="mt-4 items-end">
             <Text className="text-xs text-gray-400 mb-2 px-1 self-end">Message suggestions:</Text>
             {suggestions.map((suggestion, index) => (
-              <TouchableOpacity
-                key={index}
-                className="mb-2 bg-white border border-gray-200 rounded-3xl px-4 py-3 self-end"
-                onPress={() => handleSuggestionTap(suggestion)}
-                activeOpacity={0.7}
-              >
-                <Text className="text-gray-500 text-sm">{suggestion}</Text>
-              </TouchableOpacity>
+              <View key={index} className="mb-2 flex-row items-center self-end">
+                {/* Dismiss button */}
+                <TouchableOpacity
+                  className="mr-2 w-6 h-6 rounded-full bg-gray-100 items-center justify-center"
+                  onPress={() => handleSuggestionDismiss(suggestion)}
+                  activeOpacity={0.7}
+                >
+                  <Feather name="x" size={12} color="#666" />
+                </TouchableOpacity>
+                
+                {/* Suggestion button */}
+                <TouchableOpacity
+                  className="bg-white border border-gray-200 rounded-3xl px-4 py-3"
+                  onPress={() => handleSuggestionTap(suggestion)}
+                  activeOpacity={0.7}
+                >
+                  <Text className="text-gray-500 text-sm">{suggestion}</Text>
+                </TouchableOpacity>
+              </View>
             ))}
           </View>
         )}

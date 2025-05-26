@@ -60,12 +60,11 @@ export default function App() {
     // Apply className directly to the base component
     <GestureHandlerRootView className="flex-1">
       <SafeAreaProvider>
-        {/* Changed nesting order: NavigationContainer -> AuthProvider */}
-        <NavigationContainer>
-          <AuthProvider>
+        <AuthProvider>
+          <NavigationContainer>
             <AppContent />
-          </AuthProvider>
-        </NavigationContainer>
+          </NavigationContainer>
+        </AuthProvider>
         <StatusBar style="auto" />
       </SafeAreaProvider>
     </GestureHandlerRootView>

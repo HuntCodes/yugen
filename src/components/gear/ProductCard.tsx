@@ -15,7 +15,7 @@ export function ProductCard({ product, onPress }: ProductCardProps) {
       onPress={() => onPress(product)}
     >
       <Image 
-        source={{ uri: product.image }}
+        source={typeof product.image === 'string' ? { uri: product.image } : product.image}
         className="w-24 h-24 rounded-md mr-4 bg-gray-100"
         resizeMode="contain"
       />

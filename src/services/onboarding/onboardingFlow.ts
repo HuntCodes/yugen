@@ -187,8 +187,7 @@ const updateOnboardingProfileTool = {
         },
         experience_level: {
           type: "string" as const,
-          enum: ["beginner", "intermediate", "advanced"] as const,
-          description: "The athlete's running experience level."
+          description: "How long the athlete has been running (e.g., '6 months', '2 years', '10+ years', 'just started', 'since high school')."
         },
         goal_type: {
           type: "string" as const,

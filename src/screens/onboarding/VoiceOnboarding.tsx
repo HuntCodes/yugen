@@ -51,6 +51,7 @@ export function VoiceOnboarding() {
   const [voiceConversationActuallyCompleted, setVoiceConversationActuallyCompleted] = useState(false);
   const [showContinueButtonStage, setShowContinueButtonStage] = useState(false);
   const [finalVoiceHistory, setFinalVoiceHistory] = useState<{role: 'user' | 'coach'; content: string}[]>([]);
+  const [waitingForCoachToFinishSpeaking, setWaitingForCoachToFinishSpeaking] = useState(false);
   
   const route = useRoute<VoiceOnboardingRouteProp>();
   const navigation = useNavigation<VoiceOnboardingNavigationProp>();
@@ -99,7 +100,21 @@ export function VoiceOnboarding() {
   const handleSpeakingStateChange = useCallback((speaking: boolean, speaker?: 'user' | 'coach') => {
     console.log('[VOICE_ONBOARDING] Speaking state changed to:', speaking, 'Speaker:', speaker || 'unknown');
     setIsCoachSpeaking(speaking);
-  }, []);
+    
+    // If we're waiting for the coach to finish speaking and they just stopped
+    if (waitingForCoachToFinishSpeaking && !speaking && speaker === 'coach') {
+      console.log('[VOICE_ONBOARDING] Coach finished speaking. Showing continue button after brief delay...');
+      setWaitingForCoachToFinishSpeaking(false);
+      
+      // Add a small buffer delay to ensure audio has fully played
+      setTimeout(() => {
+        setVoiceChatUIVisible(false); // Hide the actual VoiceChat UI component now
+        setTimeout(() => {
+          setShowContinueButtonStage(true);
+        }, 500); // Short delay before showing button
+      }, 1000); // 1 second buffer after coach stops speaking
+    }
+  }, [waitingForCoachToFinishSpeaking]);
   
   useEffect(() => {
     const setup = async () => {
@@ -123,6 +138,7 @@ export function VoiceOnboarding() {
     setVoiceChatManuallyClosed(true); 
     setVoiceChatActiveForAnimation(false);
     setIsCoachSpeaking(false);
+    setWaitingForCoachToFinishSpeaking(false);
   }, []);
   
   const handleVoiceChatError = useCallback((error: string) => {
@@ -158,25 +174,26 @@ export function VoiceOnboarding() {
   ) => {
     console.log('[VOICE_ONBOARDING] Transcript received from VoiceChat:', { isVoiceChatDone });
     
-    // setVoiceChatActiveForAnimation(false); // Only deactivate animation on final completion or error
-    
     if (isVoiceChatDone) {
       console.log('[VOICE_ONBOARDING] Voice chat is DONE. Full History:', JSON.stringify(fullVoiceChatHistory, null, 2));
       setFinalVoiceHistory(fullVoiceChatHistory);
       setVoiceConversationActuallyCompleted(true);
       setVoiceChatActiveForAnimation(false); // Deactivate animation here
       
-      const lastCoachMessage = fullVoiceChatHistory.findLast(h => h.role === 'coach')?.content || '';
-      const wordCount = lastCoachMessage.split(/\s+/).length;
-      const estimatedSeconds = Math.max(3, Math.min(15, wordCount / 2.5)); 
-      
-      console.log(`[VOICE_ONBOARDING] Waiting ${estimatedSeconds.toFixed(1)} seconds for final message TTS to complete before showing Continue button.`);
-      
-      await delay(Math.ceil(estimatedSeconds * 1000));
-      setVoiceChatUIVisible(false); // Hide the actual VoiceChat UI component now
-      
-      await delay(1000); // Short delay before showing button
-      setShowContinueButtonStage(true);
+      // Instead of using word count estimation, wait for the coach to actually finish speaking
+      if (isCoachSpeaking) {
+        console.log('[VOICE_ONBOARDING] Coach is still speaking. Waiting for them to finish...');
+        setWaitingForCoachToFinishSpeaking(true);
+      } else {
+        console.log('[VOICE_ONBOARDING] Coach is not speaking. Showing continue button after brief delay...');
+        // Coach is already done speaking, show continue button after a short delay
+        setTimeout(() => {
+          setVoiceChatUIVisible(false); // Hide the actual VoiceChat UI component now
+          setTimeout(() => {
+            setShowContinueButtonStage(true);
+          }, 500); // Short delay before showing button
+        }, 1000); // 1 second buffer
+      }
     } else {
       // This is an intermediate transcript update from VoiceChat.tsx (e.g., after each AI turn that's not the *final* one)
       // VoiceChat.tsx is still active and managing its UI and TTS.
@@ -185,7 +202,7 @@ export function VoiceOnboarding() {
       // We could update a running history here if needed, but VoiceChat.tsx passes the full history when done.
       // setVoiceChatActiveForAnimation(true); // Keep animation active if AI is about to speak or user can speak
     }
-  }, []); // Dependencies are correct
+  }, [isCoachSpeaking]); // Updated dependencies
   
   const handleSwitchToTextChat = () => {
     setShowTextChat(true);
@@ -204,6 +221,7 @@ export function VoiceOnboarding() {
     setVoiceChatActiveForAnimation(true);
     setShowContinueButtonStage(false); // Reset this stage
     setVoiceConversationActuallyCompleted(false); // Reset completion state
+    setWaitingForCoachToFinishSpeaking(false); // Reset waiting state
   };
   
   const getProgressValue = () => {

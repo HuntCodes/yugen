@@ -183,7 +183,7 @@ export function useMessageProcessing() {
       const trainingPlanText = formatTrainingPlanForPrompt(trainingPlan);
       const summariesText = ""; // Summaries deprecated for this part
       
-      const systemPromptContent = buildSystemPrompt(); // No longer takes profile/plan/summaries directly
+      const systemPromptContent = buildSystemPrompt(trainingPlan, profile?.coach_id);
 
       // Construct the messages payload for the AI
       // The userContextString will be prepended to the latest user message content

@@ -1,4 +1,4 @@
-export type ExperienceLevel = 'beginner' | 'intermediate' | 'advanced';
+export type ExperienceLevel = string; // How long they've been running (e.g., '6 months', '2 years', 'just started')
 export type Units = 'km' | 'miles';
 
 export interface OnboardingProfile {

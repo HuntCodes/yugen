@@ -167,9 +167,18 @@
           return true;
         }
 
-        // --- Helper: Placeholder for AI Plan Generation Logic ---
-        // This function would adapt your existing `generateTrainingPlan` from `src/lib/openai.ts`
-        // or a similar AI call to generate a 7-day plan.
+        // --- Helper: Extract training frequency for volume calculations ---
+        function extractTrainingFrequencyDeno(frequencyString: string): number {
+          const match = frequencyString.match(/(\d+)(?:-(\d+))?/);
+          if (match) {
+            const min = parseInt(match[1]);
+            const max = match[2] ? parseInt(match[2]) : min;
+            return Math.round((min + max) / 2);
+          }
+          return 4; // Default fallback
+        }
+
+        // --- Enhanced AI Plan Generation Logic (aligned with openai.ts) ---
         async function generateNewWeekPlanWithAI(
           onboardingData: OnboardingDataInternal,
           currentPhase: string, // ADDED: current training phase
@@ -181,91 +190,202 @@
             console.warn("[planServiceDeno] OpenAI client not available. Cannot generate AI plan.");
             return [];
           }
-          // Align prompt with OnboardingDataInternal fields
-          let prompt = `Generate a 7-day training plan (Monday to Sunday) for a user with the following profile:\n`;
-          prompt += `- Goal: ${onboardingData.goalType}\n`;
-          if (onboardingData.raceDate) prompt += `- Race Date: ${onboardingData.raceDate}\n`;
-          if (onboardingData.raceDistance) prompt += `- Race Distance: ${onboardingData.raceDistance}\n`;
-          prompt += `- Experience: ${onboardingData.experienceLevel}\n`;
-          prompt += `- Training Frequency: ${onboardingData.trainingFrequency}\n`;
-          prompt += `- Current Mileage: ${onboardingData.currentMileage} ${onboardingData.units}\n`;
-          if (onboardingData.injuryHistory) prompt += `- Injury History: ${onboardingData.injuryHistory}\n`;
-          if (onboardingData.scheduleConstraints) prompt += `- Schedule Constraints: ${onboardingData.scheduleConstraints}\n`;
-          if (onboardingData.nickname) prompt += `- Nickname: ${onboardingData.nickname}\n`;
+
+          // Extract training frequency and current mileage for volume calculations
+          const trainingFrequency = extractTrainingFrequencyDeno(onboardingData.trainingFrequency);
+          const currentMileageNumber = parseFloat(String(onboardingData.currentMileage).replace(/[^\d.]/g, '') || '0');
           
-          prompt += `\nINFO FOR PLAN STRUCTURE:\n`; // Added section for clarity
-          prompt += `- Current Training Phase: ${currentPhase}\n`; // ADDED
-          prompt += `- Week Number in Plan: ${weeksSincePlanStart + 1}\n`; // ADDED (assuming weeksSincePlanStart is 0-indexed)
-
-          if (latestFeedbackSummary) {
-            prompt += `\nRecent feedback summary: ${latestFeedbackSummary}\n`;
-          }
-
+          // Calculate target dates
           let targetMondayString = 'current Monday';
+          let targetSundayString = 'current Sunday';
           if (targetMondayDate) {
             const targetSundayDate = new Date(targetMondayDate);
             targetSundayDate.setUTCDate(targetMondayDate.getUTCDate() + 6);
             targetMondayString = targetMondayDate.toISOString().split('T')[0];
-            const targetSundayString = targetSundayDate.toISOString().split('T')[0];
-            prompt += `\nThe plan should be for the week starting Monday, ${targetMondayString}, and ending Sunday, ${targetSundayString}.\n`;
+            targetSundayString = targetSundayDate.toISOString().split('T')[0];
           }
-          prompt += `\nPlease provide the plan as a JSON array, where each object has: \"day_of_week\" (1 for Monday, ..., 7 for Sunday), \"session_type\" (e.g., \"Easy Run\", \"Tempo Run\", \"Long Run\", \"Rest\", \"Strength Training\"), \"date\" (YYYY-MM-DD format for the specific day of the target week), \"distance\" (in ${onboardingData.units}, null if not applicable), \"time\" (in minutes, null if not applicable), \"notes\" (brief description or instructions, null if none). Ensure dates align with the target week starting ${targetMondayString} and are within this Mon-Sun range. Include a \"phase\": \"${currentPhase}\" and \"week_number\": ${weeksSincePlanStart + 1} in each session object.`;
 
-          console.log("[planServiceDeno] Generating plan with prompt (first 300 chars):", prompt.substring(0,300));
+          // Build sophisticated system prompt (aligned with openai.ts)
+          const systemPrompt = `You are an expert running coach. Your task is to generate a personalized 7-day training plan (Monday to Sunday).
+
+VOLUME REQUIREMENTS:
+- The total weekly distance MUST closely match the user's current weekly volume (within 10-15%).
+- For high-mileage runners (80+ km/week or 50+ miles/week), consider double days (multiple sessions per day).
+- Track cumulative distance as you create each session to ensure weekly targets are met.
+- Prioritize meeting volume requirements over session count preferences if needed.
+
+DOUBLE DAY GUIDANCE:
+- For 80-120 km/week: Include 1-2 double days per week (easy run + workout, or easy AM + easy PM)
+- For 120+ km/week: Include 2-4 double days per week
+- Double days should typically be: morning easy run (30-60 min) + afternoon workout OR two easy runs
+- Format double days as separate session objects with the same date but different session_type (e.g., "Easy Run (AM)" and "Tempo Run (PM)")
+
+SESSION TYPE GUIDANCE:
+- Easy Run: Base aerobic development, comfortable effort
+- Easy Run + Strides: Easy run with 4-6 x 100m accelerations
+- Long Run: Weekly long effort for endurance building
+- Tempo Run: Comfortably hard sustained effort (threshold pace)
+- Progression Run: Start easy, finish at moderate-hard effort
+- Hills: Hill repeats or hill circuit for strength and power
+- Track Workout: Structured intervals on track (400m, 800m, mile repeats, etc.)
+- Fartlek: Unstructured speed play with varied efforts
+- Rest: Complete rest day
+- Cross Training: Non-running aerobic activity (cycling, swimming, etc.)
+- Strength Training: Resistance training focused on running-specific strength
+
+TECHNICAL REQUIREMENTS:
+After creating the plan, you MUST call the 'save_weekly_training_plan' function with the structured plan data.
+Each session object in the sessions array should have the following fields:
+- "day_of_week" (1 for Monday through 7 for Sunday)
+- "session_type" (use the session types from the guidance above)
+- "date" (YYYY-MM-DD format for the specific day)
+- "distance" (in specified units, null if not applicable like Rest days)
+- "time" (in minutes, null if not applicable)
+- "notes" (specific instructions, pace guidance, terrain notes, etc.)
+- "week_number" (the provided week number)
+- "phase" (the provided training phase)
+
+VOLUME VERIFICATION:
+Before finalizing the plan, mentally calculate the total weekly distance and ensure it matches the target volume.`;
+
+          // Build detailed user prompt
+          let userPrompt = `Generate a 7-day training plan for the week starting Monday, ${targetMondayString}, and ending Sunday, ${targetSundayString}.
+
+Runner Profile:
+- Name: ${onboardingData.nickname || 'Runner'}
+- Goal: ${onboardingData.goalType}`;
+          
+          if (onboardingData.raceDate) userPrompt += `\n- Race Date: ${onboardingData.raceDate}`;
+          if (onboardingData.raceDistance) userPrompt += `\n- Race Distance: ${onboardingData.raceDistance}`;
+          
+          userPrompt += `
+- Experience: ${onboardingData.experienceLevel}
+- Current Weekly Volume: ${onboardingData.currentMileage} ${onboardingData.units} ⚠️ CRITICAL: The plan MUST match this weekly volume (within 10-15%)
+- Desired Training Frequency: ${onboardingData.trainingFrequency} (${trainingFrequency} days per week). ${trainingFrequency >= 6 ? 'NOTE: High frequency may require double days to meet volume targets.' : 'Adhere to this frequency strictly or deviate by at most +/- 1 day per week.'}
+- Units for Plan: ${onboardingData.units}`;
+
+          if (onboardingData.injuryHistory) userPrompt += `\n- Injury History: ${onboardingData.injuryHistory}`;
+          if (onboardingData.scheduleConstraints) userPrompt += `\n- Schedule Constraints: ${onboardingData.scheduleConstraints}`;
+
+          userPrompt += `
+
+PLAN STRUCTURE INFO:
+- Current Training Phase: ${currentPhase}
+- Week Number in Plan: ${weeksSincePlanStart + 1}
+- Target Week: ${targetMondayString} to ${targetSundayString}`;
+
+          if (latestFeedbackSummary) {
+            userPrompt += `\n\nRecent feedback summary: ${latestFeedbackSummary}`;
+          }
+
+          userPrompt += `
+
+VOLUME TARGET:
+- Weekly target: ${onboardingData.currentMileage} ${onboardingData.units}`;
+
+          // Add high mileage guidance if applicable
+          if (currentMileageNumber >= 80) {
+            userPrompt += `
+
+HIGH MILEAGE RUNNER DETECTED (${onboardingData.currentMileage}):
+- Consider 1-4 double days per week depending on volume
+- Double sessions can be: Easy AM + Workout PM, or Easy AM + Easy PM  
+- Typical double day structure: 30-60 min easy run + main workout later`;
+          }
+
+          userPrompt += `
+
+Remember to call 'save_weekly_training_plan' with the complete list of sessions for this week. Structure each session according to the function's requirements and ensure total weekly volume matches the target.`;
+
+          // Define the function/tool for structured plan generation
+          const tools = [
+            {
+              type: "function" as const,
+              function: {
+                name: "save_weekly_training_plan",
+                description: "Saves the generated 7-day weekly training plan for the user.",
+                parameters: {
+                  type: "object",
+                  properties: {
+                    sessions: {
+                      type: "array",
+                      description: "An array of training session objects for the week (Monday to Sunday).",
+                      items: {
+                        type: "object",
+                        properties: {
+                          date: { type: "string", description: "Date of the session in YYYY-MM-DD format." },
+                          day_of_week: { type: "integer", description: "Day of the week (1 for Monday, 7 for Sunday)." },
+                          week_number: { type: "integer", description: "The week number in the training plan." },
+                          phase: { type: "string", description: "Training phase (e.g., 'Base', 'Build', 'Peak', 'Taper', 'Race Week', 'Recovery')." },
+                          session_type: { type: "string", description: "Type of session (e.g., 'Easy Run', 'Easy Run + Strides', 'Long Run', 'Rest', 'Tempo Run', 'Hills', 'Track Workout', 'Fartlek', 'Progression Run', 'Cross Training', 'Strength Training')." },
+                          distance: { type: "number", nullable: true, description: `Planned distance in ${onboardingData.units}. Null if not applicable.` },
+                          time: { type: "integer", nullable: true, description: "Planned duration in minutes. Null if not applicable." },
+                          notes: { type: "string", nullable: true, description: "Specific instructions or notes for the session." }
+                        },
+                        required: ["date", "day_of_week", "week_number", "phase", "session_type"]
+                      }
+                    }
+                  },
+                  required: ["sessions"]
+                }
+              }
+            }
+          ];
+
+          console.log("[planServiceDeno] Generating plan with enhanced prompt and function calling (first 300 chars):", userPrompt.substring(0,300));
 
           try {
-            // Old v3 ChatCompletionRequestMessage type might not be needed if using v4 direct params
+            // Use function calling approach (aligned with openai.ts)
             const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-              { role: "system", content: "You are a highly experienced running coach. Generate detailed, personalized 7-day training plans." },
-              { role: "user", content: prompt }
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userPrompt }
             ];
 
-            // const completion = await openai.createChatCompletion({ // Old v3 call
-            //   model: "gpt-4-turbo-preview",
-            //   messages: messages,
-            //   max_tokens: 1500,
-            //   temperature: 0.5,
-            // });
-            const completion = await openai.chat.completions.create({ // New v4 call
-              model: "gpt-4-turbo-preview",
+            const completion = await openai.chat.completions.create({
+              model: "gpt-4o-mini", // Use same model as openai.ts for consistency
               messages: messages,
-              max_tokens: 1500,
-              temperature: 0.5,
-              // response_format: { type: "json_object" }, // Still an option in v4 if desired
+              tools: tools,
+              tool_choice: {"type": "function", "function": {"name": "save_weekly_training_plan"}}, // Force calling the function
+              max_tokens: 3500, // Increased to accommodate double days for high-mileage runners
+              temperature: 0.5, // Slightly lower temperature for more deterministic plan structure
             });
 
-            // const content = completion.data.choices[0].message?.content; // Old v3 access
-            const content = completion.choices[0].message?.content; // New v4 access
-            if (!content) {
-              console.error("[planServiceDeno] OpenAI response was empty.");
+            const message = completion.choices[0].message;
+
+            // Handle function call response (aligned with openai.ts approach)
+            let planArray: AIPlanItem[] = [];
+            
+            if (message?.tool_calls && message.tool_calls.length > 0) {
+              const toolCall = message.tool_calls[0];
+              if (toolCall.function.name === "save_weekly_training_plan") {
+                console.log('[planServiceDeno] Successfully received tool call for save_weekly_training_plan.');
+                const rawArgs = toolCall.function.arguments;
+                try {
+                  const parsedArgs = JSON.parse(rawArgs);
+                  planArray = parsedArgs.sessions || [];
+                  
+                  if (!Array.isArray(planArray) || planArray.length === 0) {
+                    console.error("[planServiceDeno] Tool call returned empty or invalid sessions array:", planArray);
               return [];
             }
 
-            // Attempt to parse the JSON from the content.
-            // OpenAI might return text before/after the JSON block, so try to extract it.
-            const jsonMatch = content.match(/\`\`\`json\n(\[[\s\S]*\])\n\`\`\`/);
-            let planArray;
-            if (jsonMatch && jsonMatch[1]) {
-              planArray = JSON.parse(jsonMatch[1]);
+                  console.log(`[planServiceDeno] Function call returned ${planArray.length} sessions`);
+                } catch (e) {
+                  console.error('[planServiceDeno] Error parsing tool call arguments:', e, "\nRaw arguments:", rawArgs);
+                  return [];
+                }
             } else {
-              // Fallback: try parsing the whole content if no markdown block found
-              try {
-                planArray = JSON.parse(content);
-              } catch (e) {
-                console.error("[planServiceDeno] Failed to parse OpenAI plan response as JSON:", content, e);
-                // Potentially try to extract JSON from a less structured response or return error
+                console.warn(`[planServiceDeno] AI called an unexpected tool: ${toolCall.function.name}.`);
                 return [];
               }
-            }
-            
-            if (!Array.isArray(planArray)) {
-                console.error("[planServiceDeno] OpenAI response was not a JSON array:", planArray);
+            } else {
+              console.warn('[planServiceDeno] AI did not make a tool call as expected. Response content:', message?.content);
                 return [];
             }
 
             // Validate and map to ensure correct structure, e.g., ensure 'date' field is included for each session.
             // The prompt asks for 'date', so the AI should provide it.
-            return planArray
+            const processedSessions = planArray
               .filter((item: AIPlanItem) => item.date) // Filter out items without dates
               .map((item: AIPlanItem, index: number) => ({
                 day_of_week: item.day_of_week || (index + 1),
@@ -277,6 +397,31 @@
                 week_number: item.week_number || (weeksSincePlanStart + 1), // Use AI's week_number or calculated
                 phase: item.phase || currentPhase, // Use AI's phase or calculated currentPhase
               }));
+
+            // Log volume tracking for debugging (similar to openai.ts)
+            if (currentMileageNumber > 0) {
+              const weekVolume = processedSessions.reduce((total: number, s) => total + (s.distance || 0), 0);
+              
+              console.log(`[planServiceDeno] Volume Analysis:`);
+              console.log(`  Target: ${currentMileageNumber} ${onboardingData.units}/week`);
+              console.log(`  Generated: ${weekVolume} ${onboardingData.units} (${processedSessions.length} sessions)`);
+              console.log(`  Generated vs Target: ${((weekVolume / currentMileageNumber) * 100).toFixed(1)}%`);
+              
+              if (weekVolume < currentMileageNumber * 0.85) {
+                console.warn(`[planServiceDeno] ⚠️ Generated volume is significantly below target (${weekVolume} vs ${currentMileageNumber})`);
+              }
+              
+              // Log double days if any
+              const doubleDays = processedSessions.reduce((acc: Record<string, number>, session) => {
+                acc[session.date] = (acc[session.date] || 0) + 1;
+                return acc;
+              }, {} as Record<string, number>);
+              
+              const doubleDayCount = Object.values(doubleDays).filter((count: number) => count > 1).length;
+              console.log(`  Double days: ${doubleDayCount}`);
+            }
+
+            return processedSessions;
 
           } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';

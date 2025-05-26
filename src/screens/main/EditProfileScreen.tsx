@@ -11,6 +11,8 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { MinimalSpinner } from '../../components/ui/MinimalSpinner';
 import { Ionicons } from '@expo/vector-icons';
 
+// No separate component needed - using direct text input
+
 export function EditProfileScreen() {
   const { session } = useAuth();
   const navigation = useNavigation<NativeStackNavigationProp<ProfileStackParamList>>();
@@ -36,6 +38,11 @@ export function EditProfileScreen() {
   const [clothingSize, setClothingSize] = useState('');
   const [scheduleConstraints, setScheduleConstraints] = useState('');
   const [units, setUnits] = useState('km');
+
+  // Simple units change handler
+  const handleUnitsChange = (newUnits: string) => {
+    setUnits(newUnits);
+  };
 
   // Load profile data
   useEffect(() => {
@@ -64,7 +71,9 @@ export function EditProfileScreen() {
           setShoeSize(profileData?.shoe_size || '');
           setClothingSize(profileData?.clothing_size || '');
           setScheduleConstraints(profileData?.schedule_constraints || '');
-          setUnits(profileData?.units || 'km');
+          
+          const loadedUnits = profileData?.units || 'km';
+          setUnits(loadedUnits);
         } catch (error) {
           console.error('Error loading profile:', error);
           Alert.alert('Error', 'Failed to load profile data');
@@ -99,6 +108,8 @@ export function EditProfileScreen() {
         units
       };
       
+
+      
       await updateProfile(session.user.id, updates);
       Alert.alert('Success', 'Profile updated successfully');
       navigation.goBack();
@@ -111,47 +122,47 @@ export function EditProfileScreen() {
   };
 
   const renderInput = (label: string, value: string, onChangeText: (text: string) => void, placeholder: string = '', isEmail = false) => (
-    <View className="mb-8">
-      <Text className="text-base text-gray-600 mb-3">{label}</Text>
+    <View className="mb-6">
+      <Text className="text-sm text-gray-600 mb-2">{label}</Text>
       <TextInput
-        className={`text-lg pb-2 border-b ${isEmail ? 'border-gray-300 text-gray-400' : 'border-gray-400'}`}
+        className={`text-base pb-2 border-b ${isEmail ? 'border-gray-300 text-gray-400' : 'border-gray-400'}`}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
         editable={!isEmail}
         autoComplete={isEmail ? 'email' : 'off'}
         keyboardType={isEmail ? 'email-address' : 'default'}
-        style={{ fontSize: 18 }}
+        style={{ fontSize: 16 }}
       />
     </View>
   );
 
   if (loading) {
     return (
-      <Screen style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF' }}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF' }}>
         <MinimalSpinner size={48} color="#000000" thickness={3} />
-      </Screen>
+      </View>
     );
   }
 
   return (
-    <Screen style={{ backgroundColor: '#FFFFFF' }}>
+    <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
       <SafeAreaView className="flex-1">
         {/* Header */}
         <View className="flex-row items-center justify-between px-6 py-4 border-b border-gray-100">
           <TouchableOpacity onPress={() => navigation.goBack()}>
             <Ionicons name="arrow-back" size={24} color="#000" />
           </TouchableOpacity>
-          <Text className="text-lg font-medium">Profile</Text>
+          <Text className="text-base font-medium">Profile</Text>
           <View style={{ width: 24 }} />
         </View>
 
         <ScrollView className="flex-1 px-6">
           {/* Avatar Section */}
-          <View className="items-center py-8">
+          <View className="items-center py-6">
             <View className="relative">
-              <View className="w-24 h-24 rounded-full bg-purple-200 items-center justify-center">
-                <Text className="text-3xl font-medium text-purple-800">
+              <View className="w-20 h-20 rounded-full bg-purple-200 items-center justify-center">
+                <Text className="text-2xl font-medium text-purple-800">
                   {email?.charAt(0) || 'U'}
                 </Text>
               </View>
@@ -165,20 +176,20 @@ export function EditProfileScreen() {
           {renderInput('Email', email, setEmail, '', true)}
 
           {/* Running Profile - Collapsible Section */}
-          <View className="mt-8 mb-4">
-            <Text className="text-lg font-medium mb-6">Running Profile</Text>
+          <View className="mt-6 mb-4">
+            <Text className="text-base font-medium mb-4">Running Profile</Text>
             
             {renderInput('Nickname', nickname, setNickname, 'Your Preferred Running Name')}
             {renderInput('Goal', goalType, setGoalType, 'E.g., Marathon, General Fitness')}
             
             {/* Race Date */}
-            <View className="mb-8">
-              <Text className="text-base text-gray-600 mb-3">Race Date</Text>
+            <View className="mb-6">
+              <Text className="text-sm text-gray-600 mb-2">Race Date</Text>
               <TouchableOpacity 
                 className="flex-row items-center justify-between pb-2 border-b border-gray-400"
                 onPress={() => setShowDatePicker(true)}
               >
-                <Text className="text-lg" style={{ fontSize: 18 }}>
+                <Text className="text-base" style={{ fontSize: 16 }}>
                   {raceDate ? raceDate.toLocaleDateString('en-GB') : 'Select Race Date'}
                 </Text>
                 <Ionicons name="chevron-down" size={20} color="#666" />
@@ -214,31 +225,21 @@ export function EditProfileScreen() {
             </View>
             
             {renderInput('Race Distance', raceDistance, setRaceDistance, 'E.g., 5K, 10K, Marathon')}
-            {renderInput('Experience Level', experienceLevel, setExperienceLevel, 'E.g., Beginner, Intermediate, Advanced')}
+            {renderInput('Experience Level', experienceLevel, setExperienceLevel, 'E.g., 6 months, 2 years, since high school')}
             {renderInput('Training Frequency', trainingFrequency, setTrainingFrequency, 'E.g., 3 Times Per Week')}
             {renderInput('Current Weekly Mileage', currentMileage, setCurrentMileage, 'E.g., 20 Km/Week')}
             
             {/* Units */}
-            <View className="mb-8">
-              <Text className="text-base text-gray-600 mb-3">Preferred Units</Text>
-              <View className="flex-row bg-gray-100 p-1 rounded-lg">
-                <TouchableOpacity
-                  className={`flex-1 items-center py-2 px-4 rounded ${units === 'km' ? 'bg-white shadow-sm' : ''}`}
-                  onPress={() => setUnits('km')}
-                >
-                  <Text className={`text-sm ${units === 'km' ? 'font-medium' : ''}`}>
-                    Kilometers (km)
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  className={`flex-1 items-center py-2 px-4 rounded ${units === 'miles' ? 'bg-white shadow-sm' : ''}`}
-                  onPress={() => setUnits('miles')}
-                >
-                  <Text className={`text-sm ${units === 'miles' ? 'font-medium' : ''}`}>
-                    Miles
-                  </Text>
-                </TouchableOpacity>
-              </View>
+            <View className="mb-6">
+              <Text className="text-sm text-gray-600 mb-2">Preferred Units</Text>
+              <TextInput
+                className="text-base pb-2 border-b border-gray-400"
+                value={units}
+                onChangeText={handleUnitsChange}
+                placeholder="km or miles"
+                style={{ fontSize: 16 }}
+              />
+              <Text className="text-xs text-gray-400 mt-1">Enter "km" for kilometers or "miles" for miles</Text>
             </View>
             
             {renderInput('Injury History', injuryHistory, setInjuryHistory, 'Any Past Or Current Injuries')}
@@ -258,11 +259,11 @@ export function EditProfileScreen() {
             {saving ? (
               <MinimalSpinner size={20} color="#FFFFFF" thickness={2} />
             ) : (
-              <Text className="text-white text-center text-lg font-medium">Save</Text>
+              <Text className="text-white text-center text-base font-medium">Save</Text>
             )}
           </TouchableOpacity>
         </View>
       </SafeAreaView>
-    </Screen>
+    </View>
   );
 } 

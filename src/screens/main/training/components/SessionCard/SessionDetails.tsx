@@ -5,7 +5,7 @@ import { Text } from '../../../../../components/ui/StyledText';
 interface SessionDetailsProps {
   distance: number;
   time: number;
-  suggestedShoe: string;
+  suggestedShoe?: string;
   description?: string;
 }
 
@@ -29,10 +29,12 @@ export const SessionDetails: React.FC<SessionDetailsProps> = ({
           <Text style={styles.detailLabel}>Time:</Text>
           <Text style={styles.detailValue}>{time} min</Text>
         </View>
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Suggested Shoe:</Text>
-          <Text style={styles.detailValue}>{suggestedShoe}</Text>
-        </View>
+        {suggestedShoe && (
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Suggested Shoe:</Text>
+            <Text style={styles.detailValue}>{suggestedShoe}</Text>
+          </View>
+        )}
       </View>
       
       {description && (

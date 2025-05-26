@@ -379,8 +379,8 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
   // --- AI CONFIGURATION ---
   const configureAIInstructions = useCallback((dc: any) => { 
     if (dc && dc.readyState === 'open') {
-        // Get basic system instructions with today's and tomorrow's training
-        const systemInstructions = buildSystemPrompt(currentTrainingPlan || undefined);
+        // Get basic system instructions with today's and tomorrow's training and coach information
+        const systemInstructions = buildSystemPrompt(currentTrainingPlan || undefined, coachId);
         
         // Get tools definition
         const toolsDefinition = getToolsDefinitionForRealtimeAPI();
@@ -407,6 +407,12 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
         
         // Combine system instructions and user context
         const fullPrompt = systemInstructions + '\n\n' + userContext;
+        
+        // Log the full prompt for debugging
+        console.log('[DailyVoiceChat] Full prompt being sent to AI:');
+        console.log('=====================================');
+        console.log(fullPrompt);
+        console.log('=====================================');
         
         // Send the basic update event first
         const basicSessionUpdateEvent = {
@@ -477,7 +483,7 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
         handleError('Failed to configure AI: DataChannel not ready.', true);
         setFallbackMode(true);
     }
-  }, [buildSystemPrompt, getToolsDefinitionForRealtimeAPI, handleError, profile, currentTrainingPlan, conversationHistory, userFeedback]);
+  }, [buildSystemPrompt, getToolsDefinitionForRealtimeAPI, handleError, profile, currentTrainingPlan, conversationHistory, userFeedback, coachId]);
 
   // --- NETWORK OPERATIONS ---
   const getEphemeralKey = useCallback(async () => {
@@ -655,6 +661,67 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
             setIsReceivingCoachMessage(false);
           }
           
+          // Handle response.audio_transcript.done for coach messages
+          else if (data.type === 'response.audio_transcript.done') {
+            console.log('[DailyVoiceChat] Coach audio transcript completed:', JSON.stringify(data));
+            
+            try {
+              const transcript = data.transcript;
+              const responseId = data.response_id;
+              
+              if (transcript && transcript.trim()) {
+                // Clean up the transcript - trim whitespace and normalize spaces
+                const cleanedTranscript = transcript.trim().replace(/\s+/g, ' ');
+                console.log(`[DailyVoiceChat] Coach said: "${cleanedTranscript}"`);
+                
+                // Update UI with coach message
+                setPendingCoachResponse(cleanedTranscript);
+                
+                // Add to conversation history
+                const newCoachMessage: TimestampedChatMessage = {
+                  sender: 'coach',
+                  message: cleanedTranscript,
+                  timestamp: Date.now(),
+                  id: v4()
+                };
+                
+                setConversationHistory(prev => [...prev, newCoachMessage]);
+              } else {
+                console.log('[DailyVoiceChat] Empty or invalid coach transcript received');
+              }
+            } catch (e) {
+              console.error('[DailyVoiceChat] Error processing coach transcript:', e);
+            }
+          }
+          
+          // Handle output audio buffer events for coach audio playback
+          else if (data.type === 'output_audio_buffer.started') {
+            console.log('[DailyVoiceChat] Output audio buffer started');
+            setIsCoachSpeakingTTS(true);
+            setShowAnimatedCoachView(true);
+            if (onSpeakingStateChange) onSpeakingStateChange(true, 'coach');
+          }
+          
+          else if (data.type === 'output_audio_buffer.stopped') {
+            console.log('[DailyVoiceChat] Output audio buffer stopped');
+            setIsCoachSpeakingTTS(false);
+            if (onSpeakingStateChange) onSpeakingStateChange(false, 'coach');
+          }
+          
+          // Handle AI response audio parts (base64 audio chunks)
+          else if (data.type === 'ai_response_audio_part') {
+            console.log('[DailyVoiceChat] AI response audio part received');
+            const audioBase64 = data.audio;
+            if (audioBase64) {
+              if (!isCoachSpeakingTTS) {
+                setIsCoachSpeakingTTS(true);
+                setShowAnimatedCoachView(true);
+                if (onSpeakingStateChange) onSpeakingStateChange(true, 'coach');
+              }
+              playTTSAudio(audioBase64);
+            }
+          }
+          
           // Handle conversation.item.created which may have undefined content
           else if (data.type === 'conversation.item.created') {
             console.log('[DailyVoiceChat] Conversation item created with type:', 
@@ -662,16 +729,18 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
               
             // Check item type and process appropriately
             if (data.item?.type === 'transcript' && data.item.transcript?.speaker === 'user') {
-              console.log('[DailyVoiceChat] User transcript received:', data.item.transcript.text);
+              // Clean up the transcript - trim whitespace and normalize spaces
+              const cleanedTranscript = data.item.transcript.text.trim().replace(/\s+/g, ' ');
+              console.log('[DailyVoiceChat] User transcript received:', cleanedTranscript);
               
               // Update UI with transcript
-              setCurrentTranscript(data.item.transcript.text);
+              setCurrentTranscript(cleanedTranscript);
               setUserTranscriptJustReceived(true);
               
               // Add message to conversation history
               const newUserMessage: TimestampedChatMessage = { 
                 sender: 'user', 
-                message: data.item.transcript.text,
+                message: cleanedTranscript,
                 timestamp: Date.now(),
                 id: v4()
               };
@@ -715,13 +784,16 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
               
               // Only update UI if there's content
               if (messageContent) {
+                // Clean up the message content - trim whitespace and normalize spaces
+                const cleanedContent = messageContent.trim().replace(/\s+/g, ' ');
+                
                 // Update UI with coach message
-                setPendingCoachResponse(messageContent);
+                setPendingCoachResponse(cleanedContent);
                 
                 // Add to conversation
                 const newCoachMessage: TimestampedChatMessage = {
                   sender: 'coach',
-                  message: messageContent,
+                  message: cleanedContent,
                   timestamp: Date.now(),
                   id: v4()
                 };
@@ -812,6 +884,53 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
               console.error('[DailyVoiceChat] Error processing function call arguments done:', e);
             }
           }
+          
+          // Handle input audio transcription events for user speech
+          else if (data.type === 'conversation.item.input_audio_transcription.completed') {
+            console.log('[DailyVoiceChat] User input audio transcription completed:', JSON.stringify(data));
+            
+            try {
+              const transcript = data.transcript;
+              const itemId = data.item_id;
+              
+              if (transcript && transcript.trim()) {
+                // Clean up the transcript - trim whitespace and normalize spaces
+                const cleanedTranscript = transcript.trim().replace(/\s+/g, ' ');
+                console.log(`[DailyVoiceChat] User said: "${cleanedTranscript}"`);
+                
+                // Update UI with transcript
+                setCurrentTranscript(cleanedTranscript);
+                setUserTranscriptJustReceived(true);
+                
+                // Add user message to conversation history
+                const newUserMessage: TimestampedChatMessage = { 
+                  sender: 'user', 
+                  message: cleanedTranscript,
+                  timestamp: Date.now(),
+                  id: v4()
+                };
+                
+                setConversationHistory(prev => [...prev, newUserMessage]);
+                
+                // Set temporary flag to show user is speaking
+                setUserIsActuallySpeaking(true);
+                
+                // Clear any existing speaking timer
+                if (userSpeakingTimerRef.current) {
+                  clearTimeout(userSpeakingTimerRef.current);
+                }
+                
+                // Set timer to turn off speaking indicator after a delay
+                userSpeakingTimerRef.current = setTimeout(() => {
+                  setUserIsActuallySpeaking(false);
+                }, 1000);
+              } else {
+                console.log('[DailyVoiceChat] Empty or invalid transcript received');
+              }
+            } catch (e) {
+              console.error('[DailyVoiceChat] Error processing user transcription:', e);
+            }
+          }
         } catch (error) {
           console.error('[DailyVoiceChat] Error processing data channel message:', error);
         }
@@ -886,6 +1005,14 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
           default:
             // Other states: 'new', 'connecting', 'checking' - no action needed
             break;
+        }
+      };
+      
+      // @ts-ignore 
+      pc.ontrack = (event: any) => {
+        console.log('[DailyVoiceChat] Received track:', event.track.kind);
+        if (event.track.kind === 'audio' && event.streams && event.streams[0]) {
+            console.log('[DailyVoiceChat] Audio track received via ontrack. This is unexpected if TTS is purely via data channel.');
         }
       };
       
@@ -1568,49 +1695,59 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
     <View className="items-center justify-center">
       {showAnimatedCoachView && (
         <View className="items-center mb-4">
-          <Animatable.View 
-            animation={isCoachSpeakingTTS ? "pulse" : "fadeIn"}
-            iterationCount={isCoachSpeakingTTS ? "infinite" : 1}
-            className="w-32 h-32 rounded-full items-center justify-center mb-2 overflow-hidden"
-          >
-            <Image 
-              source={coachAvatar} 
-              className="w-full h-full rounded-full"
-              resizeMode="cover"
-            />
-          </Animatable.View>
+          <View style={styles.animatedCoachContainer}>
+            <View
+              style={[
+                styles.coachImageWrapper,
+                styles.coachImageWrapperActive // Always use active style during conversation
+              ]}
+            >
+              <Animatable.Image
+                source={coachAvatar}
+                animation="pulse"
+                iterationCount="infinite"
+                duration={1000}
+                easing="ease-in-out"
+                style={styles.coachImage}
+                resizeMode="cover"
+              />
+              
+              <Animatable.View 
+                animation="pulse" 
+                iterationCount="infinite" 
+                duration={1500}
+                style={styles.animatedBorder}
+              />
+              
+              <Animatable.View 
+                animation={glowAnimation} 
+                iterationCount="infinite" 
+                duration={1200}
+                style={styles.glowOverlay}
+              />
+              
+              {isCoachSpeakingTTS && (
+                <View style={styles.speakingIndicator}>
+                  <Animatable.View 
+                    animation="pulse" 
+                    iterationCount="infinite" 
+                    duration={1000}
+                    style={styles.speakingDot}
+                  />
+                </View>
+              )}
+            </View>
+          </View>
           
-          <Text className="text-center font-medium text-lg mb-1">
+          <Text style={styles.coachNameText}>
             {coachName}
           </Text>
           
-          <View className="flex-row items-center">
-            <FontAwesome 
-              name={isCoachSpeakingTTS ? "volume-up" : userIsActuallySpeaking ? "microphone" : "microphone-slash"} 
-              size={16} 
-              color={isCoachSpeakingTTS || userIsActuallySpeaking ? "#8B5CF6" : "#718096"} 
-              style={{marginRight: 6}}
-            />
-            <Text className="text-sm text-gray-500">
-              {isCoachSpeakingTTS ? "Speaking..." : userIsActuallySpeaking ? "Listening..." : "Ready"}
-            </Text>
-          </View>
+
         </View>
       )}
       
-      {/* Coach Response */}
-      {pendingCoachResponse ? (
-        <View className="rounded-lg bg-purple-100 p-3 mb-2 max-w-[90%]">
-          <Text className="text-gray-800">{pendingCoachResponse}</Text>
-        </View>
-      ) : null}
-      
-      {/* User Transcript */}
-      {currentTranscript ? (
-        <View className="rounded-lg bg-gray-100 p-3 mb-4 max-w-[90%] self-end">
-          <Text className="text-gray-800">{currentTranscript}</Text>
-        </View>
-      ) : null}
+      {/* Transcripts are captured in background but not displayed during conversation */}
 
       {/* Tool Execution Indicator */}
       {isExecutingTool && (
@@ -1701,6 +1838,21 @@ const styles = StyleSheet.create({
     borderRadius: 85, 
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#F5F5F5',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.2,
+        shadowRadius: 2,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  coachImageWrapperActive: {
     borderWidth: 4,
     borderColor: '#8B5CF6',
     ...Platform.select({
@@ -1708,42 +1860,44 @@ const styles = StyleSheet.create({
         shadowColor: '#8B5CF6',
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.7,
-        shadowRadius: 15,
+        shadowRadius: 20,
       },
       android: {
         elevation: 10,
+        borderColor: '#8B5CF6',
       },
     }),
   },
   coachImage: {
-    width: 150,
-    height: 150,
-    borderRadius: 75, 
+    width: 160,
+    height: 160,
+    borderRadius: 80,
   },
   animatedBorder: {
     position: 'absolute',
-    top: -6,
-    left: -6,
-    right: -6,
-    bottom: -6,
-    borderRadius: 91,
-    borderWidth: 2,
+    top: -5,
+    left: -5,
+    right: -5,
+    bottom: -5,
+    borderRadius: 100,
+    borderWidth: 3,
     borderColor: '#8B5CF6',
   },
   glowOverlay: {
     position: 'absolute',
-    top: -10,
-    left: -10,
-    right: -10,
-    bottom: -10,
-    borderRadius: 95,
+    top: -8,
+    left: -8,
+    right: -8,
+    bottom: -8,
+    borderRadius: 100,
     backgroundColor: 'transparent',
+    borderWidth: 5,
     borderColor: 'rgba(139, 92, 246, 0.5)',
   },
   speakingIndicator: {
     position: 'absolute',
-    bottom: 8,
-    right: 8,
+    bottom: 5,
+    right: 5,
     backgroundColor: 'white',
     borderRadius: 12,
     padding: 3,
@@ -1756,9 +1910,9 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   speakingDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
     backgroundColor: '#4CAF50',
   },
   coachNameText: {

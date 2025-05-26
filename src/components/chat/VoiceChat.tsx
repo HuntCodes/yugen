@@ -539,7 +539,7 @@ Conduct a natural, friendly conversation to collect the following information:
 - clothing size
 - schedule constraints
 - preferred unit system (km or miles)
-- running experience level
+- how long they've been running
 - target race distance (if any)
 - upcoming race date (if any)
 - running goals
@@ -1094,11 +1094,7 @@ Provide specific, actionable advice tailored to the athlete's needs.`;
                   </>
                 ) : isListening ? (
                   <>
-                  {useModal && (
-                    <View className="w-20 h-20 rounded-full bg-purple-500 justify-center items-center">
-                      <FontAwesome name="microphone" size={40} color="#fff" />
-                    </View>
-                    )}
+                  {/* Microphone icon removed when connected to coach */}
                   </>
                 ) : null}
               </View>

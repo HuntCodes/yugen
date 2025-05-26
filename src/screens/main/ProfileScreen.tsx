@@ -97,6 +97,10 @@ export function ProfileScreen() {
     return `since ${date.toLocaleString('default', { month: 'long' })} ${date.getFullYear()}`;
   };
 
+  const navigateToFeedback = () => {
+    navigation.navigate('Feedback');
+  };
+
   if (loading) {
     return (
       <Screen style={{ backgroundColor: '#FFFFFF' }}>
@@ -159,13 +163,38 @@ export function ProfileScreen() {
           )}
 
           {/* Profile Section */}
-          <View className="bg-[#FBF7F6] rounded-lg mb-8">
+          <View className="bg-[#FBF7F6] rounded-lg mb-4">
             {/* Collapsible Profile Header */}
             <TouchableOpacity
               className="flex-row items-center justify-between p-4 border-b border-gray-200 bg-white"
               onPress={navigateToEditProfile}
             >
               <Text className="font-semibold text-base">Profile</Text>
+              <Text className="text-gray-400 text-lg">›</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Settings Section */}
+          <View className="bg-[#FBF7F6] rounded-lg mb-4">
+            <TouchableOpacity
+              className="flex-row items-center justify-between p-4 border-b border-gray-200 bg-white"
+              onPress={() => {
+                // TODO: Navigate to settings screen
+                Alert.alert('Settings', 'Settings screen coming soon!');
+              }}
+            >
+              <Text className="font-semibold text-base">Settings</Text>
+              <Text className="text-gray-400 text-lg">›</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Feedback Section */}
+          <View className="bg-[#FBF7F6] rounded-lg mb-8">
+            <TouchableOpacity
+              className="flex-row items-center justify-between p-4 bg-white"
+              onPress={navigateToFeedback}
+            >
+              <Text className="font-semibold text-base">Feedback</Text>
               <Text className="text-gray-400 text-lg">›</Text>
             </TouchableOpacity>
           </View>

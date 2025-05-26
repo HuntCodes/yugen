@@ -7,6 +7,7 @@ import { Button } from '../../../../components/ui/Button';
 import { colors } from '../../../../styles/colors';
 import { processWorkoutNotes } from '../../../../services/summary/workoutNoteService';
 import { supabase } from '../../../../lib/api/supabase';
+import { getSuggestedShoe } from '../../../../lib/utils/training/shoeRecommendations';
 
 // Update SessionStatus type to match what's used in the app
 type AppSessionStatus = 'completed' | 'missed' | 'planned' | 'not_completed' | 'skipped';
@@ -148,22 +149,7 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   const sessionTypeColors = getSessionTypeColor(session.session_type);
   const statusInfo = getStatusInfo(status);
 
-  // Get suggested shoe based on session type
-  const getSuggestedShoe = (sessionType: string) => {
-    const type = sessionType.toLowerCase();
-    // Cloudmonster for easy runs, strength training, long runs
-    if (type.includes('easy') || type.includes('strength') || type.includes('long')) {
-      return 'Cloudmonster';
-    }
-    // Cloudboom Echo 4 for speed intervals, hills, fartlek
-    else if (type.includes('interval') || type.includes('hill') || type.includes('fartlek') || type.includes('speed')) {
-      return 'Cloudboom Echo 4';
-    }
-    // Default
-    return 'Cloudmonster';
-  };
-
-  const suggestedShoe = session.suggested_shoe || getSuggestedShoe(session.session_type);
+  const suggestedShoe = session.suggested_shoe || getSuggestedShoe(session.session_type) || 'No recommendation';
   const displayDate = session.scheduled_date || session.date;
   const title = session.title || `${session.session_type} - ${formattedDate}`;
   const description = session.description || session.notes;

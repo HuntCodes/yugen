@@ -1,6 +1,7 @@
 import { ChatMessage } from './useMessageTypes';
 import { PlanUpdate } from '../chat/types';
 import { UserTrainingFeedbackData } from '../../services/feedback/feedbackService';
+import { coachStyles } from '../../config/coachingGuidelines';
 
 /**
  * Hook for message formatting utilities
@@ -197,8 +198,9 @@ Would you like me to update your training plan with these changes?`;
   /**
    * Builds the system prompt for the AI coach.
    * This version can optionally accept a training plan to include today's and tomorrow's workouts.
+   * It can also include coach-specific communication style information.
    */
-  const buildSystemPrompt = (trainingPlan?: any[]): string => {
+  const buildSystemPrompt = (trainingPlan?: any[], coachId?: string): string => {
     const today = new Date();
     const dayOfWeek = getDayOfWeek(today);
     const formattedDate = `${dayOfWeek}, ${today.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`;
@@ -234,33 +236,94 @@ Would you like me to update your training plan with these changes?`;
       const todayStr = formatDateYMD(today);
       const tomorrowStr = formatDateYMD(tomorrow);
       
-      const todaySession = trainingPlan.find(workout => workout.date === todayStr);
-      const tomorrowSession = trainingPlan.find(workout => workout.date === tomorrowStr);
+      // Debug logging
+      console.log('[buildSystemPrompt] Date filtering debug:');
+      console.log('- Today date string:', todayStr);
+      console.log('- Tomorrow date string:', tomorrowStr);
+      console.log('- Training plan dates:', trainingPlan.map(w => ({ date: w.date, session_type: w.session_type })));
       
-      if (todaySession) {
-        todayWorkout = `\n\nTODAY'S TRAINING: ${todaySession.session_type || 'Workout'}`;
-        if (todaySession.distance) todayWorkout += ` - ${todaySession.distance}km`;
-        if (todaySession.time) todayWorkout += ` for ${todaySession.time} minutes`;
-        if (todaySession.notes) todayWorkout += `. Notes: ${todaySession.notes}`;
-        todayWorkout += ` (ID: ${todaySession.id || 'N/A'})`;
+      // Get all sessions for today and tomorrow (there might be multiple per day)
+      const todaySessions = trainingPlan.filter(workout => {
+        // Extract date part from workout.date (handles both "YYYY-MM-DD" and "YYYY-MM-DDTHH:mm:ss+00:00" formats)
+        const workoutDateStr = workout.date.split('T')[0];
+        return workoutDateStr === todayStr;
+      });
+      const tomorrowSessions = trainingPlan.filter(workout => {
+        // Extract date part from workout.date (handles both "YYYY-MM-DD" and "YYYY-MM-DDTHH:mm:ss+00:00" formats)
+        const workoutDateStr = workout.date.split('T')[0];
+        return workoutDateStr === tomorrowStr;
+      });
+      
+      console.log('- Today sessions found:', todaySessions.length);
+      console.log('- Tomorrow sessions found:', tomorrowSessions.length);
+      console.log('- Tomorrow sessions:', tomorrowSessions.map(s => ({ date: s.date, type: s.session_type })));
+      
+      if (todaySessions.length > 0) {
+        todayWorkout = '\n\nTODAY\'S TRAINING: ';
+        if (todaySessions.length === 1) {
+          const session = todaySessions[0];
+          todayWorkout += `${session.session_type || 'Workout'}`;
+          if (session.distance) todayWorkout += ` - ${session.distance}km`;
+          if (session.time) todayWorkout += ` for ${session.time} minutes`;
+          if (session.notes) todayWorkout += `. Notes: ${session.notes}`;
+          todayWorkout += ` (ID: ${session.id || 'N/A'})`;
+        } else {
+          // Multiple sessions today
+          todayWorkout += `${todaySessions.length} sessions planned:\n`;
+          todaySessions.forEach((session, index) => {
+            todayWorkout += `  ${index + 1}. ${session.session_type || 'Workout'}`;
+            if (session.distance) todayWorkout += ` - ${session.distance}km`;
+            if (session.time) todayWorkout += ` for ${session.time} minutes`;
+            if (session.notes) todayWorkout += `. Notes: ${session.notes}`;
+            todayWorkout += ` (ID: ${session.id || 'N/A'})`;
+            if (index < todaySessions.length - 1) todayWorkout += '\n';
+          });
+        }
       } else {
         todayWorkout = '\n\nTODAY\'S TRAINING: Rest day or no scheduled workout';
       }
       
-      if (tomorrowSession) {
-        tomorrowWorkout = `\nTOMORROW'S TRAINING: ${tomorrowSession.session_type || 'Workout'}`;
-        if (tomorrowSession.distance) tomorrowWorkout += ` - ${tomorrowSession.distance}km`;
-        if (tomorrowSession.time) tomorrowWorkout += ` for ${tomorrowSession.time} minutes`;
-        if (tomorrowSession.notes) tomorrowWorkout += `. Notes: ${tomorrowSession.notes}`;
-        tomorrowWorkout += ` (ID: ${tomorrowSession.id || 'N/A'})`;
+      if (tomorrowSessions.length > 0) {
+        tomorrowWorkout = '\nTOMORROW\'S TRAINING: ';
+        if (tomorrowSessions.length === 1) {
+          const session = tomorrowSessions[0];
+          tomorrowWorkout += `${session.session_type || 'Workout'}`;
+          if (session.distance) tomorrowWorkout += ` - ${session.distance}km`;
+          if (session.time) tomorrowWorkout += ` for ${session.time} minutes`;
+          if (session.notes) tomorrowWorkout += `. Notes: ${session.notes}`;
+          tomorrowWorkout += ` (ID: ${session.id || 'N/A'})`;
+        } else {
+          // Multiple sessions tomorrow
+          tomorrowWorkout += `${tomorrowSessions.length} sessions planned:\n`;
+          tomorrowSessions.forEach((session, index) => {
+            tomorrowWorkout += `  ${index + 1}. ${session.session_type || 'Workout'}`;
+            if (session.distance) tomorrowWorkout += ` - ${session.distance}km`;
+            if (session.time) tomorrowWorkout += ` for ${session.time} minutes`;
+            if (session.notes) tomorrowWorkout += `. Notes: ${session.notes}`;
+            tomorrowWorkout += ` (ID: ${session.id || 'N/A'})`;
+            if (index < tomorrowSessions.length - 1) tomorrowWorkout += '\n';
+          });
+        }
       } else {
         tomorrowWorkout = '\nTOMORROW\'S TRAINING: Rest day or no scheduled workout';
       }
     }
     
+    // Get coach-specific information if coachId is provided
+    let coachPersonality = '';
+    let coachCommunicationStyle = '';
+    let coachName = 'Coach';
+    
+    if (coachId && coachStyles[coachId]) {
+      const coachStyle = coachStyles[coachId];
+      coachName = coachStyle.name;
+      coachPersonality = `\n\nYOUR PERSONALITY: ${coachStyle.personality.join(', ')}`;
+      coachCommunicationStyle = `\nYOUR COMMUNICATION STYLE: ${coachStyle.communicationStyle.join(', ')}`;
+    }
+    
     // Note: The Realtime API will get user profile and plan dynamically if needed via functions or context.
     // This system prompt focuses on role, capabilities, and tool usage.
-    const systemPrompt = `You are an AI running coach. Today is ${formattedDate}. Tomorrow is ${tomorrowFormatted}. It's currently ${currentTime} (${timeOfDay}).${todayWorkout}${tomorrowWorkout}
+    const systemPrompt = `You are ${coachName}, an AI running coach. Today is ${formattedDate}. Tomorrow is ${tomorrowFormatted}. It's currently ${currentTime} (${timeOfDay}).${todayWorkout}${tomorrowWorkout}${coachPersonality}${coachCommunicationStyle}
 You are conversational, helpful, and encouraging.
 Answer running-related questions (nutrition, recovery, gear, etc.).
 Explain training sessions and help the user understand their plan.

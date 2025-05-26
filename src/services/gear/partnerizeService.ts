@@ -10,7 +10,7 @@ export interface Product {
   name: string;
   description: string;
   price: string;
-  image: string;
+  image: string | any; // Support both URL strings and require() objects
   category: string;
   url: string;
   sku: string;
@@ -174,47 +174,47 @@ export const trackProductClick = async (productId: string, userId: string): Prom
 export const getFallbackProducts = (): Product[] => {
   return [
     {
-      id: 'cloudflow-1',
-      name: 'Cloudflow',
-      description: 'The performance running shoe with explosive takeoffs and soft landings.',
-      price: '$139.99',
-      image: 'https://www.on-running.com/images/product/cloudflow/cloudflow-rock-rose.png',
+      id: 'cloudmonster-1',
+      name: 'Cloudmonster',
+      description: 'Maximum cushioned running shoe for easy runs and long distances. Features CloudTec® with zero-gravity foam.',
+      price: '$159.99',
+      image: require('../../assets/cloudmonster.jpg'),
       category: 'Shoes',
-      url: 'https://www.on-running.com/products/cloudflow',
-      sku: 'CLF-RR-M',
+      url: 'https://www.on-running.com/en-us/products/cloudmonster',
+      sku: 'CM-1-M',
       brand: 'On',
     },
     {
-      id: 'weather-jacket-1',
-      name: 'Weather Jacket',
-      description: 'Lightweight, breathable protection from the elements.',
+      id: 'cloudboom-zone-1',
+      name: 'Cloudboom Zone',
+      description: 'Elite racing shoe with carbon fiber Speedboard® and LightSpray upper for maximum speed.',
+      price: '$269.99',
+      image: require('../../assets/cloudboom-zone.jpg'),
+      category: 'Shoes',
+      url: 'https://www.on-running.com/en-us/products/cloudboom-zone',
+      sku: 'CBZ-1-M',
+      brand: 'On',
+    },
+    {
+      id: 'cloudeclipse-1',
+      name: 'Cloudeclipse',
+      description: 'Premium daily trainer with dual-density CloudTec Phase® technology for unmatched comfort.',
+      price: '$179.99',
+      image: require('../../assets/cloudeclipse.jpg'),
+      category: 'Shoes',
+      url: 'https://www.on-running.com/en-us/products/cloudeclipse',
+      sku: 'CE-1-M',
+      brand: 'On',
+    },
+    {
+      id: 'cloudboom-strike-1',
+      name: 'Cloudboom Strike',
+      description: 'Versatile performance shoe with Speedboard® technology for training and racing.',
       price: '$199.99',
-      image: 'https://www.on-running.com/images/product/weather-jacket/weather-jacket-black.png',
-      category: 'Apparel',
-      url: 'https://www.on-running.com/products/weather-jacket',
-      sku: 'WJ-BLK-M',
-      brand: 'On',
-    },
-    {
-      id: 'performance-t-1',
-      name: 'Performance T',
-      description: 'Technical running tee with advanced temperature regulation.',
-      price: '$59.99',
-      image: 'https://www.on-running.com/images/product/performance-t/performance-t-navy.png',
-      category: 'Apparel',
-      url: 'https://www.on-running.com/products/performance-t',
-      sku: 'PT-NVY-M',
-      brand: 'On',
-    },
-    {
-      id: 'running-shorts-1',
-      name: 'Running Shorts',
-      description: 'Lightweight, breathable shorts with 5" inseam.',
-      price: '$69.99',
-      image: 'https://www.on-running.com/images/product/running-shorts/running-shorts-black.png',
-      category: 'Apparel',
-      url: 'https://www.on-running.com/products/running-shorts',
-      sku: 'RS-BLK-M',
+      image: require('../../assets/cloudboom-strike.jpg'),
+      category: 'Shoes',
+      url: 'https://www.on-running.com/en-us/products/cloudboom-strike',
+      sku: 'CBS-1-M',
       brand: 'On',
     },
   ];
