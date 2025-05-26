@@ -36,7 +36,7 @@ const ProfileIcon = ({ focused }: { focused: boolean }) => (
 export type TabParamList = {
   Home: undefined;
   Training: undefined;
-  Gear: undefined;
+  Gear: { highlightProductId?: string } | undefined;
   Profile: undefined;
 };
 

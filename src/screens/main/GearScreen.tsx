@@ -11,9 +11,14 @@ import { ProductDetail } from '../../components/gear/ProductDetail';
 import { CategoryFilter } from '../../components/gear/CategoryFilter';
 import { HeaderBar } from './training/components/HeaderBar';
 import { MinimalSpinner } from '../../components/ui/MinimalSpinner';
+import { useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
+import { TabParamList } from '../../navigation/TabNavigator';
+
+type GearScreenRouteProp = RouteProp<TabParamList, 'Gear'>;
 
 export function GearScreen() {
   const { session } = useAuth();
+  const route = useRoute<GearScreenRouteProp>();
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState<Product[]>([]);
@@ -31,6 +36,41 @@ export function GearScreen() {
       loadProducts();
     }
   }, [profile, selectedCategory]);
+
+  // Handle navigation parameters to highlight specific product
+  useEffect(() => {
+    if (route.params?.highlightProductId && products.length > 0) {
+      const productToHighlight = products.find(p => p.id === route.params?.highlightProductId);
+      
+      if (productToHighlight) {
+        setSelectedProduct(productToHighlight);
+        // Add a small delay to ensure proper safe area calculation
+        setTimeout(() => {
+          setModalVisible(true);
+        }, 100);
+      }
+    }
+  }, [route.params?.highlightProductId, products]);
+
+  // Handle navigation when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      // Check if we have a product to highlight
+      if (route.params?.highlightProductId) {
+        if (products.length > 0) {
+          const productToHighlight = products.find(p => p.id === route.params?.highlightProductId);
+          
+          if (productToHighlight) {
+            setSelectedProduct(productToHighlight);
+            // Add a small delay to ensure proper safe area calculation
+            setTimeout(() => {
+              setModalVisible(true);
+            }, 100);
+          }
+        }
+      }
+    }, [route.params?.highlightProductId, products])
+  );
 
   const loadUserProfile = async () => {
     try {
@@ -118,6 +158,7 @@ export function GearScreen() {
         animationType="slide"
         transparent={false}
         visible={modalVisible}
+        presentationStyle="fullScreen"
         onRequestClose={closeModal}
       >
         {selectedProduct && session?.user && (

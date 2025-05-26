@@ -7,7 +7,10 @@ import { Button } from '../../../../components/ui/Button';
 import { colors } from '../../../../styles/colors';
 import { processWorkoutNotes } from '../../../../services/summary/workoutNoteService';
 import { supabase } from '../../../../lib/api/supabase';
-import { getSuggestedShoe } from '../../../../lib/utils/training/shoeRecommendations';
+import { getSuggestedShoe, getProductIdFromShoeName } from '../../../../lib/utils/training/shoeRecommendations';
+import { useNavigation } from '@react-navigation/native';
+import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import { TabParamList } from '../../../../navigation/TabNavigator';
 
 // Update SessionStatus type to match what's used in the app
 type AppSessionStatus = 'completed' | 'missed' | 'planned' | 'not_completed' | 'skipped';
@@ -31,6 +34,8 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   onUpdateSession,
   onLayout
 }) => {
+  const navigation = useNavigation<BottomTabNavigationProp<TabParamList>>();
+  
   // Map existing status values to our app's status values
   const mapStatus = (status?: string): AppSessionStatus => {
     if (status === 'completed') return 'completed';
@@ -146,6 +151,14 @@ export const SessionCard: React.FC<SessionCardProps> = ({
     setIsEditingNotes(true);
   };
 
+  // Handle shoe recommendation click
+  const handleShoeClick = (shoeName: string) => {
+    const productId = getProductIdFromShoeName(shoeName);
+    if (productId) {
+      navigation.navigate('Gear', { highlightProductId: productId });
+    }
+  };
+
   const sessionTypeColors = getSessionTypeColor(session.session_type);
   const statusInfo = getStatusInfo(status);
 
@@ -196,7 +209,9 @@ export const SessionCard: React.FC<SessionCardProps> = ({
         </View>
         <View style={styles.detailRow}>
           <Text style={styles.detailLabel}>Suggested Shoe:</Text>
-          <Text style={styles.detailValue}>{suggestedShoe}</Text>
+          <TouchableOpacity onPress={() => handleShoeClick(suggestedShoe)}>
+            <Text style={[styles.detailValue, styles.clickableShoe]}>{suggestedShoe}</Text>
+          </TouchableOpacity>
         </View>
       </View>
       
@@ -486,5 +501,8 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 10,
     fontWeight: '600',
+  },
+  clickableShoe: {
+    color: colors.info,
   },
 }); 

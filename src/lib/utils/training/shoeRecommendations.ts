@@ -39,4 +39,29 @@ export function getSuggestedShoe(sessionType: string): string | null {
   
   // Default fallback for any unmatched session types
   return 'Cloudmonster';
+}
+
+/**
+ * Map shoe names to product IDs for navigation to gear screen
+ */
+export function getProductIdFromShoeName(shoeName: string): string | null {
+  const shoeNameLower = shoeName.toLowerCase();
+  
+  if (shoeNameLower.includes('cloudmonster')) {
+    return 'cloudmonster-1';
+  }
+  
+  if (shoeNameLower.includes('cloudeclipse')) {
+    return 'cloudeclipse-1';
+  }
+  
+  if (shoeNameLower.includes('cloudboom zone')) {
+    return 'cloudboom-zone-1';
+  }
+  
+  if (shoeNameLower.includes('cloudboom strike')) {
+    return 'cloudboom-strike-1';
+  }
+  
+  return null;
 } 

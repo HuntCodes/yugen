@@ -138,9 +138,9 @@ export function OnboardingChat() {
   // Calculate progress based on processing step
   const getProgressValue = () => {
     switch (processingStep) {
-      case 'extracting': return 0.33;
-      case 'saving': return 0.66;
-      case 'generating_plan': return 0.9;
+      case 'extracting': return 0.1;
+      case 'saving': return 0.2;
+      case 'generating_plan': return 0.5;
       case 'complete': return 1;
       default: return 0;
     }

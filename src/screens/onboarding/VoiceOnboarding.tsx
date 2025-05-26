@@ -11,20 +11,11 @@ import { environment } from '../../config/environment';
 import { useOnboardingConversation } from '../../hooks/useOnboardingConversation';
 import { FontAwesome } from '@expo/vector-icons';
 import { LoadingOverlay } from '../../components/ui/LoadingOverlay';
+import { CompletionOverlay } from './components/CompletionOverlay';
 import { debugEnvironment } from '../../debug-env.js';
 import * as Animatable from 'react-native-animatable';
 import { useAuth } from '../../hooks/useAuth';
 import { coachStyles } from '../../config/coachingGuidelines';
-
-// Define delay function at module scope
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-// Define a bolder glow animation
-const glowAnimation = {
-  0: { opacity: 0.3, borderWidth: 2 },
-  0.5: { opacity: 1, borderWidth: 5 },
-  1: { opacity: 0.3, borderWidth: 2 },
-};
 
 // Image mapping for coaches
 const imageMap: Record<string, any> = {
@@ -33,8 +24,6 @@ const imageMap: Record<string, any> = {
   dathan: require('../../assets/dathan.jpg'),
 };
 
-// Correctly type the navigation and route props using the imported RootStackParamList
-// 'VoiceOnboarding' is a valid key in the imported RootStackParamList
 type VoiceOnboardingNavigationProp = NativeStackNavigationProp<RootStackParamList, 'VoiceOnboarding'>;
 type VoiceOnboardingRouteProp = RouteProp<RootStackParamList, 'VoiceOnboarding'>;
 
@@ -47,11 +36,9 @@ export function VoiceOnboarding() {
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [isCoachSpeaking, setIsCoachSpeaking] = useState(false);
   const [voiceChatManuallyClosed, setVoiceChatManuallyClosed] = useState(false);
-  const [voiceChatActiveForAnimation, setVoiceChatActiveForAnimation] = useState(false);
   const [voiceConversationActuallyCompleted, setVoiceConversationActuallyCompleted] = useState(false);
-  const [showContinueButtonStage, setShowContinueButtonStage] = useState(false);
+  const [showCompletionOverlay, setShowCompletionOverlay] = useState(false);
   const [finalVoiceHistory, setFinalVoiceHistory] = useState<{role: 'user' | 'coach'; content: string}[]>([]);
-  const [waitingForCoachToFinishSpeaking, setWaitingForCoachToFinishSpeaking] = useState(false);
   
   const route = useRoute<VoiceOnboardingRouteProp>();
   const navigation = useNavigation<VoiceOnboardingNavigationProp>();
@@ -89,11 +76,6 @@ export function VoiceOnboarding() {
   } = useOnboardingConversation(currentCoachId);
   
   useEffect(() => {
-    if (voiceChatUIVisible) {
-      setVoiceChatActiveForAnimation(true);
-    } else {
-      setVoiceChatActiveForAnimation(false);
-    }
     console.log('[VOICE_ONBOARDING] Voice chat active:', voiceChatUIVisible);
   }, [voiceChatUIVisible]);
   
@@ -101,20 +83,13 @@ export function VoiceOnboarding() {
     console.log('[VOICE_ONBOARDING] Speaking state changed to:', speaking, 'Speaker:', speaker || 'unknown');
     setIsCoachSpeaking(speaking);
     
-    // If we're waiting for the coach to finish speaking and they just stopped
-    if (waitingForCoachToFinishSpeaking && !speaking && speaker === 'coach') {
-      console.log('[VOICE_ONBOARDING] Coach finished speaking. Showing continue button after brief delay...');
-      setWaitingForCoachToFinishSpeaking(false);
-      
-      // Add a small buffer delay to ensure audio has fully played
-      setTimeout(() => {
-        setVoiceChatUIVisible(false); // Hide the actual VoiceChat UI component now
-        setTimeout(() => {
-          setShowContinueButtonStage(true);
-        }, 500); // Short delay before showing button
-      }, 1000); // 1 second buffer after coach stops speaking
+    // If conversation is complete and coach just finished speaking, show completion overlay immediately
+    if (voiceConversationActuallyCompleted && !speaking && speaker === 'coach') {
+      console.log('[VOICE_ONBOARDING] Coach finished speaking after conversation completion. Showing overlay immediately...');
+      setVoiceChatUIVisible(false); // Hide the VoiceChat UI
+      setShowCompletionOverlay(true); // Show completion overlay immediately
     }
-  }, [waitingForCoachToFinishSpeaking]);
+  }, [voiceConversationActuallyCompleted]);
   
   useEffect(() => {
     const setup = async () => {
@@ -136,9 +111,8 @@ export function VoiceOnboarding() {
     setVoiceChatUIVisible(false);
     setIsReconnecting(false);
     setVoiceChatManuallyClosed(true); 
-    setVoiceChatActiveForAnimation(false);
     setIsCoachSpeaking(false);
-    setWaitingForCoachToFinishSpeaking(false);
+    setShowCompletionOverlay(false);
   }, []);
   
   const handleVoiceChatError = useCallback((error: string) => {
@@ -148,12 +122,10 @@ export function VoiceOnboarding() {
       console.log(`[VOICE ONBOARDING] Attempting reconnect (${reconnectAttempts + 1}/3)...`);
       setIsReconnecting(true);
       setVoiceChatUIVisible(false);
-      setVoiceChatActiveForAnimation(false);
       setTimeout(() => {
         if (!isHookProcessingComplete) {
           setVoiceChatUIVisible(true);
           setReconnectAttempts(prev => prev + 1);
-          setVoiceChatActiveForAnimation(true);
         }
       }, 2000);
     } else {
@@ -161,7 +133,6 @@ export function VoiceOnboarding() {
         console.log('[VOICE ONBOARDING] Too many reconnect attempts or non-connection error. Suggesting text chat.');
         setVoiceChatUIVisible(false);
         setIsReconnecting(false);
-        setVoiceChatActiveForAnimation(false);
       }
     }
   }, [reconnectAttempts, showTextChat, isHookProcessingComplete]);
@@ -178,21 +149,16 @@ export function VoiceOnboarding() {
       console.log('[VOICE_ONBOARDING] Voice chat is DONE. Full History:', JSON.stringify(fullVoiceChatHistory, null, 2));
       setFinalVoiceHistory(fullVoiceChatHistory);
       setVoiceConversationActuallyCompleted(true);
-      setVoiceChatActiveForAnimation(false); // Deactivate animation here
       
-      // Instead of using word count estimation, wait for the coach to actually finish speaking
+      // Check if coach is still speaking
       if (isCoachSpeaking) {
-        console.log('[VOICE_ONBOARDING] Coach is still speaking. Waiting for them to finish...');
-        setWaitingForCoachToFinishSpeaking(true);
+        console.log('[VOICE_ONBOARDING] Coach is still speaking. Will show overlay when they finish...');
+        // The overlay will be shown when handleSpeakingStateChange detects coach stops speaking
       } else {
-        console.log('[VOICE_ONBOARDING] Coach is not speaking. Showing continue button after brief delay...');
-        // Coach is already done speaking, show continue button after a short delay
-        setTimeout(() => {
-          setVoiceChatUIVisible(false); // Hide the actual VoiceChat UI component now
-          setTimeout(() => {
-            setShowContinueButtonStage(true);
-          }, 500); // Short delay before showing button
-        }, 1000); // 1 second buffer
+        console.log('[VOICE_ONBOARDING] Coach is not speaking. Showing overlay immediately...');
+        // Coach is already done speaking, show overlay immediately
+        setVoiceChatUIVisible(false);
+        setShowCompletionOverlay(true);
       }
     } else {
       // This is an intermediate transcript update from VoiceChat.tsx (e.g., after each AI turn that's not the *final* one)
@@ -200,7 +166,6 @@ export function VoiceOnboarding() {
       // We should not hide it here.
       console.log('[VOICE_ONBOARDING] Intermediate transcript segment received. VoiceChat UI remains visible.');
       // We could update a running history here if needed, but VoiceChat.tsx passes the full history when done.
-      // setVoiceChatActiveForAnimation(true); // Keep animation active if AI is about to speak or user can speak
     }
   }, [isCoachSpeaking]); // Updated dependencies
   
@@ -208,7 +173,6 @@ export function VoiceOnboarding() {
     setShowTextChat(true);
     setVoiceChatUIVisible(false);
     setIsReconnecting(false);
-    setVoiceChatActiveForAnimation(false);
     setIsCoachSpeaking(false);
     // Navigation to 'Onboarding' (which is OnboardingChat) is fine as it's in RootStackParamList
     navigation.navigate('Onboarding', { coachId: currentCoachId });
@@ -218,24 +182,21 @@ export function VoiceOnboarding() {
     setVoiceChatUIVisible(true);
     setVoiceChatManuallyClosed(false); 
     setReconnectAttempts(0);
-    setVoiceChatActiveForAnimation(true);
-    setShowContinueButtonStage(false); // Reset this stage
+    setShowCompletionOverlay(false); // Reset overlay state
     setVoiceConversationActuallyCompleted(false); // Reset completion state
-    setWaitingForCoachToFinishSpeaking(false); // Reset waiting state
   };
   
   const getProgressValue = () => {
     switch (processingStep) {
-      case 'extracting': return 0.33;
-      case 'saving': return 0.66;
-      case 'generating_plan': return 0.9;
+      case 'extracting': return 0.1;
+      case 'saving': return 0.2;
+      case 'generating_plan': return 0.5;
       case 'complete': return 1;
       default: return 0;
     }
   };
   
   const handleContinueAfterVoice = async () => {
-    setShowContinueButtonStage(false); // Hide the continue button
     console.log('[VOICE_ONBOARDING] Continue button clicked. Processing voice conversation...');
     
     if (isProcessing) {
@@ -278,6 +239,8 @@ export function VoiceOnboarding() {
   useEffect(() => {
     if (isHookProcessingComplete && processingStep === 'complete') {
       console.log('[VOICE_ONBOARDING] Full onboarding process complete. Navigating to MainApp/HomeScreen...');
+      // Hide the completion overlay before navigation
+      setShowCompletionOverlay(false);
       // Reset stack to MainApp, initial screen HomeScreen if TabNavigator is configured for that
       navigation.reset({
         index: 0,
@@ -301,55 +264,10 @@ export function VoiceOnboarding() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.contentCentered}>
-        <View style={styles.coachImageContainer}>
-          <View
-            style={[
-              styles.coachImageWrapper,
-              voiceChatActiveForAnimation && styles.coachImageWrapperActive
-            ]}
-          >
-            <Animatable.Image
-              source={coach.avatar} // This should now be safe
-              animation={voiceChatActiveForAnimation ? "pulse" : undefined}
-              iterationCount="infinite"
-              duration={1000}
-              easing="ease-in-out"
-              style={styles.coachImage}
-            />
-            
-            {voiceChatActiveForAnimation && (
-              <Animatable.View 
-                animation="pulse" 
-                iterationCount="infinite" 
-                duration={1500}
-                style={styles.animatedBorder}
-              />
-            )}
-            
-            {voiceChatActiveForAnimation && (
-              <Animatable.View 
-                animation={glowAnimation} 
-                iterationCount="infinite" 
-                duration={1200}
-                style={styles.glowOverlay}
-              />
-            )}
-            
-            {voiceChatActiveForAnimation && (
-              <View style={styles.speakingIndicator}>
-                <Animatable.View 
-                  animation="pulse" 
-                  iterationCount="infinite" 
-                  duration={1000}
-                  style={styles.speakingDot}
-                />
-              </View>
-            )}
-          </View>
-          <View style={styles.coachNameContainer}>
-            <Text style={styles.coachName}>Coach {coach.name}</Text>
-          </View>
+      <View style={styles.content}>
+        <View style={styles.header}>
+          <Image source={coach.avatar} style={styles.coachImage} />
+          <Text style={styles.coachName}>{coach.name}</Text>
         </View>
         
         {voiceChatUIVisible && apiKey && (
@@ -376,7 +294,7 @@ export function VoiceOnboarding() {
         
         <View style={styles.actionContainer}>
           {/* Show "Talk to coach" button when voice chat is NOT visible, hook is NOT complete, and NOT reconnecting */}
-          {!voiceChatUIVisible && !isHookProcessingComplete && !isReconnecting && !showContinueButtonStage && (
+          {!voiceChatUIVisible && !isHookProcessingComplete && !isReconnecting && !showCompletionOverlay && (
             <>
               <Animatable.View animation="pulse" iterationCount={3} duration={1000}>
                 <TouchableOpacity 
@@ -402,17 +320,6 @@ export function VoiceOnboarding() {
             </View>
           )}
           
-          {/* Show "Continue" button at the new stage */}
-          {showContinueButtonStage && !isProcessing && !isHookProcessingComplete && (
-            <View style={styles.continueContainer}>
-              <Text style={styles.title}>Ready to Proceed?</Text>
-              <Text style={styles.subtitle}>Your voice chat with {coach.name} is complete.</Text>
-              <TouchableOpacity onPress={handleContinueAfterVoice} style={styles.talkButton}>
-                <Text style={styles.talkButtonText}>Continue</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-          
           {voiceChatError && !isReconnecting && (
             <View style={styles.errorContainer}>
               <Text style={styles.errorText}>{voiceChatError}</Text>
@@ -420,6 +327,15 @@ export function VoiceOnboarding() {
           )}
         </View>
       </View>
+      
+      {/* Completion Overlay */}
+      <CompletionOverlay
+        visible={showCompletionOverlay}
+        coachName={coach.name}
+        coachAvatar={coach.avatar}
+        onContinue={handleContinueAfterVoice}
+        isProcessing={isProcessing}
+      />
       
       <LoadingOverlay 
         visible={isProcessing} // Correct prop name is 'visible'
@@ -437,103 +353,25 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'white',
   },
-  contentCentered: {
+  content: {
     flex: 1,
     padding: 20,
     justifyContent: 'center', // Center vertically
   },
-  coachImageContainer: {
+  header: {
     alignItems: 'center',
     marginBottom: 40,
-  },
-  coachImageWrapper: {
-    position: 'relative',
-    borderRadius: 85,
-    padding: 3,
-    borderWidth: 2,
-    borderColor: '#F5F5F5',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.2,
-        shadowRadius: 2,
-      },
-      android: {
-        elevation: 4,
-      },
-    }),
-  },
-  coachImageWrapperActive: {
-    borderWidth: 4,
-    borderColor: '#8B5CF6',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.7,
-        shadowRadius: 20,
-      },
-      android: {
-        elevation: 10,
-        borderColor: '#8B5CF6',
-      },
-    }),
-  },
-  animatedBorder: {
-    position: 'absolute',
-    top: -5,
-    left: -5,
-    right: -5,
-    bottom: -5,
-    borderRadius: 100,
-    borderWidth: 3,
-    borderColor: '#8B5CF6',
   },
   coachImage: {
     width: 160,
     height: 160,
     borderRadius: 80,
   },
-  glowOverlay: {
-    position: 'absolute',
-    top: -8,
-    left: -8,
-    right: -8,
-    bottom: -8,
-    borderRadius: 100,
-    backgroundColor: 'transparent',
-    borderWidth: 5,
-    borderColor: 'rgba(139, 92, 246, 0.5)',
-  },
-  speakingIndicator: {
-    position: 'absolute',
-    bottom: 5,
-    right: 5,
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 3,
-    borderWidth: 1,
-    borderColor: '#8B5CF6',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 3,
-  },
-  speakingDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#4CAF50',
-  },
-  coachNameContainer: {
-    marginTop: 16,
-  },
   coachName: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#000000',
+    marginTop: 16,
   },
   voiceChatContainer: {
     marginTop: 30,
@@ -583,24 +421,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textDecorationLine: 'underline',
   },
-  continueButton: {
-    backgroundColor: '#000000', // Kept black as per original style for this button
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    marginTop: 20, // Added margin for spacing
-  },
-  continueButtonText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: '600',
-  },
   errorContainer: {
     marginTop: 8,
     padding: 8,
@@ -621,52 +441,6 @@ const styles = StyleSheet.create({
   reconnectingText: {
     color: '#8B5CF6',
     fontSize: 16,
-  },
-  continueContainer: {
-    // flex: 1, // This might make it take full screen, adjust as needed
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-    marginTop: 20, // Add some margin if not taking full flex
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    textAlign: 'center',
-    color: '#333',
-  },
-  subtitle: {
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: 30,
-    color: '#555',
-    paddingHorizontal: 20,
-  },
-  voiceButton: {
-    backgroundColor: '#7C3AED', // Purple from original styles
-    paddingVertical: 15,
-    paddingHorizontal: 30,
-    borderRadius: 30,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    marginBottom: 20,
-    alignItems: 'center', // Ensure text is centered if not already
-  },
-  voiceButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  completionContainer: {
-    // flex: 1, // Adjust as needed
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-    marginTop: 20, // Add some margin
   },
   button: { // General button style, e.g., for error screen
     backgroundColor: '#7C3AED',

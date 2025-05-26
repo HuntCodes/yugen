@@ -76,6 +76,14 @@ VOLUME REQUIREMENTS:
 - Track cumulative distance as you create each session to ensure weekly targets are met.
 - Prioritize meeting volume requirements over session count preferences if needed.
 
+PROGRESSION PRINCIPLES:
+- Week 1: Establish baseline fitness and routine, conservative approach
+- Week 2: Build on Week 1 with appropriate progression and variety
+- NEVER create identical weeks - each week should show thoughtful progression
+- Vary session types, distances, and intensities while maintaining total volume
+- For beginners: focus on consistency and gradual adaptation
+- For experienced runners: introduce appropriate variety and challenge
+
 DOUBLE DAY GUIDANCE:
 - For 80-120 km/week: Include 1-2 double days per week (easy run + workout, or easy AM + easy PM)
 - For 120+ km/week: Include 2-4 double days per week
@@ -114,6 +122,16 @@ Runner Profile:
 VOLUME TARGETS:
 - Week 1 target: ${currentMileage} ${units} (or proportional if partial week)
 - Week 2 target: ${currentMileage} ${units}
+
+PROGRESSION GUIDANCE:
+- Week 1 should focus on establishing a routine and assessing the runner's current fitness
+- Week 2 should build slightly on Week 1 with minor progressions or variations:
+  * Different session types (if Week 1 had easy runs, Week 2 could include strides or tempo)
+  * Vary terrain or intensity within the same total volume
+  * For beginners: focus on consistency and gradual adaptation
+  * For experienced runners: introduce more variety in session types
+- Maintain similar total weekly volume but vary the distribution and session types
+- Avoid creating identical weeks - each week should feel like a natural progression
 ${parseFloat(String(currentMileage).replace(/[^\d.]/g, '') || '0') >= 80 ? `
 HIGH MILEAGE RUNNER DETECTED (${currentMileage}):
 - Consider 1-4 double days per week depending on volume

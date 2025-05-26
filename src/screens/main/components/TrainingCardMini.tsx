@@ -5,7 +5,7 @@ import { TrainingSession, SessionStatus } from '../training/components/types';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { TabParamList } from '../../../navigation/TabNavigator';
 import { Feather } from '@expo/vector-icons';
-import { getSuggestedShoe } from '../../../lib/utils/training/shoeRecommendations';
+import { getSuggestedShoe, getProductIdFromShoeName } from '../../../lib/utils/training/shoeRecommendations';
 
 interface TrainingCardMiniProps {
   sessions: TrainingSession[];
@@ -64,6 +64,14 @@ export function TrainingCardMini({
     }
   };
 
+  // Handle shoe recommendation click
+  const handleShoeClick = (shoeName: string) => {
+    const productId = getProductIdFromShoeName(shoeName);
+    if (productId) {
+      navigation.navigate('Gear', { highlightProductId: productId });
+    }
+  };
+
   // Get status display information
   const getStatusInfo = (status?: string) => {
     switch (status) {
@@ -113,7 +121,9 @@ export function TrainingCardMini({
         {suggestedShoe && (
           <View className="flex-row items-center">
             <Text className="text-xs text-gray-600 mr-1">Suggested shoe:</Text>
-            <Text className="text-xs font-medium">{suggestedShoe}</Text>
+            <TouchableOpacity onPress={() => handleShoeClick(suggestedShoe)}>
+              <Text className="text-xs font-medium text-blue-600">{suggestedShoe}</Text>
+            </TouchableOpacity>
           </View>
         )}
 
