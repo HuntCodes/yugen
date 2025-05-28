@@ -19,7 +19,7 @@ export function EntryScreen() {
           textAlign: 'center', 
           marginBottom: 24 
         }}>
-          Welcome to the future of training
+          Welcome to the future of endurance training
         </Text>
         
         <Text style={{ 
@@ -28,7 +28,7 @@ export function EntryScreen() {
           textAlign: 'center', 
           marginBottom: 48
         }}>
-          Join the movement and transform your running journey
+          Project Yugen: Version 0.1
         </Text>
         
         <TouchableOpacity

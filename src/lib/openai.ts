@@ -88,7 +88,7 @@ DOUBLE DAY GUIDANCE:
 - For 80-120 km/week: Include 1-2 double days per week (easy run + workout, or easy AM + easy PM)
 - For 120+ km/week: Include 2-4 double days per week
 - Double days should typically be: morning easy run (30-60 min) + afternoon workout OR two easy runs
-- Format double days as separate session objects with the same date but different session_type (e.g., "Easy Run (AM)" and "Tempo Run (PM)")
+- Format double days as separate session objects with the same date but different session_type (e.g., "Easy Run (AM)" and Double Run (PM))
 
 TECHNICAL REQUIREMENTS:
 The plan should consist of an array of session objects. Each session object must conform to the schema provided for the 'save_initial_training_plan' function.
@@ -160,7 +160,7 @@ Remember to call 'save_initial_training_plan' with the complete list of sessions
                   day_of_week: { type: "integer", description: "Day of the week (1 for Monday, 7 for Sunday)." },
                   week_number: { type: "integer", description: "The week number (1 for partial first week, 2 for full second week)." },
                   phase: { type: "string", description: "Training phase, e.g., 'Base'. Should be 'Base' for these initial weeks." },
-                  session_type: { type: "string", description: "Type of session (e.g., 'Easy Run', 'Easy Run + Strides', 'Long Run', 'Rest', 'Tempo Run', 'Hills', 'Strides', 'Track Workout', 'Fartlek', 'Progression Run', 'Cross Training', 'Strength Training')." },
+                  session_type: { type: "string", description: "Type of session (e.g., 'Easy Run', 'Easy Run + Strides', 'Double Run','Long Run', 'Threshold Run', 'Rest', 'Tempo Run', 'Hills', 'Strides', 'Track Workout', 'Fartlek', 'Progression Run', 'Cross Training', 'Strength Training')." },
                   distance: { type: "number", nullable: true, description: `Planned distance in ${units}. Null if not applicable.` },
                   time: { type: "integer", nullable: true, description: "Planned duration in minutes. Null if not applicable." },
                   notes: { type: "string", nullable: true, description: "Specific instructions or notes for the session." }
@@ -185,7 +185,7 @@ Remember to call 'save_initial_training_plan' with the complete list of sessions
         'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini', // Or your preferred model
+        model: 'gpt-4o', // Or your preferred model
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },

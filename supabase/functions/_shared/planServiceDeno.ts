@@ -223,7 +223,9 @@ DOUBLE DAY GUIDANCE:
 SESSION TYPE GUIDANCE:
 - Easy Run: Base aerobic development, comfortable effort
 - Easy Run + Strides: Easy run with 4-6 x 100m accelerations
+- Double Run: Shorter run in the afternoon
 - Long Run: Weekly long effort for endurance building
+- Threshold Run: Comfortably hard sustained effort (threshold pace)
 - Tempo Run: Comfortably hard sustained effort (threshold pace)
 - Progression Run: Start easy, finish at moderate-hard effort
 - Hills: Hill repeats or hill circuit for strength and power
@@ -342,7 +344,7 @@ Remember to call 'save_weekly_training_plan' with the complete list of sessions 
             ];
 
             const completion = await openai.chat.completions.create({
-              model: "gpt-4o-mini", // Use same model as openai.ts for consistency
+              model: "gpt-4o", // Changed from gpt-4o-mini to gpt-4o for better plan generation
               messages: messages,
               tools: tools,
               tool_choice: {"type": "function", "function": {"name": "save_weekly_training_plan"}}, // Force calling the function
