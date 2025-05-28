@@ -28,7 +28,7 @@ export function EntryScreen() {
           textAlign: 'center', 
           marginBottom: 48
         }}>
-          Project Yugen: Version 0.1
+          Project Yugen: 1.0.0
         </Text>
         
         <TouchableOpacity
