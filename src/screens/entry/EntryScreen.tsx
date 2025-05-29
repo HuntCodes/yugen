@@ -39,10 +39,10 @@ export function EntryScreen() {
             borderRadius: 6,
             marginBottom: 16
           }}
-          onPress={() => navigation.navigate('Login')}
+          onPress={() => navigation.navigate('SignUp')}
         >
           <Text style={{ color: 'white', textAlign: 'center', fontWeight: '500', fontSize: 16 }}>
-            Sign In
+            Create Account
           </Text>
         </TouchableOpacity>
 
@@ -55,10 +55,10 @@ export function EntryScreen() {
             borderWidth: 1,
             borderColor: '#F5F5F5'
           }}
-          onPress={() => navigation.navigate('SignUp')}
+          onPress={() => navigation.navigate('Login')}
         >
           <Text style={{ color: '#000000', textAlign: 'center', fontWeight: '500', fontSize: 16 }}>
-            Create Account
+            Sign In
           </Text>
         </TouchableOpacity>
       </View>

@@ -53,7 +53,7 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   // Helper function to get color for session type
   const getSessionTypeColor = (sessionType: string) => {
     const type = sessionType.toLowerCase();
-    if (type.includes('easy') || type.includes('recovery')) {
+    if (type.includes('easy') || type.includes('recovery') || type.includes('double')) {
       return colors.easy;
     } else if (type.includes('interval') || type.includes('speed') || type.includes('tempo')) {
       return colors.interval;

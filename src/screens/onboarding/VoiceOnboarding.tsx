@@ -17,6 +17,13 @@ import * as Animatable from 'react-native-animatable';
 import { useAuth } from '../../hooks/useAuth';
 import { coachStyles } from '../../config/coachingGuidelines';
 
+// Glow animation definition (copied from DailyVoiceChat)
+const glowAnimation = {
+  0: { opacity: 0.3, borderWidth: 2 },
+  0.5: { opacity: 1, borderWidth: 5 },
+  1: { opacity: 0.3, borderWidth: 2 },
+};
+
 // Image mapping for coaches
 const imageMap: Record<string, any> = {
   craig: require('../../assets/craig.jpg'),
@@ -266,7 +273,55 @@ export function VoiceOnboarding() {
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
         <View style={styles.header}>
-          <Image source={coach.avatar} style={styles.coachImage} />
+          {voiceChatUIVisible ? (
+            // Animated coach head during voice chat
+            <View style={styles.animatedCoachContainer}>
+              <View
+                style={[
+                  styles.coachImageWrapper,
+                  styles.coachImageWrapperActive
+                ]}
+              >
+                <Animatable.Image
+                  source={coach.avatar}
+                  animation="pulse"
+                  iterationCount="infinite"
+                  duration={1000}
+                  easing="ease-in-out"
+                  style={styles.coachImage}
+                  resizeMode="cover"
+                />
+                
+                <Animatable.View 
+                  animation="pulse" 
+                  iterationCount="infinite" 
+                  duration={1500}
+                  style={styles.animatedBorder}
+                />
+                
+                <Animatable.View 
+                  animation={glowAnimation} 
+                  iterationCount="infinite" 
+                  duration={1200}
+                  style={styles.glowOverlay}
+                />
+                
+                {isCoachSpeaking && (
+                  <View style={styles.speakingIndicator}>
+                    <Animatable.View 
+                      animation="pulse" 
+                      iterationCount="infinite" 
+                      duration={1000}
+                      style={styles.speakingDot}
+                    />
+                  </View>
+                )}
+              </View>
+            </View>
+          ) : (
+            // Static coach image when not in voice chat
+            <Image source={coach.avatar} style={styles.coachImage} />
+          )}
           <Text style={styles.coachName}>{coach.name}</Text>
         </View>
         
@@ -453,5 +508,89 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  animatedCoachContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+  },
+  coachImageWrapper: {
+    position: 'relative',
+    width: 170,
+    height: 170,
+    borderRadius: 85, 
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#F5F5F5',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.2,
+        shadowRadius: 2,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  coachImageWrapperActive: {
+    borderWidth: 4,
+    borderColor: '#8B5CF6',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#8B5CF6',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.7,
+        shadowRadius: 20,
+      },
+      android: {
+        elevation: 10,
+        borderColor: '#8B5CF6',
+      },
+    }),
+  },
+  animatedBorder: {
+    position: 'absolute',
+    top: -5,
+    left: -5,
+    right: -5,
+    bottom: -5,
+    borderRadius: 100,
+    borderWidth: 3,
+    borderColor: '#8B5CF6',
+  },
+  glowOverlay: {
+    position: 'absolute',
+    top: -8,
+    left: -8,
+    right: -8,
+    bottom: -8,
+    borderRadius: 100,
+    backgroundColor: 'transparent',
+    borderWidth: 5,
+    borderColor: 'rgba(139, 92, 246, 0.5)',
+  },
+  speakingIndicator: {
+    position: 'absolute',
+    bottom: 5,
+    right: 5,
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 3,
+    borderWidth: 1,
+    borderColor: '#8B5CF6',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 3,
+  },
+  speakingDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#4CAF50',
   },
 }); 

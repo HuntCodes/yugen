@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, SafeAreaView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, SafeAreaView, Keyboard, KeyboardAvoidingView, Platform, InputAccessoryView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/AppNavigator';
@@ -43,6 +43,34 @@ export function LoginScreen() {
       setLoading(false);
     }
   };
+
+  const DoneButton = () => (
+    <View style={{
+      backgroundColor: '#F8F9FA',
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      borderTopWidth: 1,
+      borderTopColor: '#E9ECEF',
+      flexDirection: 'row',
+      justifyContent: 'flex-end'
+    }}>
+      <TouchableOpacity
+        onPress={() => Keyboard.dismiss()}
+        style={{
+          paddingHorizontal: 16,
+          paddingVertical: 8
+        }}
+      >
+        <Text style={{ 
+          color: '#007AFF', 
+          fontSize: 16, 
+          fontWeight: '600' 
+        }}>
+          Done
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: 'white' }}>
@@ -103,6 +131,11 @@ export function LoginScreen() {
             placeholderTextColor="#9E9E9E"
             keyboardType="email-address"
             autoCapitalize="none"
+            returnKeyType="next"
+            onSubmitEditing={() => {
+              // Focus will move to password field automatically
+            }}
+            inputAccessoryViewID="emailDoneButton"
           />
         </View>
 
@@ -128,6 +161,12 @@ export function LoginScreen() {
             placeholder="Your password"
             placeholderTextColor="#9E9E9E"
             secureTextEntry
+            returnKeyType="done"
+            onSubmitEditing={() => {
+              Keyboard.dismiss();
+              handleLogin();
+            }}
+            inputAccessoryViewID="passwordDoneButton"
           />
         </View>
 
@@ -168,6 +207,14 @@ export function LoginScreen() {
           </TouchableOpacity>
         </View>
       </View>
+      
+      <InputAccessoryView nativeID="emailDoneButton">
+        <DoneButton />
+      </InputAccessoryView>
+      
+      <InputAccessoryView nativeID="passwordDoneButton">
+        <DoneButton />
+      </InputAccessoryView>
     </SafeAreaView>
   );
 } 

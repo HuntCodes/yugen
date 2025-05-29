@@ -1526,7 +1526,7 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
                     console.log('[DailyVoiceChat] Training plan updated. Will refresh after chat ends.');
                   }
                   
-                  // Wait a very short moment before requesting a new response
+                  // Let AI handle natural conversation flow after function execution
                   setTimeout(() => {
                     if (dataChannelRef.current?.readyState === 'open') {
                       console.log('[DailyVoiceChat] Requesting new response after function output');
@@ -1580,7 +1580,13 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
                 console.log('[DailyVoiceChat] Sending direct function output result:', JSON.stringify(functionOutputEvent));
                 dataChannelRef.current.send(JSON.stringify(functionOutputEvent));
                 
-                // Wait a very short moment before requesting a new response
+                // Set flag to refresh after chat ends
+                if (refreshHomeScreen) {
+                  setNeedsRefresh(true);
+                  console.log('[DailyVoiceChat] Training plan updated. Will refresh after chat ends.');
+                }
+                
+                // Let AI handle natural conversation flow after function execution
                 setTimeout(() => {
                   if (dataChannelRef.current?.readyState === 'open') {
                     console.log('[DailyVoiceChat] Requesting new response after function output');

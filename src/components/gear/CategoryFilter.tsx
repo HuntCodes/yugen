@@ -25,6 +25,8 @@ export function CategoryFilter({
         <TouchableOpacity
           className={`px-4 py-3 rounded-full mr-2 ${selectedCategory === null ? 'bg-black' : 'bg-[#F0ECEB]'}`}
           onPress={() => onSelectCategory(null)}
+          activeOpacity={0.7}
+          delayPressIn={0}
         >
           <Text className={`${selectedCategory === null ? 'text-white' : 'text-black'} font-medium`}>
             All
@@ -36,6 +38,8 @@ export function CategoryFilter({
             key={category}
             className={`px-4 py-3 rounded-full mr-2 ${selectedCategory === category ? 'bg-black' : 'bg-[#F0ECEB]'}`}
             onPress={() => onSelectCategory(category)}
+            activeOpacity={0.7}
+            delayPressIn={0}
           >
             <Text className={`${selectedCategory === category ? 'text-white' : 'text-black'} font-medium`}>
               {category}
