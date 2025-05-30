@@ -39,9 +39,9 @@ const glowAnimation = {
   1: { opacity: 0.3, borderWidth: 2 },
 };
 
-// Extended ChatMessage interface with timestamp
+// Extended ChatMessage interface with id
 interface TimestampedChatMessage extends CoreChatMessage {
-  timestamp?: number;
+  // sender, message, and timestamp are inherited from CoreChatMessage
   id?: string;
 }
 
@@ -118,6 +118,13 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
   const [isExecutingTool, setIsExecutingTool] = useState(false);
   const [isInitializedThisSession, setIsInitializedThisSession] = useState(false);
   const [userFeedback, setUserFeedback] = useState<any>(null);
+  const [sessionStartTime, setSessionStartTime] = useState<number | null>(null);
+  const [volume, setVolume] = useState(0.8); // Volume state (0.0 to 1.0)
+  const [showVolumeControls, setShowVolumeControls] = useState(false);
+  
+  // State for tracking speech timing
+  const [userSpeechStartTime, setUserSpeechStartTime] = useState<number | null>(null);
+  const [coachSpeechStartTime, setCoachSpeechStartTime] = useState<number | null>(null);
   
   // Track accumulated function call arguments
   const [pendingFunctionArgs, setPendingFunctionArgs] = useState<{[callId: string]: string}>({});
@@ -142,6 +149,7 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
   const maxRetries = 3;
   const wasVisibleRef = useRef(isVisible);
   const [needsRefresh, setNeedsRefresh] = useState(false);
+  const sessionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // --- HOOKS ---
   const { buildSystemPrompt, getToolsDefinitionForRealtimeAPI, buildUserContextString } = useMessageFormatting();
@@ -250,6 +258,13 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
     setPendingCoachResponse('');
     setErrorState(null);
     setIsInitializedThisSession(false);
+    
+    // Clear session timeout
+    setSessionStartTime(null);
+    if (sessionTimeoutRef.current) {
+      clearTimeout(sessionTimeoutRef.current);
+      sessionTimeoutRef.current = null;
+    }
   }, [stopAudioProcessing]);
   
   const fullCleanupAndClose = useCallback(() => {
@@ -326,7 +341,7 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
       console.log('[DailyVoiceChat] Playing TTS audio chunk...');
       const { sound } = await Audio.Sound.createAsync(
          { uri: `data:audio/mp3;base64,${base64Audio}` },
-         { shouldPlay: true }
+         { shouldPlay: true, volume: volume }
       );
       ttsPlayerRef.current = sound;
       await sound.playAsync();
@@ -334,7 +349,31 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
     } catch (e: any) {
       handleError(`TTS playback error: ${e.message}`);
     }
-  }, [handleError]);
+  }, [handleError, volume]);
+
+  // Volume control functions
+  const adjustVolume = useCallback((delta: number) => {
+    setVolume(prevVolume => {
+      const newVolume = Math.max(0, Math.min(1, prevVolume + delta));
+      console.log(`[DailyVoiceChat] Volume adjusted to: ${Math.round(newVolume * 100)}%`);
+      
+      // Update current TTS player volume if playing
+      if (ttsPlayerRef.current) {
+        ttsPlayerRef.current.setVolumeAsync(newVolume).catch(e => 
+          console.warn('[DailyVoiceChat] Error setting TTS volume:', e)
+        );
+      }
+      
+      return newVolume;
+    });
+  }, []);
+
+  const increaseVolume = useCallback(() => adjustVolume(0.1), [adjustVolume]);
+  const decreaseVolume = useCallback(() => adjustVolume(-0.1), [adjustVolume]);
+  
+  const toggleVolumeControls = useCallback(() => {
+    setShowVolumeControls(prev => !prev);
+  }, []);
 
   // Helper function to determine if two text strings are similar
   const isSimilarText = (text1: string, text2: string): boolean => {
@@ -427,7 +466,7 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
             },
             turn_detection: {
               type: "server_vad",
-              threshold: 0.8,
+              threshold: 0.9,
               prefix_padding_ms: 800,
               silence_duration_ms: 800,
               create_response: true,
@@ -515,7 +554,7 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
             'Accept': 'application/json'
           },
           body: JSON.stringify({
-            model: 'gpt-4o-mini-realtime-preview-2024-12-17',
+            model: 'gpt-4o-mini-realtime-preview',
             voice: 'verse'
           }),
           signal: controller.signal
@@ -677,15 +716,19 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
                 // Update UI with coach message
                 setPendingCoachResponse(cleanedTranscript);
                 
-                // Add to conversation history
+                // Add to conversation history using speech start time
+                const messageTimestamp = coachSpeechStartTime || Date.now(); // Fallback to current time if no start time
                 const newCoachMessage: TimestampedChatMessage = {
                   sender: 'coach',
                   message: cleanedTranscript,
-                  timestamp: Date.now(),
+                  timestamp: messageTimestamp,
                   id: v4()
                 };
                 
                 setConversationHistory(prev => [...prev, newCoachMessage]);
+                
+                // Clear the speech start time after using it
+                setCoachSpeechStartTime(null);
               } else {
                 console.log('[DailyVoiceChat] Empty or invalid coach transcript received');
               }
@@ -697,6 +740,7 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
           // Handle output audio buffer events for coach audio playback
           else if (data.type === 'output_audio_buffer.started') {
             console.log('[DailyVoiceChat] Output audio buffer started');
+            setCoachSpeechStartTime(Date.now()); // Record when coach speech starts
             setIsCoachSpeakingTTS(true);
             setShowAnimatedCoachView(true);
             if (onSpeakingStateChange) onSpeakingStateChange(true, 'coach');
@@ -737,15 +781,19 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
               setCurrentTranscript(cleanedTranscript);
               setUserTranscriptJustReceived(true);
               
-              // Add message to conversation history
+              // Add user message to conversation history using speech start time
+              const messageTimestamp = userSpeechStartTime || Date.now(); // Fallback to current time if no start time
               const newUserMessage: TimestampedChatMessage = { 
                 sender: 'user', 
                 message: cleanedTranscript,
-                timestamp: Date.now(),
+                timestamp: messageTimestamp,
                 id: v4()
               };
               
               setConversationHistory(prev => [...prev, newUserMessage]);
+              
+              // Clear the speech start time after using it
+              setUserSpeechStartTime(null);
               
               // Set temporary flag to show user is speaking
               setUserIsActuallySpeaking(true);
@@ -790,15 +838,19 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
                 // Update UI with coach message
                 setPendingCoachResponse(cleanedContent);
                 
-                // Add to conversation
+                // Add to conversation using speech start time
+                const messageTimestamp = coachSpeechStartTime || Date.now(); // Fallback to current time if no start time
                 const newCoachMessage: TimestampedChatMessage = {
                   sender: 'coach',
                   message: cleanedContent,
-                  timestamp: Date.now(),
+                  timestamp: messageTimestamp,
                   id: v4()
                 };
                 
                 setConversationHistory(prev => [...prev, newCoachMessage]);
+                
+                // Clear the speech start time after using it
+                setCoachSpeechStartTime(null);
               }
             }
             // Handle function calls
@@ -902,15 +954,19 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
                 setCurrentTranscript(cleanedTranscript);
                 setUserTranscriptJustReceived(true);
                 
-                // Add user message to conversation history
+                // Add user message to conversation history using speech start time
+                const messageTimestamp = userSpeechStartTime || Date.now(); // Fallback to current time if no start time
                 const newUserMessage: TimestampedChatMessage = { 
                   sender: 'user', 
                   message: cleanedTranscript,
-                  timestamp: Date.now(),
+                  timestamp: messageTimestamp,
                   id: v4()
                 };
                 
                 setConversationHistory(prev => [...prev, newUserMessage]);
+                
+                // Clear the speech start time after using it
+                setUserSpeechStartTime(null);
                 
                 // Set temporary flag to show user is speaking
                 setUserIsActuallySpeaking(true);
@@ -930,6 +986,17 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
             } catch (e) {
               console.error('[DailyVoiceChat] Error processing user transcription:', e);
             }
+          }
+          
+          // Handle input audio buffer events for user speech timing
+          else if (data.type === 'input_audio_buffer.speech_started') {
+            console.log('[DailyVoiceChat] User speech started');
+            setUserSpeechStartTime(Date.now()); // Record when user speech starts
+          }
+          
+          else if (data.type === 'input_audio_buffer.speech_stopped') {
+            console.log('[DailyVoiceChat] User speech stopped');
+            // Keep the start time until we get the transcript
           }
         } catch (error) {
           console.error('[DailyVoiceChat] Error processing data channel message:', error);
@@ -958,61 +1025,77 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
       
       // @ts-expect-error - Argument is optional in our implementation
       pc.onconnectionstatechange = () => {
-        console.log(`[DailyVoiceChat] Connection state changed to: ${pc.connectionState}`);
-        
-        // Handle different connection states
-        switch (pc.connectionState) {
+        if (!peerConnectionRef.current) return;
+
+        const connectionState = peerConnectionRef.current.connectionState;
+        console.log(`[DailyVoiceChat] Connection state changed to: ${connectionState}`);
+
+        switch (connectionState) {
+          case 'connecting':
+            console.log('[DailyVoiceChat] WebRTC connection in progress');
+            setIsConnecting(true);
+            break;
           case 'connected':
             console.log('[DailyVoiceChat] WebRTC connection established');
             setIsConnecting(false);
-            setIsLoading(false); // Ensure loading is set to false when connection is established
-            // Ensure coach animation is shown once connected
-            setShowAnimatedCoachView(true);
-            startAudioProcessing();
-            break;
-
-          case 'connecting':
-            // Update UI while connecting is in progress
-            console.log('[DailyVoiceChat] WebRTC connection in progress');
-            if (isLoading && !isConnecting) {
-              setIsConnecting(true);
+            setIsLoading(false); // Ensure loading is false once connected
+            // Start the session timeout timer
+            setSessionStartTime(Date.now());
+            if (sessionTimeoutRef.current) clearTimeout(sessionTimeoutRef.current);
+            sessionTimeoutRef.current = setTimeout(() => {
+                console.log("[DailyVoiceChat] Session timeout reached (25 minutes), ending session.");
+                handleEndSession(); // Corrected: No argument
+            }, 25 * 60 * 1000); // 25 minutes
+            
+            // Start audio processing if not already started (e.g., if permissions were delayed)
+            if (!isListening && localStreamRef.current) {
+                startAudioProcessing();
             }
             break;
-
           case 'disconnected':
-            console.log('[DailyVoiceChat] WebRTC connection disconnected');
-            if (!conversationComplete) {
-              handleError('Voice connection disconnected. You can try again or use text chat.', false);
-            }
-            setIsConnecting(false);
-            setIsLoading(false);
-            break;
-                
           case 'failed':
-            console.error('[DailyVoiceChat] WebRTC connection failed');
-            handleError('Voice connection failed. You can try again or use text chat.', true);
-            setIsConnecting(false);
-            setIsLoading(false);
-            // Show fallback mode after connection failure
-            setFallbackMode(true);
-            break;
-                
           case 'closed':
-            console.log('[DailyVoiceChat] WebRTC connection closed');
-            setIsLoading(false);
-            break;
-
-          default:
-            // Other states: 'new', 'connecting', 'checking' - no action needed
+            console.log(`[DailyVoiceChat] WebRTC connection ${connectionState}`);
+            setIsConnecting(false);
+            // Clear the session timeout timer
+            if (sessionTimeoutRef.current) {
+              clearTimeout(sessionTimeoutRef.current);
+              sessionTimeoutRef.current = null;
+            }
+            setSessionStartTime(null);
+            
+            // Only call fullCleanupAndClose if the session wasn't intentionally ended by the user
+            // and we are not in fallback mode already trying to switch
+            if (!conversationComplete && !fallbackMode) {
+                // If the state is 'failed', it suggests an unexpected drop.
+                // If it's 'closed' or 'disconnected', it might be from cleanup,
+                // but we should ensure cleanup runs if not already.
+                // Consider a more robust error or reconnection logic for 'failed' if desired.
+                handleError(`WebRTC connection ${connectionState}.`, connectionState === 'failed');
+                // If connection failed, consider fallback or attempt re-initialization after cleanup
+                if (connectionState === 'failed' && !cleanupScheduledRef.current) {
+                    console.log("[DailyVoiceChat] Connection failed, attempting cleanup and possibly retry or fallback.");
+                    // Fallback or retry logic could be triggered here after cleanup
+                }
+                // Ensure cleanup happens if connection drops unexpectedly
+                if (!cleanupScheduledRef.current) {
+                    fullCleanupAndClose();
+                }
+            }
             break;
         }
       };
-      
-      // @ts-ignore 
+
+      // Handle incoming remote audio tracks
+      // @ts-ignore
       pc.ontrack = (event: any) => {
-        console.log('[DailyVoiceChat] Received track:', event.track.kind);
-        if (event.track.kind === 'audio' && event.streams && event.streams[0]) {
-            console.log('[DailyVoiceChat] Audio track received via ontrack. This is unexpected if TTS is purely via data channel.');
+        console.log(`[DailyVoiceChat] Received track: ${event.track.kind}`);
+        if (event.track.kind === 'audio') {
+          console.log('[DailyVoiceChat] Audio track received via ontrack. Current design expects TTS via data channel. This track will be ignored.');
+          // We don't add event.streams[0] to any audio element or process it further,
+          // effectively ignoring it, as TTS is handled by playTTSAudio via data channel.
+          // If this track were to be played, it might look like:
+          // remoteAudioRef.current.srcObject = event.streams[0];
         }
       };
       
@@ -1055,7 +1138,7 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
 
         // Send offer to OpenAI Realtime API - Updated to match VoiceChat.tsx implementation
         console.log('[DailyVoiceChat] Sending SDP offer to OpenAI...');
-      const sdpResponse = await fetch(`https://api.openai.com/v1/realtime?model=gpt-4o-mini-realtime-preview-2024-12-17`, { 
+      const sdpResponse = await fetch(`https://api.openai.com/v1/realtime?model=gpt-4o-mini-realtime-preview`, { 
           method: 'POST',
           headers: {
               'Authorization': `Bearer ${token}`, 
@@ -1249,6 +1332,55 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
       }
     };
   }, [isVisible, isInitializedThisSession, finalCheckMicrophonePermissions, fullCleanupAndClose, fullCleanup, handleError, stopAudioProcessing]);
+
+  // --- EFFECT: Session timeout detection (proactive reset before 30min OpenAI timeout) ---
+  useEffect(() => {
+    const pc = peerConnectionRef.current;
+    const isConnected = pc?.connectionState === 'connected';
+    
+    if (isConnected && !sessionStartTime) {
+      // Session just connected, start the timer
+      const startTime = Date.now();
+      setSessionStartTime(startTime);
+      console.log('[DailyVoiceChat] Session connected, starting 25-minute timeout timer');
+      
+      // Set timeout for 25 minutes (5 minutes before OpenAI's 30min limit)
+      sessionTimeoutRef.current = setTimeout(() => {
+        console.log('[DailyVoiceChat] Proactive session reset - approaching 30min timeout');
+        
+        // Show a brief message to user about session refresh
+        setErrorState('Refreshing session...');
+        
+        // Reset the session after a brief delay
+        setTimeout(() => {
+          setSessionStartTime(null);
+          setErrorState(null);
+          
+          // Trigger a clean restart by resetting initialization flag
+          setIsInitializedThisSession(false);
+          setNeedsRefresh(true);
+        }, 1000);
+        
+      }, 1 * 60 * 1000); // 1 minute for testing
+      
+    } else if (!isConnected && sessionStartTime) {
+      // Session disconnected, clear the timer
+      console.log('[DailyVoiceChat] Session disconnected, clearing timeout timer');
+      setSessionStartTime(null);
+      if (sessionTimeoutRef.current) {
+        clearTimeout(sessionTimeoutRef.current);
+        sessionTimeoutRef.current = null;
+      }
+    }
+    
+    // Cleanup timeout on unmount
+    return () => {
+      if (sessionTimeoutRef.current) {
+        clearTimeout(sessionTimeoutRef.current);
+        sessionTimeoutRef.current = null;
+      }
+    };
+  }, [peerConnectionRef.current?.connectionState, sessionStartTime]);
 
   const handleEndSession = async () => {
     console.log('[DailyVoiceChat] Ending session manually or on completion.');
@@ -1444,13 +1576,14 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
             sender: messageSender,
             message: chatMessage.message,
           };
-          console.log('[DailyVoiceChat] Saving message:', messagePayload.sender, messagePayload.message.substring(0, 30) + (messagePayload.message.length > 30 ? '...' : ''));
-          return saveMessage(messagePayload, userId);
+          console.log('[DailyVoiceChat] Saving message:', messagePayload.sender, messagePayload.message.substring(0, 30) + (messagePayload.message.length > 30 ? '...' : ''), 'timestamp:', chatMessage.timestamp);
+          // Pass the timestamp to preserve the correct speech timing
+          return saveMessage(messagePayload, userId, chatMessage.timestamp);
         });
       
       // Wait for all save operations to complete
       await Promise.all(savePromises);
-      console.log('[DailyVoiceChat] All messages saved successfully.');
+      console.log('[DailyVoiceChat] All messages saved successfully with correct timestamps.');
       
       // No need to call onSessionComplete here - it's now called in handleEndSession
       // to ensure better sequencing of operations

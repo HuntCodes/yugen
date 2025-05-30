@@ -1,6 +1,7 @@
 export interface ChatMessage {
   sender: 'coach' | 'user';
   message: string;
+  timestamp?: number;
 }
 
 export interface ChatHistoryOptions {

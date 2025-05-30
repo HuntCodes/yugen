@@ -7,37 +7,31 @@ import { ChatMessage } from '../types/chat';
  */
 export async function saveMessage(
   message: ChatMessage, 
-  userId: string
+  userId: string,
+  customTimestamp?: number // Optional timestamp in milliseconds (local time)
 ): Promise<boolean> {
   try {
-    // Try using the stored procedure first
-    const { data, error } = await supabase.rpc('insert_coach_message', {
-      p_user_id: userId,
-      p_sender: message.sender,
-      p_message: message.message
-    });
-    
-    if (error) {
-      console.error('Error saving message via RPC:', error);
+    // Convert custom timestamp to ISO string if provided
+    const timestampToUse = customTimestamp 
+      ? new Date(customTimestamp).toISOString()
+      : new Date().toISOString();
       
-      // Fallback to direct insert if RPC fails
+    // Use direct insert to coach_messages table
       const { error: insertError } = await supabase
         .from('coach_messages')
         .insert({
           user_id: userId,
           sender: message.sender,
           message: message.message,
-          created_at: new Date().toISOString()
+        created_at: timestampToUse
         });
         
       if (insertError) {
         console.error('Error saving message via direct insert:', insertError);
         return false;
-      }
-    } else {
-      console.log('Message saved successfully via RPC');
     }
     
+    console.log('Message saved successfully with timestamp:', timestampToUse);
     return true;
   } catch (err) {
     console.error('Failed to save message:', err);

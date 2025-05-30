@@ -1,9 +1,9 @@
-import { supabase } from '../../lib/api/supabase';
+import { supabase } from '../../lib/supabase';
 
 export interface ChatMessage {
   sender: 'coach' | 'user';
   message: string;
-  timestamp?: string;
+  timestamp?: number;
 }
 
 /**
@@ -53,8 +53,8 @@ export const fetchChatHistory = async (userId: string, limit = 50): Promise<Chat
     const formattedMessages: ChatMessage[] = data.map(item => ({
       sender: item.sender,
       message: item.message,
-      timestamp: item.created_at
-    })).sort((a, b) => new Date(a.timestamp!).getTime() - new Date(b.timestamp!).getTime());
+      timestamp: new Date(item.created_at).getTime()
+    })).sort((a, b) => (a.timestamp! - b.timestamp!));
     
     return formattedMessages;
   } catch (err) {
@@ -66,8 +66,17 @@ export const fetchChatHistory = async (userId: string, limit = 50): Promise<Chat
 /**
  * Save a new message to the database
  */
-export const saveMessage = async (message: ChatMessage, userId: string): Promise<boolean> => {
+export const saveMessage = async (
+  message: ChatMessage, 
+  userId: string,
+  customTimestamp?: number // Optional timestamp in milliseconds (local time)
+): Promise<boolean> => {
   try {
+    // Convert custom timestamp to ISO string if provided
+    const timestampToUse = customTimestamp 
+      ? new Date(customTimestamp).toISOString()
+      : new Date().toISOString();
+    
     // Save to coach_messages table
     const { error: coachMsgError } = await supabase
       .from('coach_messages')
@@ -75,7 +84,7 @@ export const saveMessage = async (message: ChatMessage, userId: string): Promise
         user_id: userId,
         sender: message.sender,
         message: message.message,
-        created_at: new Date().toISOString()
+        created_at: timestampToUse
       });
       
     if (coachMsgError) {
@@ -83,6 +92,7 @@ export const saveMessage = async (message: ChatMessage, userId: string): Promise
       return false;
     }
     
+    console.log('Message saved successfully with timestamp:', timestampToUse);
     return true;
   } catch (err) {
     console.error('Error in saveMessage:', err);
@@ -128,7 +138,7 @@ export const subscribeToMessages = (
         const newMessage: ChatMessage = {
           sender: payload.new.sender,
           message: payload.new.message,
-          timestamp: payload.new.created_at
+          timestamp: new Date(payload.new.created_at).getTime() // Convert ISO string to local time milliseconds
         };
         
         // Call the provided callback

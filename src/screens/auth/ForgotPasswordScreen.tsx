@@ -3,7 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, SafeAreaVie
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/AppNavigator';
-import { supabase } from '../../lib/api/supabase';
+import { supabase } from '../../lib/supabase';
 import { MinimalSpinner } from '../../components/ui/MinimalSpinner';
 
 type ForgotPasswordScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'ForgotPassword'>;
@@ -47,7 +47,7 @@ export function ForgotPasswordScreen() {
     <View style={{
       backgroundColor: '#F8F9FA',
       paddingHorizontal: 16,
-      paddingVertical: 12,
+      paddingVertical: 6,
       borderTopWidth: 1,
       borderTopColor: '#E9ECEF',
       flexDirection: 'row',
@@ -57,7 +57,7 @@ export function ForgotPasswordScreen() {
         onPress={() => Keyboard.dismiss()}
         style={{
           paddingHorizontal: 16,
-          paddingVertical: 8
+          paddingVertical: 4
         }}
       >
         <Text style={{ 
@@ -72,7 +72,6 @@ export function ForgotPasswordScreen() {
   );
 
   return (
-    <>
       <SafeAreaView style={{ flex: 1, backgroundColor: 'white' }}>
         <View style={{ 
           flex: 1, 
@@ -142,7 +141,9 @@ export function ForgotPasswordScreen() {
               placeholder="your@email.com"
               placeholderTextColor="#9E9E9E"
               keyboardType="email-address"
+            textContentType="emailAddress"
               autoCapitalize="none"
+            autoComplete="email"
               returnKeyType="done"
               onSubmitEditing={() => {
                 Keyboard.dismiss();
@@ -181,11 +182,10 @@ export function ForgotPasswordScreen() {
             </Text>
           </TouchableOpacity>
         </View>
-      </SafeAreaView>
       
       <InputAccessoryView nativeID="emailDoneButton">
         <DoneButton />
       </InputAccessoryView>
-    </>
+    </SafeAreaView>
   );
 } 

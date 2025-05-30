@@ -2,7 +2,7 @@ import Constants from 'expo-constants';
 import { OnboardingData, TrainingSession } from '../../types/training';
 import { getRelevantChatSummaries } from '../../services/summary/chatSummaryService';
 import { getLatestTrainingFeedback } from '../../services/feedback/trainingFeedbackService';
-import { supabase } from './supabase';
+import { supabase } from '../supabase';
 import {
   getNextSunday,
   formatChatSummaries,

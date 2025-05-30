@@ -1,4 +1,4 @@
-import { supabase } from '../../lib/api/supabase';
+import { supabase } from '../../lib/supabase';
 import { ChatMessage } from '../../types/chat';
 
 // Define TrainingFeedback interface inline to avoid import error

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, SafeAreaView, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet, SafeAreaView, Platform, ActivityIndicator, AppState, AppStateStatus } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -50,6 +50,7 @@ export function VoiceOnboarding() {
   const route = useRoute<VoiceOnboardingRouteProp>();
   const navigation = useNavigation<VoiceOnboardingNavigationProp>();
   const { session } = useAuth();
+  const appState = useRef(AppState.currentState);
   
   const initialCoachId = route.params?.coachId || 'dathan';
   const [currentCoachId, setCurrentCoachId] = useState(initialCoachId);
@@ -258,6 +259,42 @@ export function VoiceOnboarding() {
     }
   }, [isHookProcessingComplete, processingStep, navigation]);
 
+  // AppState listener to reload screen when app comes back from background
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      console.log('[VoiceOnboarding] AppState changed from', appState.current, 'to', nextAppState);
+      
+      if (nextAppState === 'active' && appState.current !== 'active') {
+        console.log('[VoiceOnboarding] App came back from background - resetting voice chat state and reloading');
+        
+        // Reset all voice chat state to handle expired sessions
+        setVoiceChatUIVisible(false);
+        setVoiceChatError(null);
+        setIsReconnecting(false);
+        setVoiceChatManuallyClosed(false);
+        setIsCoachSpeaking(false);
+        setVoiceConversationActuallyCompleted(false);
+        setShowCompletionOverlay(false);
+        setReconnectAttempts(0);
+        
+        // Reload the screen
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'VoiceOnboarding', params: { coachId: currentCoachId } }]
+        });
+      }
+      appState.current = nextAppState;
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    console.log('[VoiceOnboarding] AppState listener added, current state:', AppState.currentState);
+    
+    return () => {
+      console.log('[VoiceOnboarding] AppState listener removed');
+      subscription?.remove();
+    };
+  }, [navigation, currentCoachId]);
+
   if (!coach || !coach.avatar) { // Added check for coach.avatar just in case imageMap lookup fails
     return (
       <SafeAreaView style={styles.errorContainer}>
@@ -338,6 +375,14 @@ export function VoiceOnboarding() {
               onSpeakingStateChange={handleSpeakingStateChange}
               useModal={false} // Render inline as per existing logic
             />
+            
+            {/* End Chat Button */}
+            <TouchableOpacity 
+              style={styles.endChatButton}
+              onPress={handleCloseVoiceChat}
+            >
+              <Text style={styles.endChatButtonText}>End Chat</Text>
+            </TouchableOpacity>
           </View>
         )}
         {/* Inform user if API key is missing and trying to show voice chat */}
@@ -592,5 +637,17 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: 6,
     backgroundColor: '#4CAF50',
+  },
+  endChatButton: {
+    padding: 12,
+    alignItems: 'center',
+    backgroundColor: '#8B5CF6',
+    borderRadius: 6,
+    marginTop: 16,
+  },
+  endChatButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 }); 

@@ -17,4 +17,5 @@ export interface PlanUpdate {
 export interface ChatMessage {
   sender: 'coach' | 'user';
   message: string;
+  timestamp?: number; // Added timestamp field for consistency
 } 

@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { View, TextInput, TouchableOpacity, Image, ScrollView, KeyboardAvoidingView, Platform, ImageSourcePropType, InputAccessoryView, Keyboard, Text as RNText } from 'react-native';
+import { View, TextInput, TouchableOpacity, Image, ScrollView, KeyboardAvoidingView, Platform, ImageSourcePropType, InputAccessoryView, Keyboard, Text as RNText, Pressable } from 'react-native';
 import { Text } from '../../../components/ui/StyledText';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { ChatMessage } from '../../../hooks/useChatFlow';
@@ -92,28 +92,48 @@ export function ChatMini({ coachName, coachId, imageMap, onMessageSend, isTyping
 
   const renderIOSInputAccessoryView = () => (
     <InputAccessoryView nativeID={inputAccessoryViewID} style={{ backgroundColor: '#FFFFFF' }}>
-      <View className="flex-row items-center bg-white border-t border-gray-200 px-2 py-2.5">
-        <View className="flex-1 flex-row items-center bg-white border-2 border-black rounded-full px-4 h-12">
+      <View className="flex-row items-end bg-white border-t border-gray-200 px-2 py-2.5">
+        <View className="flex-1 flex-row items-end bg-white border-2 border-black rounded-2xl px-4 py-3 min-h-[48px] max-h-[120px]" style={{ pointerEvents: 'box-none' }}>
           <TextInput
-            className="flex-1 text-base py-0"
+            className="flex-1 text-base"
             value={message}
-            onChangeText={setMessage}
+            onChangeText={(text) => {
+              if (text.length <= 500) { // 500 character limit
+                setMessage(text);
+              }
+            }}
             placeholder="Type message here"
             placeholderTextColor="#bbb"
-            multiline={false}
-            style={{ height: 38 }}
+            multiline={true}
+            maxLength={500}
+            style={{ 
+              minHeight: 24,
+              maxHeight: 72,
+              paddingVertical: 0,
+              textAlignVertical: 'top',
+              includeFontPadding: false,
+              fontSize: 16
+            }}
             returnKeyType="send"
-            onSubmitEditing={handleSend}
+            onSubmitEditing={() => {
+              handleSend();
+            }}
             blurOnSubmit={false}
             autoFocus
           />
-          <TouchableOpacity
-            className="ml-2 w-9 h-9 rounded-full items-center justify-center"
-            onPress={handleSend}
-            disabled={!message.trim()}
+          <View
+            className="ml-2 w-9 h-9 rounded-full items-center justify-center self-center"
+            onTouchEnd={() => {
+              if (message.trim()) {
+                handleSend();
+              }
+            }}
+            style={{
+              opacity: !message.trim() ? 0.5 : 1
+            }}
           >
             <Ionicons name="send" size={22} color={message.trim() ? '#000' : '#bbb'} />
-          </TouchableOpacity>
+          </View>
         </View>
         <TouchableOpacity onPress={() => Keyboard.dismiss()} className="pl-3 pr-1 py-2">
           <RNText className="text-blue-500 font-semibold text-base">Done</RNText>
@@ -132,7 +152,7 @@ export function ChatMini({ coachName, coachId, imageMap, onMessageSend, isTyping
       }}
       activeOpacity={0.8}
     >
-      <RNText className="flex-1 text-base text-[#bbb]" numberOfLines={1}>
+      <RNText className="flex-1 text-base text-[#bbb]" numberOfLines={1} style={{ fontSize: 16 }}>
         Type message here
       </RNText>
       <View className="ml-2 w-9 h-9 rounded-full items-center justify-center">
@@ -144,13 +164,19 @@ export function ChatMini({ coachName, coachId, imageMap, onMessageSend, isTyping
   const renderAndroidInput = () => (
     <View className="flex-row items-center bg-white border-2 border-black rounded-full px-4 h-12">
       <TextInput
-        className="flex-1 bg-white rounded-full px-0 py-0 text-base"
+        className="flex-1 bg-white rounded-full px-0 text-base"
         value={message}
         onChangeText={setMessage}
         placeholder="Type message here"
         placeholderTextColor="#bbb"
         multiline={false}
-        style={{ height: 38 }}
+        style={{ 
+          height: 48,
+          paddingVertical: 0,
+          textAlignVertical: 'center',
+          includeFontPadding: false,
+          fontSize: 16
+        }}
         returnKeyType="send"
         blurOnSubmit={true}
         onSubmitEditing={handleSend}
@@ -258,6 +284,9 @@ export function ChatMini({ coachName, coachId, imageMap, onMessageSend, isTyping
           inputAccessoryViewID={inputAccessoryViewID}
           value={message}
           onChangeText={setMessage}
+          returnKeyType="send"
+          onSubmitEditing={handleSend}
+          blurOnSubmit={false}
         />
       )}
       {Platform.OS === 'ios' && renderIOSInputAccessoryView()}

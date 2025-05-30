@@ -16,7 +16,7 @@ serve(async (req) => {
     }
 
     // Get parameters from request if needed
-    let model = 'gpt-4o-mini-realtime-preview-2024-12-17'
+    let model = 'gpt-4o-mini-realtime-preview'
     let voice = 'verse'
 
     // Allow overriding parameters via request body

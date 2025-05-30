@@ -79,8 +79,12 @@ const VoiceChat = ({ isVisible, onClose, coachId, apiKey, onError, onboardingMod
   const [userIsSpeaking, setUserIsSpeaking] = useState(false);
   const [conversationHistory, setConversationHistory] = useState<{role: 'user' | 'coach'; content: string}[]>([]);
   const [finalUserUtterance, setFinalUserUtterance] = useState<string | null>(null);
+  const [sessionStartTime, setSessionStartTime] = useState<number | null>(null);
+  const [volume, setVolume] = useState(0.8); // Volume state (0.0 to 1.0)
+  const [showVolumeControls, setShowVolumeControls] = useState(false);
   
   const userSpeakingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const sessionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   const auth = useAuth();
   const userId = auth.session?.user?.id;
@@ -90,6 +94,22 @@ const VoiceChat = ({ isVisible, onClose, coachId, apiKey, onError, onboardingMod
   const [pendingTranscript, setPendingTranscript] = useState('');
   const [userHasResponded, setUserHasResponded] = useState(false);
   const responseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Volume control functions
+  const adjustVolume = useCallback((delta: number) => {
+    setVolume(prevVolume => {
+      const newVolume = Math.max(0, Math.min(1, prevVolume + delta));
+      console.log(`[VoiceChat] Volume adjusted to: ${Math.round(newVolume * 100)}%`);
+      return newVolume;
+    });
+  }, []);
+
+  const increaseVolume = useCallback(() => adjustVolume(0.1), [adjustVolume]);
+  const decreaseVolume = useCallback(() => adjustVolume(-0.1), [adjustVolume]);
+  
+  const toggleVolumeControls = useCallback(() => {
+    setShowVolumeControls(prev => !prev);
+  }, []);
 
   // Add a function to stop listening and related activities
   const stopListening = () => {
@@ -111,6 +131,10 @@ const VoiceChat = ({ isVisible, onClose, coachId, apiKey, onError, onboardingMod
     if (responseTimeoutRef.current) {
       clearTimeout(responseTimeoutRef.current);
       responseTimeoutRef.current = null;
+    }
+    if (sessionTimeoutRef.current) {
+      clearTimeout(sessionTimeoutRef.current);
+      sessionTimeoutRef.current = null;
     }
     if (onSpeakingStateChange) {
       onSpeakingStateChange(false); // General speaking state off
@@ -200,6 +224,53 @@ const VoiceChat = ({ isVisible, onClose, coachId, apiKey, onError, onboardingMod
     }
   }, [isVisible]);
 
+  // Session timeout detection (proactive reset before 30min OpenAI timeout)
+  useEffect(() => {
+    const isConnected = peerConnection?.connectionState === 'connected';
+    
+    if (isConnected && !sessionStartTime) {
+      // Session just connected, start the timer
+      const startTime = Date.now();
+      setSessionStartTime(startTime);
+      console.log('[VoiceChat] Session connected, starting 25-minute timeout timer');
+      
+      // Set timeout for 25 minutes (5 minutes before OpenAI's 30min limit)
+      sessionTimeoutRef.current = setTimeout(() => {
+        console.log('[VoiceChat] Proactive session reset - approaching 30min timeout');
+        
+        // Show a brief message to user about session refresh
+        setErrorWithNotification('Refreshing session...');
+        
+        // Reset the session after a brief delay
+        setTimeout(() => {
+          setSessionStartTime(null);
+          setError(null);
+          
+          // Trigger a clean restart by reconnecting
+          reconnect();
+        }, 1000);
+        
+      }, 25 * 60 * 1000); // 25 minutes
+      
+    } else if (!isConnected && sessionStartTime) {
+      // Session disconnected, clear the timer
+      console.log('[VoiceChat] Session disconnected, clearing timeout timer');
+      setSessionStartTime(null);
+      if (sessionTimeoutRef.current) {
+        clearTimeout(sessionTimeoutRef.current);
+        sessionTimeoutRef.current = null;
+      }
+    }
+    
+    // Cleanup timeout on unmount
+    return () => {
+      if (sessionTimeoutRef.current) {
+        clearTimeout(sessionTimeoutRef.current);
+        sessionTimeoutRef.current = null;
+      }
+    };
+  }, [peerConnection?.connectionState, sessionStartTime]);
+
   // Check and request microphone permissions
   const checkMicrophonePermissions = async () => {
     try {
@@ -245,7 +316,7 @@ const VoiceChat = ({ isVisible, onClose, coachId, apiKey, onError, onboardingMod
           'Accept': 'application/json'
         },
         body: JSON.stringify({
-          model: 'gpt-4o-mini-realtime-preview-2024-12-17',
+          model: 'gpt-4o-mini-realtime-preview',
           voice: 'verse' // Updated from alloy to verse
         }),
         signal: controller.signal
@@ -458,7 +529,7 @@ const VoiceChat = ({ isVisible, onClose, coachId, apiKey, onError, onboardingMod
       
       // Send the offer to OpenAI's realtime API
       AudioDebugLogger.log('Sending SDP offer to OpenAI...');
-      const sdpResponse = await fetch(`https://api.openai.com/v1/realtime?model=gpt-4o-mini-realtime-preview-2024-12-17`, {
+      const sdpResponse = await fetch(`https://api.openai.com/v1/realtime?model=gpt-4o-mini-realtime-preview`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${ephemeralKey}`,
@@ -580,7 +651,7 @@ Provide specific, actionable advice tailored to the athlete's needs.`;
           },
           turn_detection: {
             "type": "server_vad",
-            "threshold": 0.8,
+            "threshold": 0.9,
             "prefix_padding_ms": 800,
             "silence_duration_ms": 800,
             "create_response": true,
@@ -637,7 +708,7 @@ Provide specific, actionable advice tailored to the athlete's needs.`;
       await saveMessage({
         sender,
         message,
-        timestamp: new Date().toISOString()
+        timestamp: Date.now()
       }, userId);
     } catch (err) {
       console.error('Error saving message to Supabase:', err);
@@ -1018,6 +1089,11 @@ Provide specific, actionable advice tailored to the athlete's needs.`;
       responseTimeoutRef.current = null;
     }
     
+    if (sessionTimeoutRef.current) {
+      clearTimeout(sessionTimeoutRef.current);
+      sessionTimeoutRef.current = null;
+    }
+    
     // Reset state
     setTranscript('');
     setResponseText('');
@@ -1025,6 +1101,7 @@ Provide specific, actionable advice tailored to the athlete's needs.`;
     setConversationComplete(false);
     setIsReceivingCoachMessage(false);
     setUserHasResponded(false);
+    setSessionStartTime(null);
     
     AudioDebugLogger.log('All resources cleaned up');
   }, [stream, audioOutput, dataChannel, peerConnection, sessionId]);

@@ -2,6 +2,7 @@ import { ChatMessage } from './useMessageTypes';
 import { PlanUpdate } from '../chat/types';
 import { UserTrainingFeedbackData } from '../../services/feedback/feedbackService';
 import { coachStyles } from '../../config/coachingGuidelines';
+import { formatDateYMD } from '../../lib/utils/dateUtils';
 
 /**
  * Hook for message formatting utilities
@@ -22,13 +23,6 @@ export function useMessageFormatting() {
   const getDayOfWeek = (date: Date) => {
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     return days[date.getDay()];
-  };
-
-  /**
-   * Format a date as YYYY-MM-DD
-   */
-  const formatDateYMD = (date: Date): string => {
-    return date.toISOString().split('T')[0];
   };
 
   /**
@@ -342,6 +336,8 @@ You have tools to modify workouts and record feedback.
    - SWAPS: If a user asks to "swap" two workouts, explain you'll do it in two steps: confirm moving the first, then confirm moving the second. You will decide to call the 'execute_workout_adjustment' tool for each step.
 
 2. 'add_user_training_feedback': Use this to record the user's training preferences, things they are struggling with, or general feedback. This helps personalize future plans. Specify 'week_start_date' if known, otherwise it defaults to the current week.
+
+IMPORTANT: DO NOT show session IDs (like "ID: 745f2e19-dbeb-483c-945d-436145899d15") to users in your responses. These are technical identifiers that confuse users. However, you MUST use them internally when calling the execute_workout_adjustment function for accuracy. When referring to workouts in conversation, use descriptive terms like "your morning run" or "today's tempo workout" instead.
 
 Engage naturally. Do NOT ask users to phrase requests in specific ways.
 Keep responses concise but informative. Maintain a positive and supportive tone.`;

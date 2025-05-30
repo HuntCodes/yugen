@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, ScrollView, SafeAreaView, Image, Alert, ActivityIndicator, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, ScrollView, SafeAreaView, Image, Alert, ActivityIndicator, TouchableOpacity, StyleSheet, AppState, AppStateStatus } from 'react-native';
 import { Text } from '../../components/ui/StyledText';
 import { useNavigation, useScrollToTop, useFocusEffect } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
@@ -53,6 +53,7 @@ export function HomeScreen() {
   const navigation = useNavigation<BottomTabNavigationProp<TabParamList>>();
   const { session } = useAuth();
   const scrollRef = useRef<ScrollView>(null);
+  const appState = useRef(AppState.currentState);
   useScrollToTop(scrollRef);
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<any>(null);
@@ -110,10 +111,6 @@ export function HomeScreen() {
       console.error('[HomeScreen] Error loading chat history:', error);
     }
   }, [setChatMessages]);
-
-  useEffect(() => {
-    fetchUserData();
-  }, [session]);
 
   useEffect(() => {
     // Load existing chat messages when session is available
@@ -192,6 +189,33 @@ export function HomeScreen() {
       setLoading(false);
     }
   }, [session, setLoading, setProfile, setCoach, setUpcomingSessions, setChatMessages, setJoinDate, setPlanUpdateStatus, getSuggestedShoe]);
+
+  useEffect(() => {
+    fetchUserData();
+  }, [session]);
+
+  // AppState listener to reload screen when app comes back from background
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      console.log('[HomeScreen] AppState changed from', appState.current, 'to', nextAppState);
+      
+      if (nextAppState === 'active' && appState.current !== 'active') {
+        console.log('[HomeScreen] App came back from background - refreshing data only');
+        
+        // Just refresh data, don't interfere with voice chat at all
+        fetchUserData();
+      }
+      appState.current = nextAppState;
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    console.log('[HomeScreen] AppState listener added, current state:', AppState.currentState);
+    
+    return () => {
+      console.log('[HomeScreen] AppState listener removed');
+      subscription?.remove();
+    };
+  }, [fetchUserData]);
 
   // New useEffect to check for plan updates when upcomingSessions are loaded or profile changes
   useEffect(() => {
@@ -431,31 +455,28 @@ export function HomeScreen() {
   };
 
   const handleSendMessage = async (message: string) => {
-    if (!session?.user) {
-      Alert.alert("Not signed in", "Please sign in to chat with your coach");
-      return;
-    }
+    if (!session?.user) return;
 
-    const userMessage: ChatMessage = { sender: 'user', message };
-    setChatMessages(prev => [...prev, userMessage]);
+    const newUserMessage: ChatMessage = {
+      sender: 'user',
+      message: message,
+      timestamp: Date.now(),
+    };
+
+    setChatMessages(prevMessages => [...prevMessages, newUserMessage]);
     setWaitingForResponse(true);
 
-    try {
       await processUserMessage(
-        message, 
+      newUserMessage, // Pass the entire ChatMessage object
         session.user.id, 
         profile, 
         upcomingSessions,
         handleCoachResponse,
-        fetchUserData
-      );
-    } catch (error) {
-      console.error('Error processing message:', error);
-      handleCoachResponse({
-        sender: 'coach',
-        message: 'Sorry, I had trouble processing your message. Please try again.'
-      });
-    }
+      async () => {
+        await fetchUserData();
+      }
+    );
+    setWaitingForResponse(false);
   };
   
   const handleCoachResponse = (response: ChatMessage) => {

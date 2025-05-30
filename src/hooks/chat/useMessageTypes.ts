@@ -9,6 +9,7 @@ export type ChatState = 'normal' | 'awaiting_plan_confirmation';
 export interface ChatMessage {
   sender: 'user' | 'coach';
   message: string;
+  timestamp?: number; // Added timestamp field for consistency
 }
 
 // Base parameters passed to all message handlers

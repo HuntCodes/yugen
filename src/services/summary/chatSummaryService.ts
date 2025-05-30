@@ -1,4 +1,4 @@
-import { supabase } from '../../lib/api/supabase';
+import { supabase } from '../../lib/supabase';
 import { ChatMessage } from '../../types/chat';
 import Constants from 'expo-constants';
 

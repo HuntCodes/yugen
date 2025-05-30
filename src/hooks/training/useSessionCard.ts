@@ -3,7 +3,7 @@ import { Alert } from 'react-native';
 import { TrainingSession } from '../../screens/main/training/components/types';
 import { colors } from '../../styles/colors';
 import { processWorkoutNotes } from '../../services/summary/workoutNoteService';
-import { supabase } from '../../lib/api/supabase';
+import { supabase } from '../../lib/supabase';
 import { getSuggestedShoe } from '../../lib/utils/training/shoeRecommendations';
 
 // Define session status type

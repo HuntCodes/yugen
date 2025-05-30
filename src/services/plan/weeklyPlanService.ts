@@ -1,4 +1,4 @@
-import { supabase } from '../../lib/api/supabase';
+import { supabase } from '../../lib/supabase';
 import { generateWeeklyPlan } from '../../lib/api/weeklyPlanGenerator';
 import { OnboardingData } from '../../types/training';
 import { processWeeklyTrainingFeedback } from '../../services/feedback/trainingFeedbackService';

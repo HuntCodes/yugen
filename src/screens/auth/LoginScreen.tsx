@@ -48,7 +48,7 @@ export function LoginScreen() {
     <View style={{
       backgroundColor: '#F8F9FA',
       paddingHorizontal: 16,
-      paddingVertical: 12,
+      paddingVertical: 6,
       borderTopWidth: 1,
       borderTopColor: '#E9ECEF',
       flexDirection: 'row',
@@ -58,7 +58,7 @@ export function LoginScreen() {
         onPress={() => Keyboard.dismiss()}
         style={{
           paddingHorizontal: 16,
-          paddingVertical: 8
+          paddingVertical: 4
         }}
       >
         <Text style={{ 
@@ -130,7 +130,9 @@ export function LoginScreen() {
             placeholder="your@email.com"
             placeholderTextColor="#9E9E9E"
             keyboardType="email-address"
+            textContentType="emailAddress"
             autoCapitalize="none"
+            autoComplete="email"
             returnKeyType="next"
             onSubmitEditing={() => {
               // Focus will move to password field automatically
@@ -161,6 +163,8 @@ export function LoginScreen() {
             placeholder="Your password"
             placeholderTextColor="#9E9E9E"
             secureTextEntry
+            textContentType="password"
+            autoComplete="password"
             returnKeyType="done"
             onSubmitEditing={() => {
               Keyboard.dismiss();

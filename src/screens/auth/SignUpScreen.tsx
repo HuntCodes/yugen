@@ -52,7 +52,7 @@ export function SignUpScreen() {
     <View style={{
       backgroundColor: '#F8F9FA',
       paddingHorizontal: 16,
-      paddingVertical: 12,
+      paddingVertical: 6,
       borderTopWidth: 1,
       borderTopColor: '#E9ECEF',
       flexDirection: 'row',
@@ -62,7 +62,7 @@ export function SignUpScreen() {
         onPress={() => Keyboard.dismiss()}
         style={{
           paddingHorizontal: 16,
-          paddingVertical: 8
+          paddingVertical: 4
         }}
       >
         <Text style={{ 
@@ -134,7 +134,9 @@ export function SignUpScreen() {
             placeholder="your@email.com"
             placeholderTextColor="#9E9E9E"
             keyboardType="email-address"
+            textContentType="emailAddress"
             autoCapitalize="none"
+            autoComplete="email"
             returnKeyType="next"
             onSubmitEditing={() => {
               // Focus will move to password field automatically
@@ -165,6 +167,8 @@ export function SignUpScreen() {
             placeholder="Create a password"
             placeholderTextColor="#9E9E9E"
             secureTextEntry
+            textContentType="newPassword"
+            autoComplete="password-new"
             returnKeyType="done"
             onSubmitEditing={() => {
               Keyboard.dismiss();

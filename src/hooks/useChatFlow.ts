@@ -21,7 +21,7 @@ export function useChatFlow() {
    * Process a user message and determine response
    */
   const processUserMessage = async (
-    message: string, 
+    userMessage: ChatMessage,
     userId: string, 
     profile: any,
     trainingPlan: any[],
@@ -30,27 +30,26 @@ export function useChatFlow() {
   ) => {
     try {
       // Log the user message to the terminal
-      console.log('\n👤 User:', message);
+      console.log('\n👤 User:', userMessage.message);
       
-      // Save the user message to the database
-      const userMessage: ChatMessage = { sender: 'user', message };
-      await saveMessageToDb(userMessage, userId);
+      // Save the user message to the database, now with its original timestamp
+      await saveMessageToDb(userMessage, userId, userMessage.timestamp);
       
       // Handle special debug commands
-      if (message.toLowerCase() === 'test permissions') {
+      if (userMessage.message.toLowerCase() === 'test permissions') {
         console.log('Testing database permissions is now handled by usePlanAdjustment.');
         return;
       }
       
       // Handle direct test of plan update functionality
-      if (message.toLowerCase() === 'test update plan') {
+      if (userMessage.message.toLowerCase() === 'test update plan') {
         console.log('Test plan update functionality is now handled by usePlanAdjustment.');
         return;
       }
       
       // Process the message using our message handling hook
       const response = await handleMessage({
-        message,
+        message: userMessage.message,
         userId,
         profile,
         trainingPlan,
@@ -68,14 +67,14 @@ export function useChatFlow() {
         
         if (messages && messages.length >= 5) {
           // Attempt to determine if this is about a workout
-          const isWorkoutRelated = message.toLowerCase().includes('workout') || 
-                                  message.toLowerCase().includes('run') ||
-                                  message.toLowerCase().includes('training');
+          const isWorkoutRelated = userMessage.message.toLowerCase().includes('workout') || 
+                                  userMessage.message.toLowerCase().includes('run') ||
+                                  userMessage.message.toLowerCase().includes('training');
           
           // Extract topic if possible
           let topic = undefined;
-          if (message.length < 50) {
-            topic = message; // Use short messages as topics
+          if (userMessage.message.length < 50) {
+            topic = userMessage.message; // Use short messages as topics
           }
           
           // Create a chat summary in the background
@@ -95,11 +94,14 @@ export function useChatFlow() {
       console.error('Error in useChatFlow.processUserMessage:', error);
       
       // Provide a fallback error response
+      // Ensure coach error responses also get a timestamp if needed by saveMessageToDb,
+      // though they are typically generated and saved immediately.
       const errorResponse: ChatMessage = { 
         sender: 'coach', 
-        message: "I'm sorry, I encountered an error processing your message. Please try again in a moment."
+        message: "I'm sorry, I encountered an error processing your message. Please try again in a moment.",
+        timestamp: Date.now() // Add timestamp for consistency if saveMessageToDb expects it for all messages
       };
-      await saveMessageToDb(errorResponse, userId);
+      await saveMessageToDb(errorResponse, userId, errorResponse.timestamp);
       onMessageResponse(errorResponse);
     }
   };

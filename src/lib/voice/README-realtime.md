@@ -30,7 +30,7 @@ ${supabaseUrl}/functions/v1/ephemeral-key
 ```
 
 Parameters:
-- `model`: 'gpt-4o-mini-realtime-preview-2024-12-17'
+- `model`: 'gpt-4o-mini-realtime-preview'
 - `voice`: 'verse'
 
 ### Conversation Completion Detection

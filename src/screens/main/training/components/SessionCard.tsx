@@ -6,7 +6,7 @@ import { formatDate } from '../../../../lib/utils/dateUtils';
 import { Button } from '../../../../components/ui/Button';
 import { colors } from '../../../../styles/colors';
 import { processWorkoutNotes } from '../../../../services/summary/workoutNoteService';
-import { supabase } from '../../../../lib/api/supabase';
+import { supabase } from '../../../../lib/supabase';
 import { getSuggestedShoe, getProductIdFromShoeName } from '../../../../lib/utils/training/shoeRecommendations';
 import { useNavigation } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
