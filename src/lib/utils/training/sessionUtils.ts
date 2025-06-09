@@ -1,5 +1,6 @@
-import { TrainingSession } from '../../../types/training';
 import { v4 as uuidv4 } from 'uuid';
+
+import { TrainingSession } from '../../../types/training';
 
 /**
  * Create a new training session with the given parameters
@@ -16,7 +17,7 @@ export const createTrainingSession = (
 ): TrainingSession => {
   // Calculate day of week if not provided (1-7, Monday-Sunday)
   const calculatedDayOfWeek = dayOfWeek || new Date(date).getDay() || 7; // Convert 0 (Sunday) to 7
-  
+
   return {
     id: uuidv4(),
     week_number: weekNumber,
@@ -27,6 +28,6 @@ export const createTrainingSession = (
     time,
     notes,
     status: 'not_completed',
-    phase
+    phase,
   };
-}; 
+};

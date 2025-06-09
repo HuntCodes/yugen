@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+
 import { useAuth } from '../../context/AuthContext';
 import { fetchProfile } from '../../services/profile/profileService';
 // We'll use a more general type for profile for now, assuming fields exist.
@@ -40,11 +41,11 @@ export function useTrainingOutlook() {
 
       try {
         setLoading(true);
-        const profile = await fetchProfile(session.user.id) as ProfileDataFromService;
+        const profile = (await fetchProfile(session.user.id)) as ProfileDataFromService;
         if (profile) {
           // Use created_at for planStartDate, formatting it to YYYY-MM-DD
-          const planStartDateFromCreatedAt = profile.created_at 
-            ? new Date(profile.created_at).toISOString().split('T')[0] 
+          const planStartDateFromCreatedAt = profile.created_at
+            ? new Date(profile.created_at).toISOString().split('T')[0]
             : undefined;
 
           setOutlookData({
@@ -66,4 +67,4 @@ export function useTrainingOutlook() {
   }, [session]);
 
   return { outlookData, loading, error };
-} 
+}

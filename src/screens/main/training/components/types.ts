@@ -12,9 +12,10 @@ export interface TrainingSession {
   modified?: boolean;
   post_session_notes?: string;
   suggested_shoe?: string;
+  suggested_location?: string; // AI-suggested training location
   title?: string;
   description?: string;
   scheduled_date?: string;
 }
 
-export type SessionStatus = 'completed' | 'missed' | 'planned' | 'not_completed' | 'skipped'; 
+export type SessionStatus = 'completed' | 'missed' | 'planned' | 'not_completed' | 'skipped';

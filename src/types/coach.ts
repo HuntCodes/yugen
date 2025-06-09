@@ -16,4 +16,4 @@ export interface CoachProps {
 export interface CoachSelectOptions {
   coaches: Coach[];
   onSelect: (coach: Coach) => void;
-} 
+}

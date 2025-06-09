@@ -1,7 +1,7 @@
-import { supabase } from '../../lib/supabase';
 import { generateWeeklyPlan } from '../../lib/api/weeklyPlanGenerator';
-import { OnboardingData } from '../../types/training';
+import { supabase } from '../../lib/supabase';
 import { processWeeklyTrainingFeedback } from '../../services/feedback/trainingFeedbackService';
+import { OnboardingData } from '../../types/training';
 
 /**
  * Check if a user's plan needs to be refreshed
@@ -23,12 +23,12 @@ export async function checkNeedsRefresh(userId: string): Promise<boolean> {
       .select('*', { count: 'exact', head: true })
       .eq('user_id', userId)
       .gte('date', todayFormatted);
-      
+
     if (error) {
       console.error('Error checking for future workouts:', error);
       return false;
     }
-    
+
     // Need refresh if: it's Sunday or there are no future workouts
     return isSunday || count === 0;
   } catch (error) {
@@ -47,47 +47,49 @@ async function getUserOnboardingData(userId: string): Promise<OnboardingData | n
       .from('profiles')
       .select('*')
       .eq('id', userId);
-      
+
     if (profileError) {
       console.error('Error fetching user profile:', profileError);
       return null;
     }
-    
+
     // Handle array result
     if (!profileData || profileData.length === 0) {
       console.error('No profile found for user:', userId);
       return null;
     }
-    
+
     const profile = profileData[0];
-    
+
     // Get onboarding responses
     const { data: onboardingResponses, error: onboardingError } = await supabase
       .from('onboarding_responses')
       .select('*')
       .eq('user_id', userId)
       .maybeSingle();
-      
+
     if (onboardingError) {
       console.error('Error fetching onboarding data:', onboardingError);
       // Can proceed with just profile data if needed
     }
-    
+
     // Construct onboarding data from profile and onboarding responses
     const onboardingData: OnboardingData = {
       goalType: profile.goal_description || 'General fitness',
       raceDate: profile.race_date,
       raceDistance: profile.goal_distance,
       experienceLevel: profile.running_experience || 'beginner',
-      trainingFrequency: onboardingResponses?.training_frequency || profile.training_frequency || '3-4 days per week',
+      trainingFrequency:
+        onboardingResponses?.training_frequency ||
+        profile.training_frequency ||
+        '3-4 days per week',
       current_mileage: String(profile.weekly_volume || '20'),
       units: profile.units || 'km',
-      trainingPreferences: profile.training_preferences,
       nickname: profile.display_name,
       injury_history: profile.injury_history,
-      schedule_constraints: onboardingResponses?.schedule_constraints
+      schedule_constraints: onboardingResponses?.schedule_constraints,
     };
-    
+
     return onboardingData;
   } catch (error) {
     console.error('Error getting user onboarding data:', error);
@@ -106,22 +108,32 @@ async function removeWorkoutsFromDate(userId: string, fromDateUTC: string): Prom
       .delete()
       .eq('user_id', userId)
       .gte('date', fromDateUTC); // Ensure date is compared in UTC if fromDateUTC is YYYY-MM-DD
-      
+
     if (error) {
-      console.error(`[weeklyPlanService] Error removing workouts from ${fromDateUTC} for user ${userId}:`, error);
+      console.error(
+        `[weeklyPlanService] Error removing workouts from ${fromDateUTC} for user ${userId}:`,
+        error
+      );
       return false;
     }
-    console.log(`[weeklyPlanService] Successfully removed workouts from ${fromDateUTC} for user ${userId}`);
+    console.log(
+      `[weeklyPlanService] Successfully removed workouts from ${fromDateUTC} for user ${userId}`
+    );
     return true;
   } catch (error) {
-    console.error(`[weeklyPlanService] Exception in removeWorkoutsFromDate for user ${userId}:`, error);
+    console.error(
+      `[weeklyPlanService] Exception in removeWorkoutsFromDate for user ${userId}:`,
+      error
+    );
     return false;
   }
 }
 
 export async function generateAndStoreCurrentWeekPlanForUser(userId: string): Promise<boolean> {
   try {
-    console.log(`[weeklyPlanService] Starting generateAndStoreCurrentWeekPlanForUser for user: ${userId}`);
+    console.log(
+      `[weeklyPlanService] Starting generateAndStoreCurrentWeekPlanForUser for user: ${userId}`
+    );
 
     const onboardingData = await getUserOnboardingData(userId);
     if (!onboardingData) {
@@ -130,18 +142,24 @@ export async function generateAndStoreCurrentWeekPlanForUser(userId: string): Pr
     }
 
     const todayServer = new Date(); // Server's current date
-    todayServer.setUTCHours(0,0,0,0); // Normalize to start of UTC day for comparisons
+    todayServer.setUTCHours(0, 0, 0, 0); // Normalize to start of UTC day for comparisons
     const todayServerDateUtcString = todayServer.toISOString().split('T')[0];
 
     // Determine the Monday of the current week based on server's today
     const dayOfWeekServer = todayServer.getUTCDay(); // Sunday = 0, Monday = 1, ...
     const mondayOfCurrentWeekServer = new Date(todayServer);
-    mondayOfCurrentWeekServer.setUTCDate(todayServer.getUTCDate() - (dayOfWeekServer === 0 ? 6 : dayOfWeekServer - 1));
-    const mondayOfCurrentWeekServerUtcString = mondayOfCurrentWeekServer.toISOString().split('T')[0];
-    
+    mondayOfCurrentWeekServer.setUTCDate(
+      todayServer.getUTCDate() - (dayOfWeekServer === 0 ? 6 : dayOfWeekServer - 1)
+    );
+    const mondayOfCurrentWeekServerUtcString = mondayOfCurrentWeekServer
+      .toISOString()
+      .split('T')[0];
+
     const sundayOfCurrentWeekServer = new Date(mondayOfCurrentWeekServer);
     sundayOfCurrentWeekServer.setUTCDate(mondayOfCurrentWeekServer.getUTCDate() + 6);
-    const sundayOfCurrentWeekServerUtcString = sundayOfCurrentWeekServer.toISOString().split("T")[0];
+    const sundayOfCurrentWeekServerUtcString = sundayOfCurrentWeekServer
+      .toISOString()
+      .split('T')[0];
 
     // 1. Fetch existing sessions for the target week to check for interactions
     const { data: existingSessions, error: fetchError } = await supabase
@@ -152,29 +170,41 @@ export async function generateAndStoreCurrentWeekPlanForUser(userId: string): Pr
       .lte('date', sundayOfCurrentWeekServerUtcString);
 
     if (fetchError) {
-      console.error(`[weeklyPlanService] Error fetching existing sessions for user ${userId}:`, fetchError);
+      console.error(
+        `[weeklyPlanService] Error fetching existing sessions for user ${userId}:`,
+        fetchError
+      );
       return false; // Critical error, cannot proceed safely
     }
 
     let hasInteractedSessionsInTargetWeek = false;
     if (existingSessions) {
       for (const session of existingSessions) {
-        if (session.status !== 'not_completed' || (session.post_session_notes && session.post_session_notes.trim() !== '')) {
+        if (
+          session.status !== 'not_completed' ||
+          (session.post_session_notes && session.post_session_notes.trim() !== '')
+        ) {
           hasInteractedSessionsInTargetWeek = true;
           break;
         }
       }
     }
-    console.log(`[weeklyPlanService] User ${userId} hasInteractedSessionsInTargetWeek: ${hasInteractedSessionsInTargetWeek}`);
+    console.log(
+      `[weeklyPlanService] User ${userId} hasInteractedSessionsInTargetWeek: ${hasInteractedSessionsInTargetWeek}`
+    );
 
     // 2. Conditional Deletion Logic
     if (!hasInteractedSessionsInTargetWeek) {
       // No interactions, safe to clear the whole target week from its Monday
-      console.log(`[weeklyPlanService] No interacted sessions found for target week. Removing all sessions from ${mondayOfCurrentWeekServerUtcString} for user ${userId}`);
+      console.log(
+        `[weeklyPlanService] No interacted sessions found for target week. Removing all sessions from ${mondayOfCurrentWeekServerUtcString} for user ${userId}`
+      );
       await removeWorkoutsFromDate(userId, mondayOfCurrentWeekServerUtcString);
     } else {
       // Interactions found, only clear from today (server time) onwards
-      console.log(`[weeklyPlanService] Interacted sessions found. Removing sessions from ${todayServerDateUtcString} (today server) onwards for user ${userId}`);
+      console.log(
+        `[weeklyPlanService] Interacted sessions found. Removing sessions from ${todayServerDateUtcString} (today server) onwards for user ${userId}`
+      );
       await removeWorkoutsFromDate(userId, todayServerDateUtcString);
     }
 
@@ -183,26 +213,34 @@ export async function generateAndStoreCurrentWeekPlanForUser(userId: string): Pr
     const newSessions = await generateWeeklyPlan(userId, onboardingData, false); // includeCurrentWeek = false as we target the current week based on server date
 
     if (!newSessions || newSessions.length === 0) {
-      console.error(`[weeklyPlanService] No sessions generated by generateWeeklyPlan for user: ${userId}`);
-      return false; 
+      console.error(
+        `[weeklyPlanService] No sessions generated by generateWeeklyPlan for user: ${userId}`
+      );
+      return false;
     }
-    console.log(`[weeklyPlanService] Generated ${newSessions.length} new workouts for user: ${userId}`);
+    console.log(
+      `[weeklyPlanService] Generated ${newSessions.length} new workouts for user: ${userId}`
+    );
 
     // 4. Save New Sessions (Careful Merge/Insert)
     const sessionsToInsert = [];
     for (const newSession of newSessions) {
       const newSessionDate = new Date(newSession.date);
-      newSessionDate.setUTCHours(0,0,0,0);
+      newSessionDate.setUTCHours(0, 0, 0, 0);
 
       if (newSessionDate < todayServer && hasInteractedSessionsInTargetWeek) {
         // This new session is for a past day within a week that had interactions.
         // Check if an interacted session already exists for this specific past day.
-        const existingInteractedPastSession = existingSessions?.find(es => 
-          es.date === newSession.date && 
-          (es.status !== 'not_completed' || (es.post_session_notes && es.post_session_notes.trim() !== ''))
+        const existingInteractedPastSession = existingSessions?.find(
+          (es) =>
+            es.date === newSession.date &&
+            (es.status !== 'not_completed' ||
+              (es.post_session_notes && es.post_session_notes.trim() !== ''))
         );
         if (existingInteractedPastSession) {
-          console.log(`[weeklyPlanService] Skipping save for newly generated past session on ${newSession.date} as an interacted session already exists for user ${userId}`);
+          console.log(
+            `[weeklyPlanService] Skipping save for newly generated past session on ${newSession.date} as an interacted session already exists for user ${userId}`
+          );
           continue; // Skip inserting this new past session, prioritize existing interacted one
         }
       }
@@ -223,23 +261,30 @@ export async function generateAndStoreCurrentWeekPlanForUser(userId: string): Pr
     }
 
     if (sessionsToInsert.length > 0) {
-      const { error: insertError } = await supabase
-        .from('training_plans')
-        .insert(sessionsToInsert);
+      const { error: insertError } = await supabase.from('training_plans').insert(sessionsToInsert);
 
       if (insertError) {
-        console.error(`[weeklyPlanService] Error inserting new weekly plan sessions for user ${userId}:`, insertError);
+        console.error(
+          `[weeklyPlanService] Error inserting new weekly plan sessions for user ${userId}:`,
+          insertError
+        );
         return false;
       }
-      console.log(`[weeklyPlanService] Successfully inserted ${sessionsToInsert.length} new plan sessions for user ${userId}`);
+      console.log(
+        `[weeklyPlanService] Successfully inserted ${sessionsToInsert.length} new plan sessions for user ${userId}`
+      );
     } else {
-      console.log(`[weeklyPlanService] No new sessions needed to be inserted for user ${userId} (e.g., all were past, interacted days).`);
+      console.log(
+        `[weeklyPlanService] No new sessions needed to be inserted for user ${userId} (e.g., all were past, interacted days).`
+      );
     }
-    
-    return true;
 
+    return true;
   } catch (error) {
-    console.error(`[weeklyPlanService] Exception in generateAndStoreCurrentWeekPlanForUser for user ${userId}:`, error);
+    console.error(
+      `[weeklyPlanService] Exception in generateAndStoreCurrentWeekPlanForUser for user ${userId}:`,
+      error
+    );
     return false;
   }
 }
@@ -250,11 +295,17 @@ export async function generateAndStoreCurrentWeekPlanForUser(userId: string): Pr
  */
 export async function refreshWeeklyPlan(userId: string): Promise<boolean> {
   try {
-    console.warn('[weeklyPlanService] DEPRECATED refreshWeeklyPlan called for user:', userId, 'Consider updating to generateAndStoreCurrentWeekPlanForUser or client-initiated flow.');
+    console.warn(
+      '[weeklyPlanService] DEPRECATED refreshWeeklyPlan called for user:',
+      userId,
+      'Consider updating to generateAndStoreCurrentWeekPlanForUser or client-initiated flow.'
+    );
     // Minimal original logic for reference or if called by old paths, but without feedback processing.
     const onboardingData = await getUserOnboardingData(userId);
     if (!onboardingData) {
-      console.error('[weeklyPlanService] Failed to get onboarding data for plan refresh (deprecated path)');
+      console.error(
+        '[weeklyPlanService] Failed to get onboarding data for plan refresh (deprecated path)'
+      );
       return false;
     }
     const today = new Date();
@@ -265,7 +316,7 @@ export async function refreshWeeklyPlan(userId: string): Promise<boolean> {
       console.error('[weeklyPlanService] No sessions generated (deprecated path)');
       return false;
     }
-    const sessionRows = sessions.map(session => ({
+    const sessionRows = sessions.map((session) => ({
       user_id: userId,
       week_number: session.week_number,
       day_of_week: session.day_of_week,
@@ -276,7 +327,7 @@ export async function refreshWeeklyPlan(userId: string): Promise<boolean> {
       notes: session.notes,
       status: 'not_completed',
       created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
     }));
     const { error: insertError } = await supabase.from('training_plans').insert(sessionRows);
     if (insertError) {
@@ -301,32 +352,34 @@ export async function refreshAllUserPlans(): Promise<{
   failed: number;
   skipped: number;
 }> {
-  console.warn("[weeklyPlanService] DEPRECATED refreshAllUserPlans called. This process is moving to client-initiated updates.");
+  console.warn(
+    '[weeklyPlanService] DEPRECATED refreshAllUserPlans called. This process is moving to client-initiated updates.'
+  );
   const result = {
     success: true, // Default to true as it might do nothing or only partial work now
     refreshed: 0,
     failed: 0,
-    skipped: 0
+    skipped: 0,
   };
-  
+
   // try {
   //   const { data: users, error: usersError } = await supabase
   //     .from('profiles')
   //     .select('id');
-      
+
   //   if (usersError) {
   //     console.error('[weeklyPlanService] Error fetching users (deprecated refreshAllUserPlans):', usersError);
   //     result.success = false;
   //     return result;
   //   }
-    
+
   //   if (!users || users.length === 0) {
   //     console.log('[weeklyPlanService] No users found (deprecated refreshAllUserPlans)');
   //     return result;
   //   }
-    
+
   //   console.log(`[weeklyPlanService] DEPRECATED: Checking ${users.length} users for plan refresh. Consider client-initiated flow.`);
-    
+
   //   for (const user of users) {
   //     try {
   //       const needsRefresh = await checkNeedsRefresh(user.id);
@@ -350,13 +403,13 @@ export async function refreshAllUserPlans(): Promise<{
   //       result.failed++;
   //     }
   //   }
-    
+
   //   result.success = result.failed === 0;
   //   console.log(`[weeklyPlanService] DEPRECATED refreshAllUserPlans complete. Refreshed: ${result.refreshed}, Skipped: ${result.skipped}, Failed: ${result.failed}`);
   // } catch (error) {
   //   console.error('[weeklyPlanService] DEPRECATED: Error in refreshAllUserPlans:', error);
   //   result.success = false;
   // }
-  
+
   return result;
-} 
+}

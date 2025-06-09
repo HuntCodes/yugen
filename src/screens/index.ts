@@ -2,4 +2,4 @@
 export * from './main';
 export * from './onboarding';
 export * from './auth';
-export * from './entry'; 
+export * from './entry';

@@ -1,6 +1,7 @@
+import Constants from 'expo-constants';
+
 import { supabase } from '../../lib/supabase';
 import { ChatMessage } from '../../types/chat';
-import Constants from 'expo-constants';
 
 // Define the chat summary types
 export type ChatType = 'topic' | 'general' | 'workout';
@@ -37,24 +38,26 @@ export async function createChatSummary(
 ): Promise<string | null> {
   try {
     // Get API key
-    const apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY ||
-                  Constants.expoConfig?.extra?.openaiApiKey ||
-                  Constants.expoConfig?.extra?.OPENAI_API_KEY ||
-                  (Constants.manifest as any)?.extra?.OPENAI_API_KEY;
-                    
+    const apiKey =
+      process.env.EXPO_PUBLIC_OPENAI_API_KEY ||
+      Constants.expoConfig?.extra?.openaiApiKey ||
+      Constants.expoConfig?.extra?.OPENAI_API_KEY ||
+      (Constants.manifest as any)?.extra?.OPENAI_API_KEY;
+
     if (!apiKey) {
       console.error('OpenAI API key not found');
       return null;
     }
 
     // Format the conversation for summarization
-    const conversation = messages.map(msg => 
-      `${msg.sender === 'user' ? 'User' : 'Coach'}: ${msg.message}`
-    ).join('\n\n');
+    const conversation = messages
+      .map((msg) => `${msg.sender === 'user' ? 'User' : 'Coach'}: ${msg.message}`)
+      .join('\n\n');
 
     // Build context-aware system prompt
-    let systemPrompt = 'Create a concise summary (50-70 tokens) of this coaching conversation. Focus on key points, advice given, and decisions made.';
-    
+    let systemPrompt =
+      'Create a concise summary (50-70 tokens) of this coaching conversation. Focus on key points, advice given, and decisions made.';
+
     if (topic) {
       systemPrompt = `Create a concise summary (50-70 tokens) of this coaching conversation about ${topic}. Focus on key points, advice given, and decisions made.`;
     }
@@ -77,16 +80,16 @@ export async function createChatSummary(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
         model: 'gpt-3.5-turbo',
         messages: [
-          { 
-            role: 'system', 
-            content: systemPrompt
+          {
+            role: 'system',
+            content: systemPrompt,
           },
-          { role: 'user', content: conversation }
+          { role: 'user', content: conversation },
         ],
         temperature: 0.7,
         max_tokens: 100,
@@ -128,30 +131,28 @@ export async function storeChatSummary(
     const now = new Date();
     const yesterday = new Date(now);
     yesterday.setDate(yesterday.getDate() - 1);
-    
+
     const timeFrame = {
       lower: yesterday.toISOString(),
       upper: now.toISOString(),
-      bounds: '[)'
+      bounds: '[)',
     };
 
     // Insert chat summary
-    const { error } = await supabase
-      .from('chat_summaries')
-      .insert({
-        user_id: userId,
-        topic,
-        chat_type: chatType,
-        related_workout_id: relatedWorkoutId,
-        summary,
-        time_frame: timeFrame
-      });
-      
+    const { error } = await supabase.from('chat_summaries').insert({
+      user_id: userId,
+      topic,
+      chat_type: chatType,
+      related_workout_id: relatedWorkoutId,
+      summary,
+      time_frame: timeFrame,
+    });
+
     if (error) {
       console.error('Error storing chat summary:', error);
       return false;
     }
-    
+
     return true;
   } catch (error) {
     console.error('Error in storeChatSummary:', error);
@@ -179,15 +180,15 @@ export async function processChat(
     if (!messages || messages.length < 3) {
       return true;
     }
-    
+
     // Create a summary of the conversation
     const summary = await createChatSummary(messages, userId, topic, relatedWorkoutId);
-    
+
     if (!summary) {
       console.error('Failed to create chat summary');
       return false;
     }
-    
+
     // Store the summary
     return await storeChatSummary(userId, summary, chatType, topic, relatedWorkoutId);
   } catch (error) {
@@ -202,10 +203,7 @@ export async function processChat(
  * @param limit Number of summaries to retrieve (default: 5)
  * @returns Array of chat summaries
  */
-export async function getRecentChatSummaries(
-  userId: string,
-  limit: number = 5
-): Promise<any[]> {
+export async function getRecentChatSummaries(userId: string, limit: number = 5): Promise<any[]> {
   try {
     const { data, error } = await supabase
       .from('chat_summaries')
@@ -213,12 +211,12 @@ export async function getRecentChatSummaries(
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(limit);
-      
+
     if (error) {
       console.error('Error fetching chat summaries:', error);
       return [];
     }
-    
+
     return data || [];
   } catch (error) {
     console.error('Error in getRecentChatSummaries:', error);
@@ -234,8 +232,8 @@ export async function getRecentChatSummaries(
 export async function saveChatSummary(summary: ChatSummary): Promise<boolean> {
   try {
     // Format time_frame as Postgres TSTZRANGE if present
-    let formattedSummary: any = { ...summary };
-    
+    const formattedSummary: any = { ...summary };
+
     if (summary.time_frame) {
       // Format dates in ISO format for Postgres
       const startIso = summary.time_frame.start.toISOString();
@@ -243,9 +241,7 @@ export async function saveChatSummary(summary: ChatSummary): Promise<boolean> {
       formattedSummary.time_frame = `[${startIso},${endIso}]`;
     }
 
-    const { error } = await supabase
-      .from('chat_summaries')
-      .insert(formattedSummary);
+    const { error } = await supabase.from('chat_summaries').insert(formattedSummary);
 
     if (error) {
       console.error('Error saving chat summary:', error);
@@ -280,21 +276,21 @@ export async function getRelevantChatSummaries(
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(limit);
-    
+
     // Add filters based on parameters
     if (workoutId) {
       query = query.eq('related_workout_id', workoutId);
     } else if (topic) {
       query = query.eq('topic', topic).eq('chat_type', 'topic');
     }
-    
+
     const { data, error } = await query;
-    
+
     if (error) {
       console.error('Error fetching chat summaries:', error);
       return [];
     }
-    
+
     return data as ChatSummary[];
   } catch (error) {
     console.error('Error in getRelevantChatSummaries:', error);
@@ -311,31 +307,32 @@ export async function getRelevantChatSummaries(
 export async function identifyChatContext(
   messages: ChatMessage[],
   workoutId?: string
-): Promise<{chatType: ChatType, topic?: string}> {
+): Promise<{ chatType: ChatType; topic?: string }> {
   // If workout ID is provided, this is a workout-specific chat
   if (workoutId) {
     return { chatType: 'workout' };
   }
-  
+
   try {
     // Use the last 5 messages for context (to reduce token usage)
     const recentMessages = messages.slice(-5);
-    
+
     // Get API key
-    const apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY ||
-                   Constants.expoConfig?.extra?.openaiApiKey ||
-                   Constants.expoConfig?.extra?.OPENAI_API_KEY ||
-                   (Constants.manifest as any)?.extra?.OPENAI_API_KEY;
-                     
+    const apiKey =
+      process.env.EXPO_PUBLIC_OPENAI_API_KEY ||
+      Constants.expoConfig?.extra?.openaiApiKey ||
+      Constants.expoConfig?.extra?.OPENAI_API_KEY ||
+      (Constants.manifest as any)?.extra?.OPENAI_API_KEY;
+
     if (!apiKey) {
       console.error('OpenAI API key not found');
       return { chatType: 'general' };
     }
 
     // Format messages for the AI
-    const formattedMessages = recentMessages.map(msg => ({
+    const formattedMessages = recentMessages.map((msg) => ({
       role: msg.sender === 'user' ? 'user' : 'assistant',
-      content: msg.message
+      content: msg.message,
     }));
 
     // Use GPT-3.5-turbo to determine chat type and topic
@@ -343,20 +340,20 @@ export async function identifyChatContext(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
         model: 'gpt-3.5-turbo',
         messages: [
-          { 
-            role: 'system', 
-            content: `Analyze this conversation and determine if it's about a specific running topic. If so, return JSON with "chatType": "topic" and "topic": "topic name". If it's about a specific workout, return "chatType": "workout". Otherwise, return "chatType": "general".`
+          {
+            role: 'system',
+            content: `Analyze this conversation and determine if it's about a specific running topic. If so, return JSON with "chatType": "topic" and "topic": "topic name". If it's about a specific workout, return "chatType": "workout". Otherwise, return "chatType": "general".`,
           },
-          ...formattedMessages
+          ...formattedMessages,
         ],
         temperature: 0.2,
         max_tokens: 50,
-        response_format: { type: "json_object" }
+        response_format: { type: 'json_object' },
       }),
     });
 
@@ -366,13 +363,13 @@ export async function identifyChatContext(
 
     const data = await response.json();
     const result = JSON.parse(data.choices[0].message.content.trim());
-    
+
     return {
       chatType: result.chatType as ChatType,
-      topic: result.topic
+      topic: result.topic,
     };
   } catch (error) {
     console.error('Error identifying chat context:', error);
     return { chatType: 'general' };
   }
-} 
+}

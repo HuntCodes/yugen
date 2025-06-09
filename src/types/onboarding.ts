@@ -6,8 +6,8 @@ export interface OnboardingProfile {
   current_mileage: string;
   current_frequency: string;
   injury_history: string | null;
-  shoe_size: string;
-  clothing_size: string;
+  shoe_size?: string;
+  clothing_size?: string;
   schedule_constraints: string | null;
   units: Units;
   experience_level: ExperienceLevel;
@@ -37,4 +37,4 @@ export interface OnboardingState {
 export interface ChatMessage {
   text: string;
   isUser: boolean;
-} 
+}

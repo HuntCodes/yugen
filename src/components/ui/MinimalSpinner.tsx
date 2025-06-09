@@ -23,7 +23,7 @@ export const MinimalSpinner = ({ size = 48, color = '#BDBDBD', thickness = 3 }) 
   });
 
   return (
-    <View style={[styles.container, { width: size, height: size }]}> 
+    <View style={[styles.container, { width: size, height: size }]}>
       <Animated.View
         style={[
           styles.spinner,
@@ -55,4 +55,4 @@ const styles = StyleSheet.create({
     borderRightColor: 'transparent',
     position: 'absolute',
   },
-}); 
+});

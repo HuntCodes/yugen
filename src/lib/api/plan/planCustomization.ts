@@ -1,5 +1,5 @@
-import { supabase } from '../../supabase';
 import { TrainingSession } from '../../../types/training';
+import { supabase } from '../../supabase';
 
 /**
  * Extract the numeric training frequency from the training frequency text
@@ -14,7 +14,7 @@ export function extractTrainingFrequency(trainingFrequency: string): number {
       return frequency;
     }
   }
-  
+
   // If we couldn't extract a number, try to interpret common phrases
   const loweredText = trainingFrequency.toLowerCase();
   if (loweredText.includes('once a week') || loweredText.includes('1 day')) {
@@ -29,10 +29,14 @@ export function extractTrainingFrequency(trainingFrequency: string): number {
     return 5;
   } else if (loweredText.includes('six') || loweredText.includes('6 day')) {
     return 6;
-  } else if (loweredText.includes('seven') || loweredText.includes('every day') || loweredText.includes('7 day')) {
+  } else if (
+    loweredText.includes('seven') ||
+    loweredText.includes('every day') ||
+    loweredText.includes('7 day')
+  ) {
     return 7;
   }
-  
+
   // Default to 3 days if we can't determine
   return 3;
 }
@@ -40,7 +44,10 @@ export function extractTrainingFrequency(trainingFrequency: string): number {
 /**
  * Get a single recent workout summary for a specific user and workout type
  */
-export async function getRecentWorkoutSummary(userId: string, workoutType: string): Promise<string | null> {
+export async function getRecentWorkoutSummary(
+  userId: string,
+  workoutType: string
+): Promise<string | null> {
   try {
     // Find a recent workout of this type
     const { data: workouts, error } = await supabase
@@ -51,11 +58,11 @@ export async function getRecentWorkoutSummary(userId: string, workoutType: strin
       .eq('status', 'completed')
       .order('date', { ascending: false })
       .limit(1);
-      
+
     if (error || !workouts || workouts.length === 0) {
       return null;
     }
-    
+
     // Get the summary for this workout
     return await getWorkoutNoteSummary(workouts[0].id, userId);
   } catch (error) {
@@ -77,11 +84,11 @@ async function getWorkoutNoteSummary(workoutId: string, userId: string): Promise
       .eq('id', workoutId)
       .eq('user_id', userId)
       .single();
-    
+
     if (error || !data) {
       return null;
     }
-    
+
     return data.post_session_notes;
   } catch (error) {
     console.error('Error getting workout note summary:', error);
@@ -93,15 +100,19 @@ async function getWorkoutNoteSummary(workoutId: string, userId: string): Promise
  * Prepare training feedback for plan generation prompt
  * Returns sections for preferences, struggles, and overall feedback
  */
-export function prepareTrainingFeedback(trainingFeedback: any, userProfile: any, onboardingData: any): {
+export function prepareTrainingFeedback(
+  trainingFeedback: any,
+  userProfile: any,
+  onboardingData: any
+): {
   trainingPreferencesSection: string;
   struggleSection: string;
   feedbackSection: string;
 } {
-  let trainingPreferencesSection = userProfile?.training_preferences || onboardingData.trainingPreferences || 'None specified';
+  let trainingPreferencesSection = 'None specified';
   let struggleSection = '';
   let feedbackSection = '';
-  
+
   if (trainingFeedback) {
     if (trainingFeedback.prefers && trainingFeedback.prefers.length > 0) {
       trainingPreferencesSection = trainingFeedback.prefers.join(', ');
@@ -115,21 +126,25 @@ ${trainingFeedback.struggling_with.map((item: string) => `- ${item}`).join('\n')
 ${trainingFeedback.feedback_summary}`;
     }
   }
-  
+
   return {
     trainingPreferencesSection,
     struggleSection,
-    feedbackSection
+    feedbackSection,
   };
 }
 
 /**
  * Add week number and phase information to all sessions
  */
-export function addWeekInfoToSessions(sessions: TrainingSession[], weekNumber: number, phase: string): TrainingSession[] {
-  return sessions.map(session => ({
+export function addWeekInfoToSessions(
+  sessions: TrainingSession[],
+  weekNumber: number,
+  phase: string
+): TrainingSession[] {
+  return sessions.map((session) => ({
     ...session,
     week_number: weekNumber,
-    phase: phase
+    phase,
   }));
-} 
+}

@@ -1,2 +1,2 @@
-export * from './planService'; 
-export * from './weeklyPlanService'; 
+export * from './planService';
+export * from './weeklyPlanService';

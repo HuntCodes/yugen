@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Dimensions, Text } from 'react-native';
+
 import { colors } from '../../styles/colors';
 
 interface WeeklyMileage {
@@ -31,7 +32,7 @@ export function MileageGraph({ weeklyData, preferredUnit, font }: MileageGraphPr
   }
 
   // Calculate max value for Y-axis scaling
-  const allPlannedValues = weeklyData.map(d => convertMileage(d.plannedMileage));
+  const allPlannedValues = weeklyData.map((d) => convertMileage(d.plannedMileage));
   const maxValue = allPlannedValues.length > 0 ? Math.max(...allPlannedValues) : 0;
 
   // Determine the top tick value for the Y-axis - round up to next 10
@@ -42,7 +43,7 @@ export function MileageGraph({ weeklyData, preferredUnit, font }: MileageGraphPr
     const roundingFactor = 10; // Always round to next 10 for both km and mi
     topTickValue = Math.ceil(maxValue / roundingFactor) * roundingFactor;
   }
-  
+
   // Ensure minimum value
   if (maxValue > 0 && topTickValue < 10) {
     topTickValue = 10;
@@ -61,21 +62,15 @@ export function MileageGraph({ weeklyData, preferredUnit, font }: MileageGraphPr
   const chartPadding = 20;
 
   return (
-    <View className="bg-white rounded-lg p-4" style={{ minHeight: 330 }}>
+    <View className="rounded-lg bg-white p-4" style={{ minHeight: 330 }}>
       {/* Legend */}
-      <View className="flex-row justify-center items-center mb-6">
-        <View className="flex-row items-center mr-12">
-          <View 
-            className="w-3 h-3 rounded mr-3" 
-            style={{ backgroundColor: '#D1D5DB' }}
-          />
+      <View className="mb-6 flex-row items-center justify-center">
+        <View className="mr-12 flex-row items-center">
+          <View className="mr-3 h-3 w-3 rounded" style={{ backgroundColor: '#D1D5DB' }} />
           <Text className="text-text-primary font-medium">Planned</Text>
         </View>
         <View className="flex-row items-center">
-          <View 
-            className="w-3 h-3 rounded mr-3" 
-            style={{ backgroundColor: colors.success }}
-          />
+          <View className="mr-3 h-3 w-3 rounded" style={{ backgroundColor: colors.success }} />
           <Text className="text-text-primary font-medium">Completed</Text>
         </View>
       </View>
@@ -83,34 +78,31 @@ export function MileageGraph({ weeklyData, preferredUnit, font }: MileageGraphPr
       {/* Custom Bar Chart */}
       <View style={{ height: 280, paddingLeft: yAxisLabelWidth, paddingRight: chartPadding }}>
         {/* Y-axis labels and grid lines - positioned together */}
-        <View className="absolute left-0 right-5 top-2 bottom-8" style={{ height: chartHeight }}>
+        <View className="absolute bottom-8 left-0 right-5 top-2" style={{ height: chartHeight }}>
           {yAxisLabelTexts.reverse().map((label, index) => {
             const positionRatio = index / (yAxisLabelTexts.length - 1);
             const topPosition = positionRatio * chartHeight - 6; // Subtract half text height for centering
-            
+
             return (
               <View key={index}>
                 {/* Y-axis label */}
-                <View 
+                <View
                   className="absolute items-end pr-2"
-                  style={{ 
+                  style={{
                     width: yAxisLabelWidth,
                     top: topPosition,
-                  }}
-                >
-                  <Text className="text-xs text-gray-600">
-                    {label}
-                  </Text>
+                  }}>
+                  <Text className="text-xs text-gray-600">{label}</Text>
                 </View>
-                
+
                 {/* Grid line */}
-                <View 
+                <View
                   className="absolute border-t border-gray-200"
-                  style={{ 
+                  style={{
                     left: yAxisLabelWidth + 2,
                     right: 0,
                     top: topPosition + 6, // Add back the offset for grid line
-                    height: 1
+                    height: 1,
                   }}
                 />
               </View>
@@ -119,22 +111,24 @@ export function MileageGraph({ weeklyData, preferredUnit, font }: MileageGraphPr
         </View>
 
         {/* Bars container - aligned with chart area */}
-        <View className="absolute left-12 right-5 top-2 bottom-8" style={{ height: chartHeight }}>
-          <View className="flex-1 flex-row justify-between items-end">
+        <View className="absolute bottom-8 left-12 right-5 top-2" style={{ height: chartHeight }}>
+          <View className="flex-1 flex-row items-end justify-between">
             {weeklyData.map((data, index) => {
               const plannedValue = convertMileage(data.plannedMileage);
               const actualValue = convertMileage(data.actualMileage);
               const barHeight = (plannedValue / topTickValue) * chartHeight;
               const actualHeight = (actualValue / topTickValue) * chartHeight;
-              
+
               return (
-                <View key={data.weekNumber} className="items-center flex-1">
+                <View key={data.weekNumber} className="flex-1 items-center">
                   {/* Bar container - positioned relative to the chart baseline */}
-                  <View className="relative" style={{ width: 32, height: barHeight > 0 ? barHeight : 2 }}>
+                  <View
+                    className="relative"
+                    style={{ width: 32, height: barHeight > 0 ? barHeight : 2 }}>
                     {/* Background grey bar (planned) */}
-                    <View 
+                    <View
                       className="absolute bottom-0 w-full"
-                      style={{ 
+                      style={{
                         height: '100%',
                         backgroundColor: '#D1D5DB',
                         borderRadius: 4,
@@ -142,9 +136,9 @@ export function MileageGraph({ weeklyData, preferredUnit, font }: MileageGraphPr
                     />
                     {/* Green fill (actual) */}
                     {actualHeight > 0 && (
-                      <View 
+                      <View
                         className="absolute bottom-0 w-full"
-                        style={{ 
+                        style={{
                           height: `${Math.min(100, (actualHeight / Math.max(barHeight, 1)) * 100)}%`,
                           backgroundColor: colors.success,
                           borderRadius: 4,
@@ -157,17 +151,13 @@ export function MileageGraph({ weeklyData, preferredUnit, font }: MileageGraphPr
             })}
           </View>
         </View>
-        
 
-        
         {/* Week labels positioned closer to chart area */}
-        <View className="absolute left-12 right-5 bottom-4" style={{ height: 20 }}>
+        <View className="absolute bottom-4 left-12 right-5" style={{ height: 20 }}>
           <View className="flex-row justify-between">
             {weeklyData.map((data, index) => (
               <View key={data.weekNumber} className="flex-1 items-center">
-                <Text className="text-xs text-gray-600 text-center">
-                  Week {data.weekNumber}
-                </Text>
+                <Text className="text-center text-xs text-gray-600">Week {data.weekNumber}</Text>
               </View>
             ))}
           </View>
@@ -175,4 +165,4 @@ export function MileageGraph({ weeklyData, preferredUnit, font }: MileageGraphPr
       </View>
     </View>
   );
-} 
+}

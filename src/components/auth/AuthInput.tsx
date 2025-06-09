@@ -9,14 +9,12 @@ interface AuthInputProps extends TextInputProps {
 export function AuthInput({ label, error, ...props }: AuthInputProps) {
   return (
     <View className="mb-4">
-      <Text className="text-gray-700 mb-1">{label}</Text>
+      <Text className="mb-1 text-gray-700">{label}</Text>
       <TextInput
-        className={`border rounded-lg p-3 ${
-          error ? 'border-red-500' : 'border-gray-300'
-        }`}
+        className={`rounded-lg border p-3 ${error ? 'border-red-500' : 'border-gray-300'}`}
         {...props}
       />
-      {error && <Text className="text-red-500 text-sm mt-1">{error}</Text>}
+      {error && <Text className="mt-1 text-sm text-red-500">{error}</Text>}
     </View>
   );
-} 
+}

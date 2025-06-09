@@ -27,7 +27,7 @@ class WebSocketClient {
       open: [],
       message: [],
       close: [],
-      error: []
+      error: [],
     };
   }
 
@@ -37,25 +37,25 @@ class WebSocketClient {
   connect(): WebSocketClient {
     // Use the native WebSocket implementation
     this.ws = new WebSocket(this.url, this.protocols);
-    
+
     this.ws.onopen = (event) => {
       this.isConnected = true;
-      this.listeners.open.forEach(listener => listener(event));
+      this.listeners.open.forEach((listener) => listener(event));
     };
-    
+
     this.ws.onmessage = (event) => {
-      this.listeners.message.forEach(listener => listener(event));
+      this.listeners.message.forEach((listener) => listener(event));
     };
-    
+
     this.ws.onclose = (event) => {
       this.isConnected = false;
-      this.listeners.close.forEach(listener => listener(event));
+      this.listeners.close.forEach((listener) => listener(event));
     };
-    
+
     this.ws.onerror = (error) => {
-      this.listeners.error.forEach(listener => listener(error));
+      this.listeners.error.forEach((listener) => listener(error));
     };
-    
+
     return this;
   }
 
@@ -76,11 +76,11 @@ class WebSocketClient {
     if (!this.isConnected || !this.ws) {
       throw new Error('WebSocket is not connected');
     }
-    
+
     if (typeof data === 'object' && !ArrayBuffer.isView(data) && !(data instanceof ArrayBuffer)) {
       data = JSON.stringify(data);
     }
-    
+
     this.ws.send(data);
     return this;
   }
@@ -96,4 +96,4 @@ class WebSocketClient {
   }
 }
 
-export default WebSocketClient; 
+export default WebSocketClient;

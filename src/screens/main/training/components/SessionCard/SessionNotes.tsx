@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, TextInput, Modal, StyleSheet } from 'react-native';
-import { Text } from '../../../../../components/ui/StyledText';
+
 import { Button } from '../../../../../components/ui/Button';
+import { Text } from '../../../../../components/ui/StyledText';
 
 interface SessionNotesProps {
   notes: string;
@@ -29,7 +30,7 @@ export const SessionNotes: React.FC<SessionNotesProps> = ({
   onOpenNotes,
   onChangeNotes,
   onSaveNotes,
-  onCancelNotes
+  onCancelNotes,
 }) => {
   return (
     <>
@@ -40,30 +41,18 @@ export const SessionNotes: React.FC<SessionNotesProps> = ({
           <Text style={styles.notesText}>{sessionNotes}</Text>
         </View>
       )}
-      
+
       {/* Button to add notes */}
       <View style={styles.footer}>
-        <Button 
-          title="Add Notes" 
-          onPress={onOpenNotes}
-          variant="secondary"
-          size="small"
-        />
+        <Button title="Add Notes" onPress={onOpenNotes} variant="secondary" size="small" />
       </View>
-      
+
       {/* Notes editing modal */}
-      <Modal
-        visible={isEditing}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={onCancelNotes}
-      >
+      <Modal visible={isEditing} transparent animationType="slide" onRequestClose={onCancelNotes}>
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>
-              {title || `Session - ${formattedDate}`}
-            </Text>
-            
+            <Text style={styles.modalTitle}>{title || `Session - ${formattedDate}`}</Text>
+
             <Text style={styles.modalLabel}>Post-Session Notes:</Text>
             <TextInput
               style={styles.notesInput}
@@ -73,14 +62,9 @@ export const SessionNotes: React.FC<SessionNotesProps> = ({
               placeholder="How did this workout feel? Any challenges or successes?"
               placeholderTextColor="#999"
             />
-            
+
             <View style={styles.modalButtons}>
-              <Button
-                title="Cancel"
-                variant="outline"
-                size="small"
-                onPress={onCancelNotes}
-              />
+              <Button title="Cancel" variant="outline" size="small" onPress={onCancelNotes} />
               <Button
                 title="Save"
                 variant="primary"
@@ -167,5 +151,5 @@ const styles = StyleSheet.create({
   modalButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-  }
-}); 
+  },
+});

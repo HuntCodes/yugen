@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Alert } from 'react-native';
-import { TrainingSession } from '../../screens/main/training/components/types';
-import { colors } from '../../styles/colors';
-import { processWorkoutNotes } from '../../services/summary/workoutNoteService';
+
 import { supabase } from '../../lib/supabase';
 import { getSuggestedShoe } from '../../lib/utils/training/shoeRecommendations';
+import { TrainingSession } from '../../screens/main/training/components/types';
+import { processWorkoutNotes } from '../../services/summary/workoutNoteService';
+import { colors } from '../../styles/colors';
 
 // Define session status type
 type AppSessionStatus = 'completed' | 'missed' | 'planned' | 'not_completed' | 'skipped';
@@ -23,7 +24,7 @@ export function useSessionCard(
     if (status === 'not_completed') return 'not_completed';
     return 'planned';
   };
-  
+
   const [status, setStatus] = useState<AppSessionStatus>(mapStatus(session.status));
   const [isUpdating, setIsUpdating] = useState(false);
   const [notes, setNotes] = useState(session.post_session_notes || '');
@@ -32,19 +33,29 @@ export function useSessionCard(
   // Helper function to get color for session type
   const getSessionTypeColor = (sessionType: string) => {
     const type = sessionType.toLowerCase();
-    
+
     // Easy/Recovery runs
     if (type.includes('easy') || type.includes('recovery')) {
       return colors.easy;
     }
     // Speed/Power work
-    else if (type.includes('interval') || type.includes('speed') || type.includes('track') || 
-             type.includes('hill') || type.includes('strides')) {
+    else if (
+      type.includes('interval') ||
+      type.includes('speed') ||
+      type.includes('track') ||
+      type.includes('hill') ||
+      type.includes('strides')
+    ) {
       return colors.interval;
     }
     // Threshold/Tempo work
-    else if (type.includes('tempo') || type.includes('threshold') || type.includes('fartlek') ||
-             type.includes('progressive') || type.includes('race pace')) {
+    else if (
+      type.includes('tempo') ||
+      type.includes('threshold') ||
+      type.includes('fartlek') ||
+      type.includes('progressive') ||
+      type.includes('race pace')
+    ) {
       return colors.interval;
     }
     // Long runs and time trials
@@ -85,25 +96,31 @@ export function useSessionCard(
   // Get display text for status
   const getStatusDisplayText = (status: AppSessionStatus) => {
     switch (status) {
-      case 'completed': return 'Completed';
-      case 'missed': return 'Missed';
-      case 'skipped': return 'Skipped';
-      case 'not_completed': return 'Not Completed';
-      case 'planned': return 'Planned';
-      default: return 'Planned';
+      case 'completed':
+        return 'Completed';
+      case 'missed':
+        return 'Missed';
+      case 'skipped':
+        return 'Skipped';
+      case 'not_completed':
+        return 'Not Completed';
+      case 'planned':
+        return 'Planned';
+      default:
+        return 'Planned';
     }
   };
 
   // Handle status updates
   const handleStatusUpdate = async (newStatus: AppSessionStatus) => {
     if (!onUpdateSession) return;
-    
+
     setIsUpdating(true);
     try {
       // If clicking the same status that's already active, set to not_completed
       // Otherwise set to the new status
       const updatedStatus = status === newStatus ? 'not_completed' : newStatus;
-      await onUpdateSession(session.id, { 
+      await onUpdateSession(session.id, {
         status: updatedStatus,
         // Ensure we're passing back all the necessary session data
         distance: session.distance,
@@ -112,7 +129,7 @@ export function useSessionCard(
         session_type: session.session_type,
         date: session.date,
         notes: session.notes,
-        post_session_notes: session.post_session_notes
+        post_session_notes: session.post_session_notes,
       });
       setStatus(updatedStatus);
     } catch (error) {
@@ -126,12 +143,12 @@ export function useSessionCard(
   // Save notes
   const handleSaveNotes = async () => {
     if (!onUpdateSession) return;
-    
+
     setIsUpdating(true);
     try {
       // First update the session with new notes
       await onUpdateSession(session.id, { post_session_notes: notes });
-      
+
       // Then process and summarize the notes if they're not empty
       if (notes && notes.trim() !== '') {
         // Check if we have a userId prop
@@ -148,7 +165,7 @@ export function useSessionCard(
           }
         }
       }
-      
+
       setIsEditingNotes(false);
     } catch (error) {
       console.error('🔍 [SessionCard] Error in handleSaveNotes:', error);
@@ -172,7 +189,8 @@ export function useSessionCard(
   // Calculate derived values
   const sessionTypeColors = getSessionTypeColor(session.session_type);
   const statusInfo = getStatusInfo(status);
-  const suggestedShoe = session.suggested_shoe || getSuggestedShoe(session.session_type) || undefined;
+  const suggestedShoe =
+    session.suggested_shoe || getSuggestedShoe(session.session_type) || undefined;
   const displayDate = session.scheduled_date || session.date;
   const title = session.title || `${session.session_type} - ${formattedDate}`;
   const description = session.description || session.notes;
@@ -184,7 +202,7 @@ export function useSessionCard(
     notes,
     setNotes,
     isEditingNotes,
-    
+
     // Derived values
     sessionTypeColors,
     statusInfo,
@@ -192,15 +210,15 @@ export function useSessionCard(
     displayDate,
     title,
     description,
-    
+
     // Helper functions
     getStatusDisplayText,
-    
+
     // Actions
     handleStatusUpdate,
     handleSaveNotes,
     handleOpenNotesModal,
     handleCancelNotes,
-    setIsEditingNotes
+    setIsEditingNotes,
   };
-} 
+}

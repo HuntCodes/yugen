@@ -1,7 +1,8 @@
 import React, { useRef, createRef } from 'react';
 import { View, ScrollView, StyleSheet, LayoutChangeEvent } from 'react-native';
-import { Text } from '../../../../components/ui/StyledText';
+
 import { TrainingSession } from './types';
+import { Text } from '../../../../components/ui/StyledText';
 
 // Define SessionLayout type here or import if shared
 type SessionLayout = { y: number; height: number };
@@ -13,24 +14,24 @@ export interface SessionListProps {
   sessionLayoutsRef: React.MutableRefObject<Record<string, SessionLayout>>;
   scrollViewRef: React.RefObject<ScrollView | null>;
   children: (
-    session: TrainingSession, 
-    formattedDate: string, 
-    dayOfWeek: string, 
+    session: TrainingSession,
+    formattedDate: string,
+    dayOfWeek: string,
     isModified: boolean
   ) => React.ReactNode;
 }
 
-export const SessionList: React.FC<SessionListProps> = ({ 
-  sessions, 
-  formatDate, 
+export const SessionList: React.FC<SessionListProps> = ({
+  sessions,
+  formatDate,
   getDayOfWeek,
   sessionLayoutsRef,
   scrollViewRef,
-  children
+  children,
 }) => {
   // Store refs for each session view dynamically - MOVED BEFORE early return
   const sessionViewRefs = useRef<Record<string, React.RefObject<View | null>>>({});
-  
+
   if (!sessions || sessions.length === 0) {
     return (
       <View style={styles.emptyContainer}>
@@ -40,7 +41,7 @@ export const SessionList: React.FC<SessionListProps> = ({
   }
 
   // Initialize refs for new sessions
-  sessions.forEach(session => {
+  sessions.forEach((session) => {
     if (!sessionViewRefs.current[session.id]) {
       // Ensure refs are created only once per session ID for the component's lifetime
       sessionViewRefs.current[session.id] = createRef<View | null>();
@@ -49,7 +50,7 @@ export const SessionList: React.FC<SessionListProps> = ({
 
   // Group sessions by week
   const sessionsByWeek: { [key: number]: TrainingSession[] } = {};
-  sessions.forEach(session => {
+  sessions.forEach((session) => {
     const weekNum = session.week_number || 1;
     if (!sessionsByWeek[weekNum]) {
       sessionsByWeek[weekNum] = [];
@@ -81,24 +82,24 @@ export const SessionList: React.FC<SessionListProps> = ({
         }
       );
     } else {
-       // console.warn(`[AutoScroll Debug] Ref not ready for measurement: node=${!!node}, scrollViewNode=${!!scrollViewNode}`);
+      // console.warn(`[AutoScroll Debug] Ref not ready for measurement: node=${!!node}, scrollViewNode=${!!scrollViewNode}`);
     }
   };
 
   return (
     <View style={styles.container}>
-      {Object.keys(sessionsByWeek).map(weekKey => {
+      {Object.keys(sessionsByWeek).map((weekKey) => {
         const weekNum = parseInt(weekKey, 10);
         const weekSessions = sessionsByWeek[weekNum];
-        
+
         return (
           <View key={`week-${weekNum}`} style={styles.weekContainer}>
             <Text style={styles.weekHeader}>Week {weekNum}</Text>
-            {weekSessions.map(session => {
+            {weekSessions.map((session) => {
               const formattedDate = formatDate(session.date);
               const dayOfWeek = getDayOfWeek(session.date);
               const isModified = !!session.modified;
-              
+
               return (
                 // Attach the specific ref and use onLayout to trigger measure
                 <View
@@ -106,8 +107,7 @@ export const SessionList: React.FC<SessionListProps> = ({
                   key={session.id}
                   style={styles.sessionContainer}
                   // onLayout is now just a trigger to perform the measurement
-                  onLayout={() => handleLayout(session.id)}
-                >
+                  onLayout={() => handleLayout(session.id)}>
                   {children(session, formattedDate, dayOfWeek, isModified)}
                 </View>
               );
@@ -147,4 +147,4 @@ const styles = StyleSheet.create({
   sessionContainer: {
     marginBottom: 12,
   },
-}); 
+});

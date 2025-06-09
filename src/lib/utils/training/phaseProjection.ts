@@ -1,4 +1,5 @@
 import { LocalDate, DayOfWeek, TemporalAdjusters, ZoneId, Month } from '@js-joda/core';
+
 import { getTrainingPhase } from './planAnalysis'; // Existing function
 
 export interface WeeklyPhaseOutlook {
@@ -28,7 +29,9 @@ export function generatePhaseOutlook(
   let currentIterMondayLd = todayLd.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
   const endDateLd = todayLd.plusMonths(projectionMonths).with(TemporalAdjusters.lastDayOfMonth());
 
-  const planStartDateForPhaseCalc = planStartDateString ? new Date(planStartDateString + 'T00:00:00.000Z') : undefined;
+  const planStartDateForPhaseCalc = planStartDateString
+    ? new Date(planStartDateString + 'T00:00:00.000Z')
+    : undefined;
 
   while (currentIterMondayLd.isBefore(endDateLd) || currentIterMondayLd.isEqual(endDateLd)) {
     const currentIterSundayLd = currentIterMondayLd.plusDays(6);
@@ -43,17 +46,25 @@ export function generatePhaseOutlook(
     );
     // No setHours(0,0,0,0) here, as getTrainingPhase does that internally on its copy.
 
-    const phase = getTrainingPhase(raceDateString, jsDateForPhaseCurrentDate, planStartDateForPhaseCalc);
-    
-    const isCurrentWeek = todayLd.isEqual(currentIterMondayLd) || (todayLd.isAfter(currentIterMondayLd) && todayLd.isBefore(currentIterSundayLd.plusDays(1)));
-    
+    const phase = getTrainingPhase(
+      raceDateString,
+      jsDateForPhaseCurrentDate,
+      planStartDateForPhaseCalc
+    );
+
+    const isCurrentWeek =
+      todayLd.isEqual(currentIterMondayLd) ||
+      (todayLd.isAfter(currentIterMondayLd) && todayLd.isBefore(currentIterSundayLd.plusDays(1)));
+
     let weekIdentifierPrefix = '';
     if (isCurrentWeek) {
       weekIdentifierPrefix = 'This Week: ';
-    } else if (currentIterMondayLd.isAfter(todayLd.with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY)))) {
+    } else if (
+      currentIterMondayLd.isAfter(todayLd.with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY)))
+    ) {
       // Check if it's the very next week
       const nextWeekMonday = todayLd.with(TemporalAdjusters.next(DayOfWeek.MONDAY));
-      if(currentIterMondayLd.isEqual(nextWeekMonday)){
+      if (currentIterMondayLd.isEqual(nextWeekMonday)) {
         weekIdentifierPrefix = 'Next Week: ';
       }
     }
@@ -66,8 +77,8 @@ export function generatePhaseOutlook(
       weekIdentifier: `${weekIdentifierPrefix}${formatMonthDay(currentIterMondayLd)} - ${formatMonthDay(currentIterSundayLd)}`,
       weekStartDate: currentIterMondayLd.toString(), // YYYY-MM-DD
       weekEndDate: currentIterSundayLd.toString(), // YYYY-MM-DD
-      phase: phase,
-      isCurrentWeek: isCurrentWeek,
+      phase,
+      isCurrentWeek,
     });
 
     currentIterMondayLd = currentIterMondayLd.plusWeeks(1);
@@ -79,4 +90,4 @@ export function generatePhaseOutlook(
 // Helper to get abbreviated month name (if needed standalone, otherwise inline is fine)
 // const getShortMonthName = (month: Month): string => {
 //   return month.toString().substring(0, 3);
-// }; 
+// };

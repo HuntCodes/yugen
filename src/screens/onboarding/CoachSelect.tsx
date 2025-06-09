@@ -1,12 +1,22 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Image, ScrollView, ActivityIndicator, SafeAreaView, Alert } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../../navigation/AppNavigator';
-import { supabase } from '../../lib/supabase';
-import { COACHES } from '../../lib/constants/coaches';
-import { checkProfileExists, createProfile, updateCoachSelection } from '../../services/profile';
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  Image,
+  ScrollView,
+  ActivityIndicator,
+  SafeAreaView,
+  Alert,
+} from 'react-native';
+
 import { MinimalSpinner } from '../../components/ui/MinimalSpinner';
+import { COACHES } from '../../lib/constants/coaches';
+import { supabase } from '../../lib/supabase';
+import { RootStackParamList } from '../../navigation/AppNavigator';
+import { checkProfileExists, createProfile, updateCoachSelection } from '../../services/profile';
 
 type CoachSelectNavigationProp = NativeStackNavigationProp<RootStackParamList, 'CoachSelect'>;
 
@@ -25,16 +35,16 @@ export function CoachSelect() {
         setInitialLoading(true);
         // Use v1 method to get the current user
         const user = supabase.auth.user();
-        
+
         if (!user) {
           console.error('No authenticated user');
           setInitialLoading(false);
           return;
         }
-        
+
         // Check if profile exists using profile service
         const profileData = await checkProfileExists(user.id);
-        
+
         if (profileData?.exists) {
           setProfileExists(true);
           // If a coach is already selected, use it
@@ -50,7 +60,7 @@ export function CoachSelect() {
         setInitialLoading(false);
       }
     };
-    
+
     initializeProfile();
   }, []);
 
@@ -62,13 +72,13 @@ export function CoachSelect() {
 
     setLoading(true);
     setError(null);
-    
+
     try {
       // Use v1 method to get the current user
       const user = supabase.auth.user();
-      
+
       if (!user) throw new Error('User not authenticated');
-      
+
       // If profile doesn't exist, create it first with the coach_id
       if (!profileExists) {
         console.log('Creating new profile with coach_id:', selectedCoach);
@@ -78,19 +88,22 @@ export function CoachSelect() {
         console.log('Updating existing profile with coach_id:', selectedCoach);
         await updateCoachSelection(user.id, selectedCoach);
       }
-      
+
       // Wait for Supabase to complete the operation
-      await new Promise(resolve => setTimeout(resolve, 300));
-      
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
       // Verify the operation succeeded by checking the profile again
       const verifyProfile = await checkProfileExists(user.id);
-      
-      if (!verifyProfile || !verifyProfile.hasCoach || 
-          verifyProfile.profile?.coach_id !== selectedCoach) {
+
+      if (
+        !verifyProfile ||
+        !verifyProfile.hasCoach ||
+        verifyProfile.profile?.coach_id !== selectedCoach
+      ) {
         console.error('Verification failed:', verifyProfile);
         throw new Error('Failed to verify coach selection. Please try again.');
       }
-      
+
       console.log('Successfully saved coach_id:', selectedCoach);
       navigation.navigate('VoiceOnboarding', { coachId: selectedCoach });
     } catch (err: any) {
@@ -107,9 +120,7 @@ export function CoachSelect() {
       <SafeAreaView style={{ flex: 1, backgroundColor: 'white' }}>
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <MinimalSpinner size={48} color="#000000" thickness={3} />
-          <Text style={{ marginTop: 16, color: '#757575' }}>
-            Loading...
-          </Text>
+          <Text style={{ marginTop: 16, color: '#757575' }}>Loading...</Text>
         </View>
       </SafeAreaView>
     );
@@ -118,20 +129,18 @@ export function CoachSelect() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: 'white' }}>
       <View style={{ flex: 1, padding: 16 }}>
-        <Text style={{ 
-          fontSize: 28, 
-          fontWeight: 'bold', 
-          marginTop: 16, 
-          marginBottom: 24,
-          color: '#000000'
-        }}>
+        <Text
+          style={{
+            fontSize: 28,
+            fontWeight: 'bold',
+            marginTop: 16,
+            marginBottom: 24,
+            color: '#000000',
+          }}>
           Choose your coach
         </Text>
 
-        <ScrollView 
-          style={{ marginBottom: 24 }}
-          showsVerticalScrollIndicator={false}
-        >
+        <ScrollView style={{ marginBottom: 24 }} showsVerticalScrollIndicator={false}>
           {COACHES.map((coach) => (
             <TouchableOpacity
               key={coach.id}
@@ -143,17 +152,16 @@ export function CoachSelect() {
                 marginBottom: 16,
                 borderWidth: 1,
                 borderColor: selectedCoach === coach.id ? '#000000' : '#F5F5F5',
-                backgroundColor: selectedCoach === coach.id ? '#F5F5F5' : 'white'
+                backgroundColor: selectedCoach === coach.id ? '#F5F5F5' : 'white',
               }}
-              onPress={() => setSelectedCoach(coach.id)}
-            >
+              onPress={() => setSelectedCoach(coach.id)}>
               <Image
                 source={
-                  coach.id === 'craig' ? 
-                    require('../../assets/craig.jpg') : 
-                  coach.id === 'thomas' ? 
-                    require('../../assets/thomas.jpg') : 
-                    require('../../assets/dathan.jpg')
+                  coach.id === 'craig'
+                    ? require('../../assets/craig.jpg')
+                    : coach.id === 'thomas'
+                      ? require('../../assets/thomas.jpg')
+                      : require('../../assets/dathan.jpg')
                 }
                 style={{
                   width: 60,
@@ -165,18 +173,20 @@ export function CoachSelect() {
                 }}
               />
               <View style={{ flex: 1 }}>
-                <Text style={{ 
-                  fontSize: 18, 
-                  fontWeight: 'bold',
-                  marginBottom: 4,
-                  color: '#000000'
-                }}>
+                <Text
+                  style={{
+                    fontSize: 18,
+                    fontWeight: 'bold',
+                    marginBottom: 4,
+                    color: '#000000',
+                  }}>
                   {coach.name}
                 </Text>
-                <Text style={{ 
-                  color: '#757575',
-                  lineHeight: 20
-                }}>
+                <Text
+                  style={{
+                    color: '#757575',
+                    lineHeight: 20,
+                  }}>
                   {coach.personalityBlurb}
                 </Text>
               </View>
@@ -185,11 +195,12 @@ export function CoachSelect() {
         </ScrollView>
 
         {error && (
-          <Text style={{ 
-            color: '#E53935', 
-            marginBottom: 16, 
-            textAlign: 'center' 
-          }}>
+          <Text
+            style={{
+              color: '#E53935',
+              marginBottom: 16,
+              textAlign: 'center',
+            }}>
             {error}
           </Text>
         )}
@@ -200,11 +211,10 @@ export function CoachSelect() {
             paddingVertical: 16,
             borderRadius: 6,
             alignItems: 'center',
-            opacity: selectedCoach ? 1 : 0.5
+            opacity: selectedCoach ? 1 : 0.5,
           }}
           onPress={handleCoachSelect}
-          disabled={!selectedCoach || loading}
-        >
+          disabled={!selectedCoach || loading}>
           {loading ? (
             <MinimalSpinner size={20} color="#FFFFFF" thickness={2} />
           ) : (
@@ -216,4 +226,4 @@ export function CoachSelect() {
       </View>
     </SafeAreaView>
   );
-} 
+}

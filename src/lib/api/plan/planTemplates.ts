@@ -4,7 +4,7 @@ import { TrainingSession } from '../../../types/training';
  * Get coach personality traits for plan generation
  */
 export function getCoachPersonality(coachId: string): string {
-  switch(coachId) {
+  switch (coachId) {
     case 'craig':
       return 'You are Coach Craig - motivational, science-focused, and analytical. You emphasize structured workouts with clear purpose.';
     case 'thomas':
@@ -22,15 +22,15 @@ export function getCoachPersonality(coachId: string): string {
 export function getNextSunday(fromDate: Date = new Date()): Date {
   const result = new Date(fromDate);
   const day = result.getDay(); // 0 = Sunday, 1 = Monday, etc.
-  
+
   // If today is not Sunday, move to next Sunday
   if (day !== 0) {
     result.setDate(result.getDate() + (7 - day));
   }
-  
+
   // Set to end of day
   result.setHours(23, 59, 59, 999);
-  
+
   return result;
 }
 
@@ -39,25 +39,30 @@ export function getNextSunday(fromDate: Date = new Date()): Date {
  */
 export function formatChatSummaries(summaries: any[]): string {
   if (!summaries || summaries.length === 0) {
-    return "No recent conversation history available.";
+    return 'No recent conversation history available.';
   }
-  
-  return summaries.map((summary, index) => {
-    const typeLabel = summary.chat_type === 'workout' ? 'Workout discussion' :
-                      summary.chat_type === 'topic' ? `Topic: ${summary.topic}` :
-                      'General coaching';
-    return `${index + 1}. ${typeLabel}: ${summary.summary}`;
-  }).join('\n');
+
+  return summaries
+    .map((summary, index) => {
+      const typeLabel =
+        summary.chat_type === 'workout'
+          ? 'Workout discussion'
+          : summary.chat_type === 'topic'
+            ? `Topic: ${summary.topic}`
+            : 'General coaching';
+      return `${index + 1}. ${typeLabel}: ${summary.summary}`;
+    })
+    .join('\n');
 }
 
 /**
  * Convert generator sessions to match expected training type
  */
 export function convertToTrainingType(sessions: TrainingSession[]): any[] {
-  return sessions.map(session => ({
+  return sessions.map((session) => ({
     ...session,
     id: session.id || '',
-    status: session.status || 'not_completed'
+    status: session.status || 'not_completed',
   }));
 }
 
@@ -82,7 +87,7 @@ export function buildWeeklyPlanPrompt({
   currentMileage,
   userProfile,
   onboardingData,
-  trainingPreferencesSection
+  trainingPreferencesSection,
 }: {
   mondayStr: string;
   sundayStr: string;
@@ -120,10 +125,15 @@ Phase: ${trainingPhase}
 COACH STYLE: ${coachPersonality}
 
 PHASE DESCRIPTION: The runner is in the "${trainingPhase}" phase. This means:
-${trainingPhase === 'Base' ? '- Focus on building a foundation with mostly easy runs.' :
-  trainingPhase === 'Build' ? '- Progressively increase volume by ~5% per week. Include some quality workouts.' :
-  trainingPhase === 'Recovery' ? '- Lower volume and intensity to allow for recovery.' :
-  '- Focus on running consistently with a mix of easy and moderate efforts.'}
+${
+  trainingPhase === 'Base'
+    ? '- Focus on building a foundation with mostly easy runs.'
+    : trainingPhase === 'Build'
+      ? '- Progressively increase volume by ~5% per week. Include some quality workouts.'
+      : trainingPhase === 'Recovery'
+        ? '- Lower volume and intensity to allow for recovery.'
+        : '- Focus on running consistently with a mix of easy and moderate efforts.'
+}
 
 For each day next week, provide:
 - Type: [Type of workout]
@@ -157,4 +167,4 @@ Runner Profile:
 - Injury History: ${userProfile?.injury_history || onboardingData.injury_history || 'None'}
 
 Fill out the training sessions for each training day next week. For rest days, either omit them or explicitly mark them as "Rest Day" with no distance/time.`;
-} 
+}

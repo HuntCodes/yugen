@@ -1,16 +1,28 @@
-import React, { useState, useEffect } from 'react';
-import { View, TouchableOpacity, TextInput, StyleSheet, Alert, Modal, LayoutChangeEvent } from 'react-native';
-import { Text } from '../../../../components/ui/StyledText';
-import { TrainingSession, SessionStatus } from './types';
-import { formatDate } from '../../../../lib/utils/dateUtils';
-import { Button } from '../../../../components/ui/Button';
-import { colors } from '../../../../styles/colors';
-import { processWorkoutNotes } from '../../../../services/summary/workoutNoteService';
-import { supabase } from '../../../../lib/supabase';
-import { getSuggestedShoe, getProductIdFromShoeName } from '../../../../lib/utils/training/shoeRecommendations';
-import { useNavigation } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import { useNavigation } from '@react-navigation/native';
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  TouchableOpacity,
+  TextInput,
+  StyleSheet,
+  Alert,
+  Modal,
+  LayoutChangeEvent,
+} from 'react-native';
+
+import { TrainingSession, SessionStatus } from './types';
+import { Button } from '../../../../components/ui/Button';
+import { Text } from '../../../../components/ui/StyledText';
+import { supabase } from '../../../../lib/supabase';
+import { formatDate } from '../../../../lib/utils/dateUtils';
+import {
+  getSuggestedShoe,
+  getProductIdFromShoeName,
+} from '../../../../lib/utils/training/shoeRecommendations';
 import { TabParamList } from '../../../../navigation/TabNavigator';
+import { processWorkoutNotes } from '../../../../services/summary/workoutNoteService';
+import { colors } from '../../../../styles/colors';
 
 // Update SessionStatus type to match what's used in the app
 type AppSessionStatus = 'completed' | 'missed' | 'planned' | 'not_completed' | 'skipped';
@@ -32,10 +44,10 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   isModified = false,
   userId,
   onUpdateSession,
-  onLayout
+  onLayout,
 }) => {
   const navigation = useNavigation<BottomTabNavigationProp<TabParamList>>();
-  
+
   // Map existing status values to our app's status values
   const mapStatus = (status?: string): AppSessionStatus => {
     if (status === 'completed') return 'completed';
@@ -44,7 +56,7 @@ export const SessionCard: React.FC<SessionCardProps> = ({
     if (status === 'not_completed') return 'not_completed';
     return 'planned';
   };
-  
+
   const [status, setStatus] = useState<AppSessionStatus>(mapStatus(session.status));
   const [isUpdating, setIsUpdating] = useState(false);
   const [notes, setNotes] = useState(session.post_session_notes || '');
@@ -85,13 +97,13 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   // Handle status updates
   const handleStatusUpdate = async (newStatus: AppSessionStatus) => {
     if (!onUpdateSession) return;
-    
+
     setIsUpdating(true);
     try {
       // If clicking the same status that's already active, set to not_completed
       // Otherwise set to the new status
       const updatedStatus = status === newStatus ? 'not_completed' : newStatus;
-      await onUpdateSession(session.id, { 
+      await onUpdateSession(session.id, {
         status: updatedStatus,
         // Ensure we're passing back all the necessary session data
         distance: session.distance,
@@ -100,7 +112,7 @@ export const SessionCard: React.FC<SessionCardProps> = ({
         session_type: session.session_type,
         date: session.date,
         notes: session.notes,
-        post_session_notes: session.post_session_notes
+        post_session_notes: session.post_session_notes,
       });
       setStatus(updatedStatus);
     } catch (error) {
@@ -114,12 +126,12 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   // Save notes
   const handleSaveNotes = async () => {
     if (!onUpdateSession) return;
-    
+
     setIsUpdating(true);
     try {
       // First update the session with new notes
       await onUpdateSession(session.id, { post_session_notes: notes });
-      
+
       // Then process and summarize the notes if they're not empty
       if (notes && notes.trim() !== '') {
         // Check if we have a userId prop
@@ -136,7 +148,7 @@ export const SessionCard: React.FC<SessionCardProps> = ({
           }
         }
       }
-      
+
       setIsEditingNotes(false);
     } catch (error) {
       console.error('🔍 [SessionCard] Error in handleSaveNotes:', error);
@@ -162,7 +174,8 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   const sessionTypeColors = getSessionTypeColor(session.session_type);
   const statusInfo = getStatusInfo(status);
 
-  const suggestedShoe = session.suggested_shoe || getSuggestedShoe(session.session_type) || 'No recommendation';
+  const suggestedShoe =
+    session.suggested_shoe || getSuggestedShoe(session.session_type) || 'No recommendation';
   const displayDate = session.scheduled_date || session.date;
   const title = session.title || `${session.session_type} - ${formattedDate}`;
   const description = session.description || session.notes;
@@ -170,12 +183,18 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   // Get display text for status
   const getStatusDisplayText = (status: AppSessionStatus) => {
     switch (status) {
-      case 'completed': return 'Completed';
-      case 'missed': return 'Missed';
-      case 'skipped': return 'Skipped';
-      case 'not_completed': return 'Not Completed';
-      case 'planned': return 'Planned';
-      default: return 'Planned';
+      case 'completed':
+        return 'Completed';
+      case 'missed':
+        return 'Missed';
+      case 'skipped':
+        return 'Skipped';
+      case 'not_completed':
+        return 'Not Completed';
+      case 'planned':
+        return 'Planned';
+      default:
+        return 'Planned';
     }
   };
 
@@ -185,18 +204,19 @@ export const SessionCard: React.FC<SessionCardProps> = ({
         <Text style={styles.date}>{formatDate(displayDate)}</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           {isModified && (
-            <View style={[styles.statusBadge, { backgroundColor: colors.modified, marginRight: 8 }]}>
+            <View
+              style={[styles.statusBadge, { backgroundColor: colors.modified, marginRight: 8 }]}>
               <Text style={styles.statusText}>Modified</Text>
             </View>
           )}
-        <View style={[styles.statusBadge, { backgroundColor: sessionTypeColors.dot }]}>
-          <Text style={styles.statusText}>{session.session_type}</Text>
+          <View style={[styles.statusBadge, { backgroundColor: sessionTypeColors.dot }]}>
+            <Text style={styles.statusText}>{session.session_type}</Text>
           </View>
         </View>
       </View>
-      
+
       <Text style={styles.title}>{title}</Text>
-      
+
       {/* Session details */}
       <View style={styles.detailsContainer}>
         <View style={styles.detailRow}>
@@ -213,78 +233,76 @@ export const SessionCard: React.FC<SessionCardProps> = ({
             <Text style={[styles.detailValue, styles.clickableShoe]}>{suggestedShoe}</Text>
           </TouchableOpacity>
         </View>
+        {session.suggested_location && (
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Suggested Location:</Text>
+            <Text style={styles.detailValue}>{session.suggested_location}</Text>
+          </View>
+        )}
       </View>
-      
-      {description && (
-        <Text style={styles.description}>{description}</Text>
-      )}
-      
+
+      {description && <Text style={styles.description}>{description}</Text>}
+
       {/* Status buttons */}
       <View style={styles.statusButtons}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[
             styles.statusButton,
             styles.completedButton,
-            status === 'completed' && styles.completedButtonActive
+            status === 'completed' && styles.completedButtonActive,
           ]}
           disabled={isUpdating}
-          onPress={() => handleStatusUpdate('completed')}
-        >
-          <Text style={[
-            styles.statusButtonText,
-            status === 'completed' && styles.statusButtonTextActive
-          ]}>
+          onPress={() => handleStatusUpdate('completed')}>
+          <Text
+            style={[
+              styles.statusButtonText,
+              status === 'completed' && styles.statusButtonTextActive,
+            ]}>
             Completed
           </Text>
         </TouchableOpacity>
-        
-        <TouchableOpacity 
+
+        <TouchableOpacity
           style={[
             styles.statusButton,
             styles.skippedButton,
-            status === 'skipped' && styles.skippedButtonActive
+            status === 'skipped' && styles.skippedButtonActive,
           ]}
           disabled={isUpdating}
-          onPress={() => handleStatusUpdate('skipped')}
-        >
-          <Text style={[
-            styles.statusButtonText,
-            status === 'skipped' && styles.statusButtonTextActive
-          ]}>
+          onPress={() => handleStatusUpdate('skipped')}>
+          <Text
+            style={[
+              styles.statusButtonText,
+              status === 'skipped' && styles.statusButtonTextActive,
+            ]}>
             Skipped
           </Text>
         </TouchableOpacity>
       </View>
-      
+
       {session.post_session_notes && (
         <View style={styles.notesContainer}>
           <Text style={styles.notesLabel}>Your Notes:</Text>
           <Text style={styles.notesText}>{session.post_session_notes}</Text>
         </View>
       )}
-      
+
       <View style={styles.footer}>
-        <Button 
-          title="Add Notes" 
-          onPress={handleOpenNotesModal}
-          variant="secondary"
-          size="small"
-        />
+        <Button title="Add Notes" onPress={handleOpenNotesModal} variant="secondary" size="small" />
       </View>
-      
+
       {/* Notes editing modal */}
       <Modal
         visible={isEditingNotes}
-        transparent={true}
+        transparent
         animationType="slide"
-        onRequestClose={() => setIsEditingNotes(false)}
-      >
+        onRequestClose={() => setIsEditingNotes(false)}>
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>
               {session.session_type} - {formattedDate}
             </Text>
-            
+
             <Text style={styles.modalLabel}>Post-Session Notes:</Text>
             <TextInput
               style={styles.notesInput}
@@ -294,7 +312,7 @@ export const SessionCard: React.FC<SessionCardProps> = ({
               placeholder="How did this workout feel? Any challenges or successes?"
               placeholderTextColor="#999"
             />
-            
+
             <View style={styles.modalButtons}>
               <Button
                 title="Cancel"
@@ -505,4 +523,4 @@ const styles = StyleSheet.create({
   clickableShoe: {
     color: colors.info,
   },
-}); 
+});

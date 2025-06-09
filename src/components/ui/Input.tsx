@@ -37,9 +37,7 @@ export function Input({
 }: InputProps) {
   return (
     <View style={style} className="mb-4">
-      {label && (
-        <Text className="text-sm font-medium text-gray-700 mb-1">{label}</Text>
-      )}
+      {label && <Text className="mb-1 text-sm font-medium text-gray-700">{label}</Text>}
       <TextInput
         value={value}
         onChangeText={onChangeText}
@@ -49,14 +47,12 @@ export function Input({
         autoCapitalize={autoCapitalize}
         keyboardType={keyboardType}
         style={inputStyle}
-        className="bg-gray-100 px-4 py-3 rounded-md text-black"
+        className="rounded-md bg-gray-100 px-4 py-3 text-black"
         placeholderTextColor="#9CA3AF"
         onSubmitEditing={onSubmitEditing}
         returnKeyType={returnKeyType}
       />
-      {error && (
-        <Text className="text-sm text-red-500 mt-1">{error}</Text>
-      )}
+      {error && <Text className="mt-1 text-sm text-red-500">{error}</Text>}
     </View>
   );
-} 
+}

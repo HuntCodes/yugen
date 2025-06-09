@@ -1,18 +1,23 @@
+import { useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import React, { useState, useEffect } from 'react';
 import { View, FlatList, ActivityIndicator, Modal } from 'react-native';
-import { Text } from '../../components/ui/StyledText';
-import { Screen } from '../../components/ui/Screen';
-import { useAuth } from '../../context/AuthContext';
-import { fetchProfile } from '../../services/profile/profileService';
-import { getGearRecommendations, getCategoryRecommendations, getProductCategories } from '../../services/gear/gearService';
-import { Product, getFallbackProducts } from '../../services/gear/partnerizeService';
+
+import { HeaderBar } from './training/components/HeaderBar';
+import { CategoryFilter } from '../../components/gear/CategoryFilter';
 import { ProductCard } from '../../components/gear/ProductCard';
 import { ProductDetail } from '../../components/gear/ProductDetail';
-import { CategoryFilter } from '../../components/gear/CategoryFilter';
-import { HeaderBar } from './training/components/HeaderBar';
 import { MinimalSpinner } from '../../components/ui/MinimalSpinner';
-import { useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
+import { Screen } from '../../components/ui/Screen';
+import { Text } from '../../components/ui/StyledText';
+import { useAuth } from '../../context/AuthContext';
 import { TabParamList } from '../../navigation/TabNavigator';
+import {
+  getGearRecommendations,
+  getCategoryRecommendations,
+  getProductCategories,
+} from '../../services/gear/gearService';
+import { Product, getFallbackProducts } from '../../services/gear/partnerizeService';
+import { fetchProfile } from '../../services/profile/profileService';
 
 type GearScreenRouteProp = RouteProp<TabParamList, 'Gear'>;
 
@@ -40,8 +45,8 @@ export function GearScreen() {
   // Handle navigation parameters to highlight specific product
   useEffect(() => {
     if (route.params?.highlightProductId && products.length > 0) {
-      const productToHighlight = products.find(p => p.id === route.params?.highlightProductId);
-      
+      const productToHighlight = products.find((p) => p.id === route.params?.highlightProductId);
+
       if (productToHighlight) {
         setSelectedProduct(productToHighlight);
         // Add a small delay to ensure proper safe area calculation
@@ -58,8 +63,10 @@ export function GearScreen() {
       // Check if we have a product to highlight
       if (route.params?.highlightProductId) {
         if (products.length > 0) {
-          const productToHighlight = products.find(p => p.id === route.params?.highlightProductId);
-          
+          const productToHighlight = products.find(
+            (p) => p.id === route.params?.highlightProductId
+          );
+
           if (productToHighlight) {
             setSelectedProduct(productToHighlight);
             // Add a small delay to ensure proper safe area calculation
@@ -108,18 +115,20 @@ export function GearScreen() {
     setSelectedCategory(category);
   };
 
+  // Filter products based on selected category
+  const filteredProducts = selectedCategory 
+    ? products.filter(product => product.category === selectedCategory)
+    : products;
+
   const renderProduct = ({ item }: { item: Product }) => (
-    <ProductCard 
-      product={item} 
-      onPress={handleProductPress} 
-    />
+    <ProductCard product={item} onPress={handleProductPress} />
   );
 
   return (
-    <Screen className="py-4 px-6" style={{ backgroundColor: '#FBF7F6', flex: 1 }}>
+    <Screen className="px-6 py-4" style={{ backgroundColor: '#FBF7F6', flex: 1 }}>
       <HeaderBar title="Gear" />
 
-      <CategoryFilter 
+      <CategoryFilter
         categories={categories}
         selectedCategory={selectedCategory}
         onSelectCategory={handleCategorySelect}
@@ -134,20 +143,22 @@ export function GearScreen() {
       ) : (
         <View className="flex-1">
           <FlatList
-            data={products}
+            data={filteredProducts}
             renderItem={renderProduct}
-            keyExtractor={item => item.id}
+            keyExtractor={(item) => item.id}
             ItemSeparatorComponent={() => <View className="h-4" />}
             contentContainerStyle={{ paddingBottom: 16, paddingHorizontal: 24 }}
             showsVerticalScrollIndicator={false}
           />
-          
+
           {/* Owned Section */}
-          <View className="px-4 pt-2 pb-6">
-            <Text className="font-bold text-xl mb-3">Owned</Text>
-            <View className="bg-white rounded-lg p-4">
-              <Text className="text-gray-500 text-center">No gear added yet.</Text>
-              <Text className="text-gray-400 text-center text-sm mt-1">Track your running shoes, apparel, and accessories here.</Text>
+          <View className="px-4 pb-6 pt-2">
+            <Text className="mb-3 text-xl font-bold">Owned</Text>
+            <View className="rounded-lg bg-white p-4">
+              <Text className="text-center text-gray-500">No gear added yet.</Text>
+              <Text className="mt-1 text-center text-sm text-gray-400">
+                Track your running shoes, apparel, and accessories here.
+              </Text>
             </View>
           </View>
         </View>
@@ -159,16 +170,11 @@ export function GearScreen() {
         transparent={false}
         visible={modalVisible}
         presentationStyle="fullScreen"
-        onRequestClose={closeModal}
-      >
+        onRequestClose={closeModal}>
         {selectedProduct && session?.user && (
-          <ProductDetail 
-            product={selectedProduct} 
-            userId={session.user.id}
-            onClose={closeModal} 
-          />
+          <ProductDetail product={selectedProduct} userId={session.user.id} onClose={closeModal} />
         )}
       </Modal>
     </Screen>
   );
-} 
+}

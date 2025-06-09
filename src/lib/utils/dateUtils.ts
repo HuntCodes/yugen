@@ -15,7 +15,7 @@ export const formatDate = (dateString: string): string => {
     return date.toLocaleDateString('en-US', {
       weekday: 'long',
       month: 'short',
-      day: 'numeric'
+      day: 'numeric',
     });
   } catch (err) {
     console.error('Error formatting date:', dateString, err);
@@ -40,14 +40,14 @@ export const getDayOfWeek = (dateString: string): string => {
 /**
  * Format a date as YYYY-MM-DD in the user's LOCAL timezone
  * This properly uses local date methods to avoid UTC conversion issues
- * 
+ *
  * IMPORTANT: This fixes the timezone issue where training plan autoscroll
  * was using UTC dates but should use the user's local timezone.
- * 
+ *
  * Example: If it's 11 PM PST on Dec 15, UTC is already Dec 16.
  * - Wrong approach: toISOString().split('T')[0] gives UTC date (Dec 16)
  * - Correct approach: Use local date methods to get actual local date (Dec 15)
- * 
+ *
  * @param date - Date object to format (optional, defaults to today)
  * @returns Date string in YYYY-MM-DD format in user's LOCAL timezone
  */
@@ -62,15 +62,15 @@ export const formatDateYMD = (date: Date = new Date()): string => {
 /**
  * Get today's date as YYYY-MM-DD string in user's LOCAL timezone
  * Uses js-joda to ensure proper timezone handling like HomeScreen
- * 
+ *
  * DEBUG: To verify this works correctly, you can test:
  * console.log('Wrong (UTC):', new Date().toISOString().split('T')[0]);
  * console.log('Correct (Local):', getTodayYMD());
- * 
+ *
  * @returns Today's date string in YYYY-MM-DD format in user's local timezone
  */
 export const getTodayYMD = (): string => {
   const systemZone = ZoneId.systemDefault();
   const userLocalToday = LocalDate.now(systemZone);
   return userLocalToday.toString(); // Returns YYYY-MM-DD format
-}; 
+};

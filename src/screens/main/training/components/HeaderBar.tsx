@@ -1,8 +1,9 @@
-import React from 'react';
-import { View, TouchableOpacity, Platform, StyleSheet } from 'react-native';
-import { Text } from '../../../../components/ui/StyledText';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import React from 'react';
+import { View, TouchableOpacity, Platform, StyleSheet } from 'react-native';
+
+import { Text } from '../../../../components/ui/StyledText';
 
 export interface HeaderBarProps {
   title: string;
@@ -31,4 +32,4 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333333',
   },
-}); 
+});

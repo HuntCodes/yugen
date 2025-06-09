@@ -1,4 +1,4 @@
-declare module 'base-64'; 
+declare module 'base-64';
 
 declare module '*.ttf' {
   const value: any;
@@ -8,4 +8,4 @@ declare module '*.ttf' {
 declare module '*.otf' {
   const value: any;
   export default value;
-} 
+}

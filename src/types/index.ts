@@ -2,4 +2,4 @@
 export * from './auth';
 export * from './chat';
 export * from './coach';
-export * from './training'; 
+export * from './training';

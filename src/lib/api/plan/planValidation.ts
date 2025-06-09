@@ -1,15 +1,18 @@
-import { TrainingSession } from "../../../types/training";
+import { TrainingSession } from '../../../types/training';
 
 /**
  * Validate that the training plan meets minimum requirements
  */
-export function validatePlan(sessions: TrainingSession[], expectedFrequency: number): {
+export function validatePlan(
+  sessions: TrainingSession[],
+  expectedFrequency: number
+): {
   valid: boolean;
   errors: string[];
 } {
   const result = {
     valid: true,
-    errors: [] as string[]
+    errors: [] as string[],
   };
 
   // Check if there are any sessions
@@ -20,24 +23,25 @@ export function validatePlan(sessions: TrainingSession[], expectedFrequency: num
   }
 
   // Count workout days (excluding rest days)
-  const workoutDays = sessions.filter(s => 
-    s.session_type?.toLowerCase() !== 'rest' && 
-    s.session_type?.toLowerCase() !== 'rest day'
+  const workoutDays = sessions.filter(
+    (s) => s.session_type?.toLowerCase() !== 'rest' && s.session_type?.toLowerCase() !== 'rest day'
   ).length;
 
   // Validate training frequency
   if (Math.abs(workoutDays - expectedFrequency) > 1) {
     result.valid = false;
-    result.errors.push(`Frequency mismatch: Plan has ${workoutDays} training days, expected around ${expectedFrequency}`);
+    result.errors.push(
+      `Frequency mismatch: Plan has ${workoutDays} training days, expected around ${expectedFrequency}`
+    );
   }
 
   // Check for required session types based on phase
   const phase = sessions[0]?.phase?.toLowerCase() || 'base';
-  const sessionTypes = sessions.map(s => s.session_type?.toLowerCase());
-  
+  const sessionTypes = sessions.map((s) => s.session_type?.toLowerCase());
+
   if (phase === 'base' || phase === 'build') {
     // Should have at least one long run in base or build phases
-    if (!sessionTypes.some(type => type?.includes('long'))) {
+    if (!sessionTypes.some((type) => type?.includes('long'))) {
       result.valid = false;
       result.errors.push(`Missing long run in ${phase} phase`);
     }
@@ -45,17 +49,23 @@ export function validatePlan(sessions: TrainingSession[], expectedFrequency: num
 
   // Validate session distances and times
   for (const session of sessions) {
-    if (session.session_type?.toLowerCase() !== 'rest' && 
-        session.session_type?.toLowerCase() !== 'rest day') {
+    if (
+      session.session_type?.toLowerCase() !== 'rest' &&
+      session.session_type?.toLowerCase() !== 'rest day'
+    ) {
       // Non-rest sessions should have distance and time
       if (!session.distance || session.distance <= 0) {
         result.valid = false;
-        result.errors.push(`Session ${session.session_type} on ${session.date} has invalid distance: ${session.distance}`);
+        result.errors.push(
+          `Session ${session.session_type} on ${session.date} has invalid distance: ${session.distance}`
+        );
       }
-      
+
       if (!session.time || session.time <= 0) {
         result.valid = false;
-        result.errors.push(`Session ${session.session_type} on ${session.date} has invalid time: ${session.time}`);
+        result.errors.push(
+          `Session ${session.session_type} on ${session.date} has invalid time: ${session.time}`
+        );
       }
     }
   }
@@ -69,7 +79,7 @@ export function validatePlan(sessions: TrainingSession[], expectedFrequency: num
 export function calculateCyclicalPhase(weekNumber: number): string {
   // Basic 3-week cycle: 2 weeks build, 1 week recovery
   const cyclePosition = weekNumber % 3;
-  
+
   if (cyclePosition < 2) {
     // First two weeks of cycle are build
     return 'Build';
@@ -83,10 +93,10 @@ export function calculateCyclicalPhase(weekNumber: number): string {
  * Ensure sessions have proper IDs and status fields
  */
 export function normalizeSessionData(sessions: TrainingSession[]): TrainingSession[] {
-  return sessions.map(session => ({
+  return sessions.map((session) => ({
     ...session,
     id: session.id || crypto.randomUUID(),
-    status: session.status || 'not_completed'
+    status: session.status || 'not_completed',
   }));
 }
 
@@ -102,11 +112,11 @@ export function validateSessionDates(sessions: TrainingSession[]): TrainingSessi
   });
 
   // Ensure all dates are valid
-  return sorted.map(session => {
+  return sorted.map((session) => {
     if (!session.date) {
       // If no date, assume it's an error and set to today
       session.date = new Date().toISOString().split('T')[0];
     }
     return session;
   });
-} 
+}

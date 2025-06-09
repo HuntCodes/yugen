@@ -1,33 +1,34 @@
-import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
-import { corsHeaders } from '../_shared/cors.ts'
+import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
+
+import { corsHeaders } from '../_shared/cors.ts';
 
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response('ok', { headers: corsHeaders });
   }
 
   try {
     // Get the OpenAI key from environment variables
-    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY')
-    
+    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
+
     if (!OPENAI_API_KEY) {
-      throw new Error('OPENAI_API_KEY is not set in environment variables')
+      throw new Error('OPENAI_API_KEY is not set in environment variables');
     }
 
     // Get parameters from request if needed
-    let model = 'gpt-4o-mini-realtime-preview'
-    let voice = 'verse'
+    let model = 'gpt-4o-mini-realtime-preview';
+    let voice = 'verse';
 
     // Allow overriding parameters via request body
     if (req.method === 'POST') {
       try {
-        const body = await req.json()
-        if (body.model) model = body.model
-        if (body.voice) voice = body.voice
+        const body = await req.json();
+        if (body.model) model = body.model;
+        if (body.voice) voice = body.voice;
       } catch (error) {
         // Continue with defaults if JSON parsing fails
-        console.error('Failed to parse request body:', error)
+        console.error('Failed to parse request body:', error);
       }
     }
 
@@ -35,40 +36,43 @@ serve(async (req) => {
     const response = await fetch('https://api.openai.com/v1/realtime/sessions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: model,
-        voice: voice
+        model,
+        voice,
       }),
-    })
+    });
 
     if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`OpenAI API error (${response.status}): ${errorText}`)
+      const errorText = await response.text();
+      throw new Error(`OpenAI API error (${response.status}): ${errorText}`);
     }
 
-    const data = await response.json()
-    
+    const data = await response.json();
+
     // Return the response with CORS headers
     return new Response(JSON.stringify(data), {
-      headers: { 
+      headers: {
         ...corsHeaders,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
       },
-    })
+    });
   } catch (error) {
-    console.error('Error:', error.message)
-    
-    return new Response(JSON.stringify({ 
-      error: error.message 
-    }), {
-      status: 500,
-      headers: { 
-        ...corsHeaders,
-        'Content-Type': 'application/json'
-      },
-    })
+    console.error('Error:', error.message);
+
+    return new Response(
+      JSON.stringify({
+        error: error.message,
+      }),
+      {
+        status: 500,
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
   }
-}) 
+});

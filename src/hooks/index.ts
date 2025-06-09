@@ -7,4 +7,4 @@ export { useVoiceChat } from './useVoiceChat';
 // export { useOnboardingFlow } from './useOnboardingFlow';
 
 // Re-export hooks from subfolders
-export * from './chat'; 
+export * from './chat';

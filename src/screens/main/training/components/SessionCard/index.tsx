@@ -1,12 +1,13 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import { Text } from '../../../../../components/ui/StyledText';
-import { SessionHeader } from './SessionHeader';
+
 import { SessionDetails } from './SessionDetails';
-import { SessionStatusControls } from './SessionStatusControls';
+import { SessionHeader } from './SessionHeader';
 import { SessionNotes } from './SessionNotes';
-import { TrainingSession } from '../types';
+import { SessionStatusControls } from './SessionStatusControls';
+import { Text } from '../../../../../components/ui/StyledText';
 import { useSessionCard } from '../../../../../hooks/training/useSessionCard';
+import { TrainingSession } from '../types';
 
 interface SessionCardProps {
   session: TrainingSession;
@@ -22,7 +23,7 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   session,
   formattedDate,
   userId,
-  onUpdateSession
+  onUpdateSession,
 }) => {
   const {
     // State
@@ -31,7 +32,7 @@ export const SessionCard: React.FC<SessionCardProps> = ({
     notes,
     setNotes,
     isEditingNotes,
-    
+
     // Derived values
     sessionTypeColors,
     statusInfo,
@@ -40,24 +41,33 @@ export const SessionCard: React.FC<SessionCardProps> = ({
     title,
     description,
     getStatusDisplayText,
-    
+
     // Actions
     handleStatusUpdate,
     handleSaveNotes,
     handleOpenNotesModal,
-    handleCancelNotes
+    handleCancelNotes,
   } = useSessionCard(session, formattedDate, userId, onUpdateSession);
 
   return (
-    <View style={[styles.container, { borderLeftColor: typeof sessionTypeColors === 'string' ? sessionTypeColors : sessionTypeColors.text }]}>
+    <View
+      style={[
+        styles.container,
+        {
+          borderLeftColor:
+            typeof sessionTypeColors === 'string' ? sessionTypeColors : sessionTypeColors.text,
+        },
+      ]}>
       <SessionHeader
         displayDate={displayDate}
         sessionType={session.session_type}
         isModified={!!session.modified}
-        typeColor={typeof sessionTypeColors === 'string' ? sessionTypeColors : sessionTypeColors.text}
+        typeColor={
+          typeof sessionTypeColors === 'string' ? sessionTypeColors : sessionTypeColors.text
+        }
         formattedDate={formattedDate}
       />
-      
+
       <View style={styles.titleContainer}>
         <View style={[styles.statusBadge, { backgroundColor: statusInfo.bg }]}>
           <View style={styles.statusInner}>
@@ -66,7 +76,7 @@ export const SessionCard: React.FC<SessionCardProps> = ({
             </Text>
           </View>
         </View>
-        
+
         <Text style={styles.titleText}>{title}</Text>
       </View>
 
@@ -74,15 +84,16 @@ export const SessionCard: React.FC<SessionCardProps> = ({
         distance={session.distance}
         time={session.time}
         suggestedShoe={suggestedShoe}
+        suggestedLocation={session.suggested_location}
         description={description}
       />
-      
+
       <SessionStatusControls
         status={status}
         isUpdating={isUpdating}
         onStatusUpdate={handleStatusUpdate}
       />
-      
+
       <SessionNotes
         notes={notes}
         sessionNotes={session.post_session_notes || ''}
@@ -138,4 +149,4 @@ const styles = StyleSheet.create({
     color: '#111827', // Primary text color
     marginBottom: 4,
   },
-}); 
+});

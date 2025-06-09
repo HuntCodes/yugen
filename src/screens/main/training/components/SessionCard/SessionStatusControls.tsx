@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, TouchableOpacity, StyleSheet } from 'react-native';
+
 import { Text } from '../../../../../components/ui/StyledText';
 import { colors } from '../../../../../styles/colors';
 
@@ -18,40 +19,37 @@ interface SessionStatusControlsProps {
 export const SessionStatusControls: React.FC<SessionStatusControlsProps> = ({
   status,
   isUpdating,
-  onStatusUpdate
+  onStatusUpdate,
 }) => {
   return (
     <View style={styles.statusButtons}>
-      <TouchableOpacity 
+      <TouchableOpacity
         style={[
           styles.statusButton,
           styles.completedButton,
-          status === 'completed' && styles.completedButtonActive
+          status === 'completed' && styles.completedButtonActive,
         ]}
         disabled={isUpdating}
-        onPress={() => onStatusUpdate('completed')}
-      >
-        <Text style={[
-          styles.statusButtonText,
-          status === 'completed' && styles.statusButtonTextActive
-        ]}>
+        onPress={() => onStatusUpdate('completed')}>
+        <Text
+          style={[
+            styles.statusButtonText,
+            status === 'completed' && styles.statusButtonTextActive,
+          ]}>
           Completed
         </Text>
       </TouchableOpacity>
-      
-      <TouchableOpacity 
+
+      <TouchableOpacity
         style={[
           styles.statusButton,
           styles.skippedButton,
-          status === 'skipped' && styles.skippedButtonActive
+          status === 'skipped' && styles.skippedButtonActive,
         ]}
         disabled={isUpdating}
-        onPress={() => onStatusUpdate('skipped')}
-      >
-        <Text style={[
-          styles.statusButtonText,
-          status === 'skipped' && styles.statusButtonTextActive
-        ]}>
+        onPress={() => onStatusUpdate('skipped')}>
+        <Text
+          style={[styles.statusButtonText, status === 'skipped' && styles.statusButtonTextActive]}>
           Skipped
         </Text>
       </TouchableOpacity>
@@ -92,5 +90,5 @@ const styles = StyleSheet.create({
   },
   statusButtonTextActive: {
     color: '#FFFFFF',
-  }
-}); 
+  },
+});

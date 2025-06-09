@@ -1,10 +1,24 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, SafeAreaView, Keyboard, KeyboardAvoidingView, Platform, InputAccessoryView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../../navigation/AppNavigator';
-import { useAuth } from '../../context/AuthContext';
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  ActivityIndicator,
+  SafeAreaView,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  InputAccessoryView,
+} from 'react-native';
+
 import { MinimalSpinner } from '../../components/ui/MinimalSpinner';
+import { useAuth } from '../../context/AuthContext';
+import { requestLocationPermission } from '../../lib/location/locationUtils';
+import { requestMicrophonePermission } from '../../lib/voice/voiceUtils';
+import { RootStackParamList } from '../../navigation/AppNavigator';
 
 type SignUpScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'SignUp'>;
 
@@ -21,7 +35,7 @@ export function SignUpScreen() {
       setError('Please enter both email and password');
       return;
     }
-    
+
     if (password.length < 8) {
       setError('Password must be at least 8 characters');
       return;
@@ -29,13 +43,24 @@ export function SignUpScreen() {
 
     setLoading(true);
     setError(null);
-    
+
     try {
       await signUp(email, password);
+
+      // Request permissions after successful signup
+      try {
+        console.log('Requesting permissions after successful signup...');
+        await Promise.all([requestLocationPermission(), requestMicrophonePermission()]);
+        console.log('Permissions requested successfully');
+      } catch (permissionError) {
+        console.warn('Error requesting permissions after signup:', permissionError);
+        // Don't fail the signup flow if permissions fail
+      }
+
       // Auth context will handle navigation after successful sign-up
     } catch (error: any) {
       console.error('Sign up error:', error);
-      
+
       if (error.message.includes('email')) {
         setError('Invalid email format or email already in use');
       } else if (error.message.includes('password')) {
@@ -43,33 +68,34 @@ export function SignUpScreen() {
       } else {
         setError(error.message || 'An error occurred during sign up');
       }
-      
+
       setLoading(false);
     }
   };
 
   const DoneButton = () => (
-    <View style={{
-      backgroundColor: '#F8F9FA',
-      paddingHorizontal: 16,
-      paddingVertical: 6,
-      borderTopWidth: 1,
-      borderTopColor: '#E9ECEF',
-      flexDirection: 'row',
-      justifyContent: 'flex-end'
-    }}>
+    <View
+      style={{
+        backgroundColor: '#F8F9FA',
+        paddingHorizontal: 16,
+        paddingVertical: 6,
+        borderTopWidth: 1,
+        borderTopColor: '#E9ECEF',
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+      }}>
       <TouchableOpacity
         onPress={() => Keyboard.dismiss()}
         style={{
           paddingHorizontal: 16,
-          paddingVertical: 4
-        }}
-      >
-        <Text style={{ 
-          color: '#007AFF', 
-          fontSize: 16, 
-          fontWeight: '600' 
+          paddingVertical: 4,
         }}>
+        <Text
+          style={{
+            color: '#007AFF',
+            fontSize: 16,
+            fontWeight: '600',
+          }}>
           Done
         </Text>
       </TouchableOpacity>
@@ -78,47 +104,50 @@ export function SignUpScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: 'white' }}>
-      <View style={{ 
-        flex: 1, 
-        padding: 24,
-        justifyContent: 'center'
-      }}>
-        <TouchableOpacity 
+      <View
+        style={{
+          flex: 1,
+          padding: 24,
+          justifyContent: 'center',
+        }}>
+        <TouchableOpacity
           style={{ position: 'absolute', top: 24, left: 24, zIndex: 10 }}
-          onPress={() => navigation.goBack()}
-        >
+          onPress={() => navigation.goBack()}>
           <Text style={{ fontSize: 18, fontWeight: 'bold' }}>←</Text>
         </TouchableOpacity>
-        
-        <Text style={{ 
-          fontSize: 28, 
-          fontWeight: 'bold', 
-          color: 'black', 
-          marginBottom: 32 
-        }}>
+
+        <Text
+          style={{
+            fontSize: 28,
+            fontWeight: 'bold',
+            color: 'black',
+            marginBottom: 32,
+          }}>
           Create account
         </Text>
 
         {error && (
-          <View style={{
-            backgroundColor: '#FFEBEE',
-            padding: 16,
-            borderRadius: 6,
-            marginBottom: 16,
-            borderWidth: 1,
-            borderColor: '#FFCDD2'
-          }}>
+          <View
+            style={{
+              backgroundColor: '#FFEBEE',
+              padding: 16,
+              borderRadius: 6,
+              marginBottom: 16,
+              borderWidth: 1,
+              borderColor: '#FFCDD2',
+            }}>
             <Text style={{ color: '#C62828' }}>{error}</Text>
           </View>
         )}
 
         <View style={{ marginBottom: 16 }}>
-          <Text style={{ 
-            fontSize: 14, 
-            fontWeight: '500', 
-            color: '#757575', 
-            marginBottom: 8 
-          }}>
+          <Text
+            style={{
+              fontSize: 14,
+              fontWeight: '500',
+              color: '#757575',
+              marginBottom: 8,
+            }}>
             Email
           </Text>
           <TextInput
@@ -127,7 +156,7 @@ export function SignUpScreen() {
               borderRadius: 6,
               padding: 16,
               fontSize: 16,
-              color: 'black'
+              color: 'black',
             }}
             value={email}
             onChangeText={setEmail}
@@ -146,12 +175,13 @@ export function SignUpScreen() {
         </View>
 
         <View style={{ marginBottom: 24 }}>
-          <Text style={{ 
-            fontSize: 14, 
-            fontWeight: '500', 
-            color: '#757575', 
-            marginBottom: 8 
-          }}>
+          <Text
+            style={{
+              fontSize: 14,
+              fontWeight: '500',
+              color: '#757575',
+              marginBottom: 8,
+            }}>
             Password
           </Text>
           <TextInput
@@ -160,7 +190,7 @@ export function SignUpScreen() {
               borderRadius: 6,
               padding: 16,
               fontSize: 16,
-              color: 'black'
+              color: 'black',
             }}
             value={password}
             onChangeText={setPassword}
@@ -184,38 +214,38 @@ export function SignUpScreen() {
             paddingVertical: 16,
             borderRadius: 6,
             alignItems: 'center',
-            marginBottom: 16
+            marginBottom: 16,
           }}
           onPress={handleSignUp}
-          disabled={loading}
-        >
+          disabled={loading}>
           {loading ? (
             <MinimalSpinner size={20} color="#FFFFFF" thickness={2} />
           ) : (
             <Text style={{ color: 'white', fontWeight: '500', fontSize: 16 }}>Create Account</Text>
           )}
         </TouchableOpacity>
-        
-        <View style={{ 
-          flexDirection: 'row', 
-          alignItems: 'center', 
-          justifyContent: 'center',
-          marginTop: 24 
-        }}>
+
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginTop: 24,
+          }}>
           <Text style={{ color: '#757575' }}>Already have an account? </Text>
           <TouchableOpacity onPress={() => navigation.navigate('Login')}>
             <Text style={{ color: '#000000', fontWeight: '500' }}>Sign in</Text>
           </TouchableOpacity>
         </View>
       </View>
-      
+
       <InputAccessoryView nativeID="emailDoneButton">
         <DoneButton />
       </InputAccessoryView>
-      
+
       <InputAccessoryView nativeID="passwordDoneButton">
         <DoneButton />
       </InputAccessoryView>
     </SafeAreaView>
   );
-} 
+}

@@ -15,7 +15,7 @@ export function usePlanAdjustment() {
   const adjustmentLogic = useAdjustmentLogic();
   const adjustmentParser = useAdjustmentParser();
   const adjustmentStorage = useAdjustmentStorage();
-  
+
   // Combine and return all the functions from the refactored modules
   return {
     // From useAdjustmentParser
@@ -23,17 +23,17 @@ export function usePlanAdjustment() {
     isConfirmingPlanUpdate: adjustmentParser.isConfirmingPlanUpdate,
     isRejectingPlanUpdate: adjustmentParser.isRejectingPlanUpdate,
     generateConfirmationMessage: adjustmentParser.generateConfirmationMessage,
-    
+
     // Previously named handlePlanAdjustment, now generatePlanAdjustment
     handlePlanAdjustment: adjustmentParser.generatePlanAdjustment,
-    
+
     // From useAdjustmentStorage
     applyPlanChangeToSupabase: adjustmentStorage.applyPlanChangeToSupabase,
     testDatabasePermissions: adjustmentStorage.testDatabasePermissions,
-    
+
     // New functions from useAdjustmentLogic
     handleMessage: adjustmentLogic.handleMessage,
     hasPendingAdjustment: adjustmentLogic.hasPendingAdjustment,
-    clearPendingAdjustment: adjustmentLogic.clearPendingAdjustment
+    clearPendingAdjustment: adjustmentLogic.clearPendingAdjustment,
   };
 }

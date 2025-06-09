@@ -7,7 +7,10 @@ const envVars = process.env;
 
 // Check for OpenAI API key
 const openaiKey = envVars.EXPO_PUBLIC_OPENAI_API_KEY || envVars.OPENAI_API_KEY;
-console.log('OpenAI API Key:', openaiKey ? `Present (${openaiKey.substring(0, 10)}...)` : 'Missing');
+console.log(
+  'OpenAI API Key:',
+  openaiKey ? `Present (${openaiKey.substring(0, 10)}...)` : 'Missing'
+);
 
 // Check for Supabase URL
 const supabaseUrl = envVars.EXPO_PUBLIC_SUPABASE_URL || envVars.SUPABASE_URL;
@@ -15,7 +18,10 @@ console.log('Supabase URL:', supabaseUrl || 'Missing');
 
 // Check for Supabase Anon Key
 const supabaseKey = envVars.EXPO_PUBLIC_SUPABASE_ANON_KEY || envVars.SUPABASE_ANON_KEY;
-console.log('Supabase Anon Key:', supabaseKey ? `Present (${supabaseKey.substring(0, 10)}...)` : 'Missing');
+console.log(
+  'Supabase Anon Key:',
+  supabaseKey ? `Present (${supabaseKey.substring(0, 10)}...)` : 'Missing'
+);
 
 // Check for EAS Project ID
 console.log('EAS Project ID:', envVars.EAS_PROJECT_ID || 'Missing');
@@ -32,4 +38,4 @@ console.log('EXPO_PUBLIC_OPENAI_API_KEY=sk-abc123...');
 console.log('EXPO_PUBLIC_SUPABASE_URL=https://example.supabase.co');
 console.log('EXPO_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1...');
 
-console.log('\n===== TEST COMPLETE ====='); 
+console.log('\n===== TEST COMPLETE =====');

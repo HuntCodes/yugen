@@ -11,4 +11,4 @@ export { ChatMessage, ChatState } from './useMessageTypes';
 
 export function useMessageHandling() {
   return useMessageProcessing();
-} 
+}

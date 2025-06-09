@@ -1,19 +1,27 @@
-import React, { useEffect, useState } from 'react';
-import { View, TouchableOpacity, ScrollView, Alert, Image, ActivityIndicator } from 'react-native';
-import { Text } from '../../components/ui/StyledText';
-import { Screen } from '../../components/ui/Screen';
-import { useAuth } from '../../context/AuthContext';
-import { fetchProfile, updateProfile } from '../../services/profile/profileService';
-import { COACHES } from '../../lib/constants/coaches';
-import { useNavigation, CommonActions } from '@react-navigation/native';
+import { Feather } from '@expo/vector-icons';
+import { useNavigation, CommonActions, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { ProfileStackParamList } from '../../navigation/ProfileNavigator';
 import { LinearGradient } from 'expo-linear-gradient';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, TouchableOpacity, ScrollView, Alert, Image, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
 import { MinimalSpinner } from '../../components/ui/MinimalSpinner';
+import { Screen } from '../../components/ui/Screen';
+import { Text } from '../../components/ui/StyledText';
+import { useAuth } from '../../context/AuthContext';
+import { COACHES } from '../../lib/constants/coaches';
+import { fetchProfile, updateProfile } from '../../services/profile/profileService';
+
+import type { ProfileStackParamList } from '../../navigation/ProfileNavigator';
+
+
+import { colors } from '../../styles/colors';
+import { Coach } from '../../types/coach';
 
 // Helper function to get coach images (moved outside component for clarity)
 function getCoachImage(coachId: string) {
-  switch(coachId) {
+  switch (coachId) {
     case 'craig':
       return require('../../assets/coaches/craig.jpg');
     case 'thomas':
@@ -39,7 +47,7 @@ export function ProfileScreen() {
         try {
           const profileData = await fetchProfile(session.user.id);
           setProfile(profileData);
-          
+
           if (profileData?.created_at) {
             setJoinDate(new Date(profileData.created_at));
           } else if (session.user.created_at) {
@@ -47,9 +55,9 @@ export function ProfileScreen() {
           } else {
             setJoinDate(new Date());
           }
-          
+
           if (profileData?.coach_id) {
-            const coachData = COACHES.find(c => c.id === profileData.coach_id);
+            const coachData = COACHES.find((c) => c.id === profileData.coach_id);
             setCoach(coachData || null);
           }
         } catch (error) {
@@ -59,7 +67,7 @@ export function ProfileScreen() {
         }
       }
     };
-    
+
     loadProfile();
   }, [session]);
 
@@ -78,14 +86,10 @@ export function ProfileScreen() {
   };
 
   const confirmSignOut = () => {
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Sign Out', onPress: handleSignOut, style: 'destructive' }
-      ]
-    );
+    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Sign Out', onPress: handleSignOut, style: 'destructive' },
+    ]);
   };
 
   const navigateToEditProfile = () => {
@@ -99,6 +103,10 @@ export function ProfileScreen() {
 
   const navigateToFeedback = () => {
     navigation.navigate('Feedback');
+  };
+
+  const navigateToNotifications = () => {
+    navigation.navigate('Notifications');
   };
 
   if (loading) {
@@ -118,21 +126,22 @@ export function ProfileScreen() {
         {/* Main Content Area */}
         <View className="flex-1">
           {/* Purple Gradient Banner Wrapper */}
-          <View className="rounded-lg mt-4 mb-8 overflow-hidden shadow-sm"> 
+          <View className="mb-8 mt-4 overflow-hidden rounded-lg shadow-sm">
             <LinearGradient
               colors={['#a587e4', '#38418D']}
               start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
+              end={{ x: 1, y: 1 }}>
               <View className="p-6">
-                <View className="flex-row items-center mb-4">
-                  <View className="w-20 h-20 rounded-full bg-white/20 items-center justify-center mr-4">
-                    <Text className="text-white text-3xl font-bold">
+                <View className="mb-4 flex-row items-center">
+                  <View className="mr-4 h-20 w-20 items-center justify-center rounded-full bg-white/20">
+                    <Text className="text-3xl font-bold text-white">
                       {profile?.nickname?.charAt(0) || profile?.email?.charAt(0) || 'J'}
                     </Text>
                   </View>
                   <View>
-                    <Text className="text-white text-2xl font-bold">{profile?.nickname || profile?.email?.split('@')[0] || 'User'}</Text>
+                    <Text className="text-2xl font-bold text-white">
+                      {profile?.nickname || profile?.email?.split('@')[0] || 'User'}
+                    </Text>
                     <Text className="text-white/80">{profile?.email || session?.user?.email}</Text>
                   </View>
                 </View>
@@ -142,17 +151,17 @@ export function ProfileScreen() {
           </View>
 
           {coach && (
-            <View className="p-4 bg-[#FBF7F6] rounded-lg mb-8">
-              <Text className="font-bold mb-2">Your Coach</Text>
+            <View className="mb-8 rounded-lg bg-[#FBF7F6] p-4">
+              <Text className="mb-2 font-bold">Your Coach</Text>
               <View className="flex-row items-center">
                 {coach.image ? (
-                  <Image 
+                  <Image
                     source={getCoachImage(coach.id)}
-                    className="w-12 h-12 rounded-full mr-3"
+                    className="mr-3 h-12 w-12 rounded-full"
                     resizeMode="cover"
                   />
                 ) : (
-                  <View className="w-12 h-12 rounded-full bg-gray-300 mr-3" />
+                  <View className="mr-3 h-12 w-12 rounded-full bg-gray-300" />
                 )}
                 <View>
                   <Text className="font-medium">{coach.name}</Text>
@@ -163,39 +172,45 @@ export function ProfileScreen() {
           )}
 
           {/* Profile Section */}
-          <View className="bg-[#FBF7F6] rounded-lg mb-4">
-            {/* Collapsible Profile Header */}
+          <View className="mb-4 rounded-lg bg-[#FBF7F6]">
             <TouchableOpacity
-              className="flex-row items-center justify-between p-4 border-b border-gray-200 bg-white"
-              onPress={navigateToEditProfile}
-            >
-              <Text className="font-semibold text-base">Profile</Text>
-              <Text className="text-gray-400 text-lg">›</Text>
+              className="flex-row items-center justify-between border-b border-gray-200 bg-white p-4"
+              onPress={navigateToEditProfile}>
+              <Text className="text-base font-semibold">Profile</Text>
+              <Text className="text-lg text-gray-400">›</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Notifications Section */}
+          <View className="mb-4 rounded-lg bg-[#FBF7F6]">
+            <TouchableOpacity
+              className="flex-row items-center justify-between border-b border-gray-200 bg-white p-4"
+              onPress={navigateToNotifications}>
+              <Text className="text-base font-semibold">Notifications</Text>
+              <Text className="text-lg text-gray-400">›</Text>
             </TouchableOpacity>
           </View>
 
           {/* Settings Section */}
-          <View className="bg-[#FBF7F6] rounded-lg mb-4">
+          <View className="mb-4 rounded-lg bg-[#FBF7F6]">
             <TouchableOpacity
-              className="flex-row items-center justify-between p-4 border-b border-gray-200 bg-white"
+              className="flex-row items-center justify-between border-b border-gray-200 bg-white p-4"
               onPress={() => {
                 // TODO: Navigate to settings screen
                 Alert.alert('Settings', 'Settings screen coming soon!');
-              }}
-            >
-              <Text className="font-semibold text-base">Settings</Text>
-              <Text className="text-gray-400 text-lg">›</Text>
+              }}>
+              <Text className="text-base font-semibold">Settings</Text>
+              <Text className="text-lg text-gray-400">›</Text>
             </TouchableOpacity>
           </View>
 
           {/* Feedback Section */}
-          <View className="bg-[#FBF7F6] rounded-lg mb-8">
+          <View className="mb-8 rounded-lg bg-[#FBF7F6]">
             <TouchableOpacity
-              className="flex-row items-center justify-between p-4 bg-white"
-              onPress={navigateToFeedback}
-            >
-              <Text className="font-semibold text-base">Feedback</Text>
-              <Text className="text-gray-400 text-lg">›</Text>
+              className="flex-row items-center justify-between bg-white p-4"
+              onPress={navigateToFeedback}>
+              <Text className="text-base font-semibold">Feedback</Text>
+              <Text className="text-lg text-gray-400">›</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -203,13 +218,12 @@ export function ProfileScreen() {
         {/* Sign Out button fixed at bottom */}
         <View className="pb-8 pt-4">
           <TouchableOpacity
-            className="border border-gray-300 py-3 rounded-full"
-            onPress={confirmSignOut}
-          >
+            className="rounded-full border border-gray-300 py-3"
+            onPress={confirmSignOut}>
             <Text className="text-center font-medium">Sign Out</Text>
           </TouchableOpacity>
         </View>
       </View>
     </Screen>
   );
-} 
+}

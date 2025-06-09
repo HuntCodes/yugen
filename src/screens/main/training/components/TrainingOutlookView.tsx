@@ -1,23 +1,30 @@
+import { LocalDate, TemporalAdjusters } from '@js-joda/core';
 import React from 'react';
 import { Text, View, ActivityIndicator, StyleSheet, ScrollView } from 'react-native';
-import { useTrainingOutlook, TrainingOutlookData } from '../../../../hooks/training/useTrainingOutlook';
-import { generatePhaseOutlook, WeeklyPhaseOutlook } from '../../../../lib/utils/training/phaseProjection';
-import { colors as appColors } from '../../../../styles/colors';
 import { Calendar, CalendarUtils, DateData } from 'react-native-calendars';
-import { LocalDate, TemporalAdjusters } from '@js-joda/core';
+
+import {
+  useTrainingOutlook,
+  TrainingOutlookData,
+} from '../../../../hooks/training/useTrainingOutlook';
+import {
+  generatePhaseOutlook,
+  WeeklyPhaseOutlook,
+} from '../../../../lib/utils/training/phaseProjection';
+import { colors as appColors } from '../../../../styles/colors';
 import '@js-joda/locale_en-us'; // Ensure locale data is loaded for formatting
 import { MinimalSpinner } from '../../../../components/ui/MinimalSpinner';
 // import CustomDayForOutlook from '../../../../screens/main/training/components/CustomDayForOutlook'; // Temporarily remove custom day component
 
 // Define TrainingPhase enum locally as it's not exported from planAnalysis.ts
 export enum TrainingPhase {
-  Base = "Base",
-  Build = "Build",
-  Peak = "Peak",
-  Taper = "Taper",
-  RaceWeek = "Race Week",
-  Recovery = "Recovery",
-  None = "None",
+  Base = 'Base',
+  Build = 'Build',
+  Peak = 'Peak',
+  Taper = 'Taper',
+  RaceWeek = 'Race Week',
+  Recovery = 'Recovery',
+  None = 'None',
 }
 
 // Define colors for phases
@@ -28,7 +35,7 @@ const phaseColors: Record<TrainingPhase, { color: string; textColor: string }> =
   [TrainingPhase.Taper]: { color: '#FF9800', textColor: appColors.text.primary }, // Orange
   [TrainingPhase.RaceWeek]: { color: '#F44336', textColor: appColors.text.light }, // Red
   [TrainingPhase.Recovery]: { color: '#607D8B', textColor: appColors.text.light }, // Blue Grey
-  [TrainingPhase.None]: { color: appColors.background, textColor: appColors.text.primary }
+  [TrainingPhase.None]: { color: appColors.background, textColor: appColors.text.primary },
 };
 
 // Define explanations for each training phase
@@ -39,7 +46,7 @@ const phaseExplanations: Record<TrainingPhase, string> = {
   [TrainingPhase.Taper]: 'Reduce load to freshen up before racing',
   [TrainingPhase.RaceWeek]: 'Final preparations before competition',
   [TrainingPhase.Recovery]: 'Active recovery with easy runs and rest ',
-  [TrainingPhase.None]: ''
+  [TrainingPhase.None]: '',
 };
 
 // Updated interface for what 'period' marking expects, based on user-provided documentation
@@ -78,12 +85,16 @@ const TrainingOutlookView: React.FC = () => {
     let initialViewDateStr = CalendarUtils.getCalendarDateString(today.toString());
 
     // Max date is always today + 3 months
-    newMaxCalDateStr = CalendarUtils.getCalendarDateString(today.plusMonths(3).with(TemporalAdjusters.lastDayOfMonth()).toString());
+    newMaxCalDateStr = CalendarUtils.getCalendarDateString(
+      today.plusMonths(3).with(TemporalAdjusters.lastDayOfMonth()).toString()
+    );
 
     if (outlookData && outlookData.planStartDate) {
       const planStartActualDate = LocalDate.parse(outlookData.planStartDate);
-      newMinCalDateStr = CalendarUtils.getCalendarDateString(planStartActualDate.withDayOfMonth(1).toString());
-      
+      newMinCalDateStr = CalendarUtils.getCalendarDateString(
+        planStartActualDate.withDayOfMonth(1).toString()
+      );
+
       const planStartMonthInitial = planStartActualDate.withDayOfMonth(1);
       if (today.isBefore(planStartMonthInitial)) {
         initialViewDateStr = CalendarUtils.getCalendarDateString(planStartMonthInitial.toString());
@@ -101,7 +112,7 @@ const TrainingOutlookView: React.FC = () => {
           const start2 = LocalDate.parse(week2StartDateStr);
           return end1.plusDays(1).equals(start2);
         } catch (e) {
-          console.error("Error parsing dates for contiguity check:", e);
+          console.error('Error parsing dates for contiguity check:', e);
           return false;
         }
       };
@@ -115,22 +126,22 @@ const TrainingOutlookView: React.FC = () => {
           const weekEndDateLocalDate = LocalDate.parse(week.weekEndDate);
           const currentPhase = week.phase as TrainingPhase;
           const phaseStyle = phaseColors[currentPhase] || phaseColors[TrainingPhase.None];
-          
+
           // Simplified logic: each week is its own band
-          // const isTruePhaseStart = (index === 0) || 
-          //                          (rawOutlook[index].phase !== rawOutlook[index - 1].phase) || 
+          // const isTruePhaseStart = (index === 0) ||
+          //                          (rawOutlook[index].phase !== rawOutlook[index - 1].phase) ||
           //                          !areWeeksContiguous(rawOutlook[index - 1].weekEndDate, rawOutlook[index].weekStartDate);
-          // const isTruePhaseEnd = (index === rawOutlook.length - 1) || 
-          //                        (rawOutlook[index].phase !== rawOutlook[index + 1].phase) || 
+          // const isTruePhaseEnd = (index === rawOutlook.length - 1) ||
+          //                        (rawOutlook[index].phase !== rawOutlook[index + 1].phase) ||
           //                        !areWeeksContiguous(rawOutlook[index].weekEndDate, rawOutlook[index + 1].weekStartDate);
 
           let currentDateIter = weekStartDateLocalDate;
           while (!currentDateIter.isAfter(weekEndDateLocalDate)) {
             const dateString = CalendarUtils.getCalendarDateString(currentDateIter.toString());
-            
+
             const periodMarking: PeriodMarkingData = {
               color: phaseStyle.color,
-              textColor: phaseStyle.textColor, 
+              textColor: phaseStyle.textColor,
             };
 
             // Each week segment starts on its weekStartDateLocalDate and ends on its weekEndDateLocalDate
@@ -140,7 +151,7 @@ const TrainingOutlookView: React.FC = () => {
             if (currentDateIter.equals(weekEndDateLocalDate)) {
               periodMarking.endingDay = true;
             }
-            
+
             newMarkedDatesLogic[dateString] = periodMarking;
             currentDateIter = currentDateIter.plusDays(1);
           }
@@ -155,49 +166,64 @@ const TrainingOutlookView: React.FC = () => {
     setMaxCalendarDate(newMaxCalDateStr);
     setInitialCalendarDate(initialViewDateStr);
     setCurrentCalendarMonth(initialViewDateStr);
-
   }, [outlookData]);
 
   if (profileLoading) {
-    return <View style={styles.centeredContainer}><MinimalSpinner size={48} color={appColors.text.primary} thickness={3} /></View>;
+    return (
+      <View style={styles.centeredContainer}>
+        <MinimalSpinner size={48} color={appColors.text.primary} thickness={3} />
+      </View>
+    );
   }
 
   if (profileError) {
-    return <View style={styles.centeredContainer}><Text style={styles.errorText}>Error loading profile data: {profileError}</Text></View>;
+    return (
+      <View style={styles.centeredContainer}>
+        <Text style={styles.errorText}>Error loading profile data: {profileError}</Text>
+      </View>
+    );
   }
 
   if (!outlookData) {
-    return <View style={styles.centeredContainer}><Text style={styles.infoText}>No profile data available to display outlook.</Text></View>;
+    return (
+      <View style={styles.centeredContainer}>
+        <Text style={styles.infoText}>No profile data available to display outlook.</Text>
+      </View>
+    );
   }
-  
+
   return (
     <View style={styles.flexView}>
       <Calendar
         current={initialCalendarDate}
         minDate={minCalendarDate}
         maxDate={maxCalendarDate}
-        markingType={'period'} 
-        markedDates={markedDates} 
+        markingType="period"
+        markedDates={markedDates}
         onMonthChange={(month: DateData) => {
           setCurrentCalendarMonth(CalendarUtils.getCalendarDateString(month.dateString));
         }}
-        firstDay={1} 
+        firstDay={1}
         // Disable arrow navigation when at min/max dates
         disableArrowLeft={(() => {
           if (!minCalendarDate || !currentCalendarMonth) return false;
           const currentDate = new Date(currentCalendarMonth);
           const minDate = new Date(minCalendarDate);
           // Disable if current month is at or before the minimum month
-          return currentDate.getFullYear() <= minDate.getFullYear() && 
-                 currentDate.getMonth() <= minDate.getMonth();
+          return (
+            currentDate.getFullYear() <= minDate.getFullYear() &&
+            currentDate.getMonth() <= minDate.getMonth()
+          );
         })()}
         disableArrowRight={(() => {
           if (!maxCalendarDate || !currentCalendarMonth) return false;
           const currentDate = new Date(currentCalendarMonth);
           const maxDate = new Date(maxCalendarDate);
           // Disable if current month is at or after the maximum month
-          return currentDate.getFullYear() >= maxDate.getFullYear() && 
-                 currentDate.getMonth() >= maxDate.getMonth();
+          return (
+            currentDate.getFullYear() >= maxDate.getFullYear() &&
+            currentDate.getMonth() >= maxDate.getMonth()
+          );
         })()}
         // Custom arrow handlers to prevent navigation outside bounds
         onPressArrowLeft={(subtractMonth) => {
@@ -208,8 +234,11 @@ const TrainingOutlookView: React.FC = () => {
           const currentDate = new Date(currentCalendarMonth);
           const minDate = new Date(minCalendarDate);
           // Only allow navigation if we're not at the minimum month
-          if (currentDate.getFullYear() > minDate.getFullYear() || 
-              (currentDate.getFullYear() === minDate.getFullYear() && currentDate.getMonth() > minDate.getMonth())) {
+          if (
+            currentDate.getFullYear() > minDate.getFullYear() ||
+            (currentDate.getFullYear() === minDate.getFullYear() &&
+              currentDate.getMonth() > minDate.getMonth())
+          ) {
             subtractMonth();
           }
         }}
@@ -221,14 +250,17 @@ const TrainingOutlookView: React.FC = () => {
           const currentDate = new Date(currentCalendarMonth);
           const maxDate = new Date(maxCalendarDate);
           // Only allow navigation if we're not at the maximum month
-          if (currentDate.getFullYear() < maxDate.getFullYear() || 
-              (currentDate.getFullYear() === maxDate.getFullYear() && currentDate.getMonth() < maxDate.getMonth())) {
+          if (
+            currentDate.getFullYear() < maxDate.getFullYear() ||
+            (currentDate.getFullYear() === maxDate.getFullYear() &&
+              currentDate.getMonth() < maxDate.getMonth())
+          ) {
             addMonth();
           }
         }}
         theme={{
-          backgroundColor: appColors.background, 
-          calendarBackground: appColors.background, 
+          backgroundColor: appColors.background,
+          calendarBackground: appColors.background,
           textSectionTitleColor: '#555555',
           textSectionTitleDisabledColor: '#C0C0C0',
           selectedDayBackgroundColor: appColors.secondary,
@@ -250,7 +282,7 @@ const TrainingOutlookView: React.FC = () => {
           textMonthFontSize: 18,
           textDayHeaderFontSize: 14,
         }}
-        enableSwipeMonths={true}
+        enableSwipeMonths
         style={styles.calendarStyle}
       />
       <View style={styles.legendOuterContainer}>
@@ -295,7 +327,7 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   errorText: {
-    color: appColors.error, 
+    color: appColors.error,
     fontSize: 16,
     textAlign: 'center',
   },
@@ -305,12 +337,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   calendarStyle: {
-    marginHorizontal: 10, 
+    marginHorizontal: 10,
   },
   legendOuterContainer: {
-    flexShrink: 1, 
+    flexShrink: 1,
     borderTopWidth: 1,
-    borderColor: appColors.border, 
+    borderColor: appColors.border,
     marginTop: 10,
     backgroundColor: '#FBF7F6', // Same as TrainingPlanScreen header
   },
@@ -334,8 +366,8 @@ const styles = StyleSheet.create({
     height: 14,
     borderRadius: 7,
     marginRight: 10,
-    borderWidth: 1, 
-    borderColor: appColors.text.disabled, 
+    borderWidth: 1,
+    borderColor: appColors.text.disabled,
   },
   legendTextContainer: {
     flex: 1,
@@ -351,4 +383,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default TrainingOutlookView; 
+export default TrainingOutlookView;

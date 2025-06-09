@@ -1,6 +1,7 @@
+import Constants from 'expo-constants';
+
 import { supabase } from '../../lib/supabase';
 import { ChatMessage } from '../../types/chat';
-import Constants from 'expo-constants';
 
 // Define the summary types for sessions
 export type SessionType = 'workout' | 'topic' | 'general';
@@ -40,20 +41,21 @@ export async function createSessionSummary(
 ): Promise<string | null> {
   try {
     // Get API key
-    const apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY ||
-                   Constants.expoConfig?.extra?.openaiApiKey ||
-                   Constants.expoConfig?.extra?.OPENAI_API_KEY ||
-                   (Constants.manifest as any)?.extra?.OPENAI_API_KEY;
-                     
+    const apiKey =
+      process.env.EXPO_PUBLIC_OPENAI_API_KEY ||
+      Constants.expoConfig?.extra?.openaiApiKey ||
+      Constants.expoConfig?.extra?.OPENAI_API_KEY ||
+      (Constants.manifest as any)?.extra?.OPENAI_API_KEY;
+
     if (!apiKey) {
       console.error('OpenAI API key not found');
       return null;
     }
 
     // Format messages for the AI
-    const formattedMessages = messages.map(msg => ({
+    const formattedMessages = messages.map((msg) => ({
       role: msg.sender === 'user' ? 'user' : 'assistant',
-      content: msg.message
+      content: msg.message,
     }));
 
     // Use GPT-3.5-turbo for summarization (more cost-effective)
@@ -61,20 +63,22 @@ export async function createSessionSummary(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
         model: 'gpt-3.5-turbo',
         messages: [
-          { 
-            role: 'system', 
+          {
+            role: 'system',
             content: `Create a concise summary (50-100 tokens) of this conversation about ${
-              sessionType === 'workout' ? 'a specific workout' : 
-              sessionType === 'topic' ? `the topic "${topic || 'unknown'}"` : 
-              'general coaching advice'
-            }. Focus on key points, advice given, decisions made, and any action items.`
+              sessionType === 'workout'
+                ? 'a specific workout'
+                : sessionType === 'topic'
+                  ? `the topic "${topic || 'unknown'}"`
+                  : 'general coaching advice'
+            }. Focus on key points, advice given, decisions made, and any action items.`,
           },
-          ...formattedMessages
+          ...formattedMessages,
         ],
         temperature: 0.7,
         max_tokens: 150,
@@ -103,8 +107,8 @@ export async function createSessionSummary(
 export async function saveSessionSummary(summary: SessionSummary): Promise<boolean> {
   try {
     // Format time_frame as Postgres TSTZRANGE if present
-    let formattedSummary: any = { ...summary };
-    
+    const formattedSummary: any = { ...summary };
+
     if (summary.time_frame) {
       // Format dates in ISO format for Postgres
       const startIso = summary.time_frame.start.toISOString();
@@ -112,9 +116,7 @@ export async function saveSessionSummary(summary: SessionSummary): Promise<boole
       formattedSummary.time_frame = `[${startIso},${endIso}]`;
     }
 
-    const { error } = await supabase
-      .from('session_summaries')
-      .insert(formattedSummary);
+    const { error } = await supabase.from('session_summaries').insert(formattedSummary);
 
     if (error) {
       console.error('Error saving session summary:', error);
@@ -142,11 +144,12 @@ export async function createNoteSummary(
 ): Promise<string | null> {
   try {
     // Get API key
-    const apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY ||
-                   Constants.expoConfig?.extra?.openaiApiKey ||
-                   Constants.expoConfig?.extra?.OPENAI_API_KEY ||
-                   (Constants.manifest as any)?.extra?.OPENAI_API_KEY;
-                     
+    const apiKey =
+      process.env.EXPO_PUBLIC_OPENAI_API_KEY ||
+      Constants.expoConfig?.extra?.openaiApiKey ||
+      Constants.expoConfig?.extra?.OPENAI_API_KEY ||
+      (Constants.manifest as any)?.extra?.OPENAI_API_KEY;
+
     if (!apiKey) {
       console.error('OpenAI API key not found');
       return null;
@@ -157,16 +160,17 @@ export async function createNoteSummary(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
         model: 'gpt-3.5-turbo',
         messages: [
-          { 
-            role: 'system', 
-            content: 'Create a very concise summary (30-50 tokens) of these workout notes. Focus on key observations, feelings, and performance indicators.'
+          {
+            role: 'system',
+            content:
+              'Create a very concise summary (30-50 tokens) of these workout notes. Focus on key observations, feelings, and performance indicators.',
           },
-          { role: 'user', content: notes }
+          { role: 'user', content: notes },
         ],
         temperature: 0.7,
         max_tokens: 100,
@@ -208,21 +212,21 @@ export async function getRelevantSummaries(
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(limit);
-    
+
     // Add filters based on parameters
     if (sessionId) {
       query = query.eq('session_id', sessionId);
     } else if (topic) {
       query = query.eq('topic', topic).eq('session_type', 'topic');
     }
-    
+
     const { data, error } = await query;
-    
+
     if (error) {
       console.error('Error fetching session summaries:', error);
       return [];
     }
-    
+
     return data as SessionSummary[];
   } catch (error) {
     console.error('Error in getRelevantSummaries:', error);
@@ -238,31 +242,32 @@ export async function getRelevantSummaries(
 export async function identifySessionContext(
   messages: ChatMessage[],
   workoutId?: string
-): Promise<{sessionType: SessionType, topic?: string}> {
+): Promise<{ sessionType: SessionType; topic?: string }> {
   // If workout ID is provided, this is a workout-specific session
   if (workoutId) {
     return { sessionType: 'workout' };
   }
-  
+
   try {
     // Use the last 5 messages for context (to reduce token usage)
     const recentMessages = messages.slice(-5);
-    
+
     // Get API key
-    const apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY ||
-                   Constants.expoConfig?.extra?.openaiApiKey ||
-                   Constants.expoConfig?.extra?.OPENAI_API_KEY ||
-                   (Constants.manifest as any)?.extra?.OPENAI_API_KEY;
-                     
+    const apiKey =
+      process.env.EXPO_PUBLIC_OPENAI_API_KEY ||
+      Constants.expoConfig?.extra?.openaiApiKey ||
+      Constants.expoConfig?.extra?.OPENAI_API_KEY ||
+      (Constants.manifest as any)?.extra?.OPENAI_API_KEY;
+
     if (!apiKey) {
       console.error('OpenAI API key not found');
       return { sessionType: 'general' };
     }
 
     // Format messages for the AI
-    const formattedMessages = recentMessages.map(msg => ({
+    const formattedMessages = recentMessages.map((msg) => ({
       role: msg.sender === 'user' ? 'user' : 'assistant',
-      content: msg.message
+      content: msg.message,
     }));
 
     // Use GPT-3.5-turbo to determine session type and topic
@@ -270,20 +275,20 @@ export async function identifySessionContext(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
         model: 'gpt-3.5-turbo',
         messages: [
-          { 
-            role: 'system', 
-            content: `Analyze this conversation and determine if it's about a specific running topic. If so, return JSON with "sessionType": "topic" and "topic": "topic name". If it's about a specific workout, return "sessionType": "workout". Otherwise, return "sessionType": "general".`
+          {
+            role: 'system',
+            content: `Analyze this conversation and determine if it's about a specific running topic. If so, return JSON with "sessionType": "topic" and "topic": "topic name". If it's about a specific workout, return "sessionType": "workout". Otherwise, return "sessionType": "general".`,
           },
-          ...formattedMessages
+          ...formattedMessages,
         ],
         temperature: 0.2,
         max_tokens: 50,
-        response_format: { type: "json_object" }
+        response_format: { type: 'json_object' },
       }),
     });
 
@@ -293,13 +298,13 @@ export async function identifySessionContext(
 
     const data = await response.json();
     const result = JSON.parse(data.choices[0].message.content.trim());
-    
+
     return {
       sessionType: result.sessionType as SessionType,
-      topic: result.topic
+      topic: result.topic,
     };
   } catch (error) {
     console.error('Error identifying session context:', error);
     return { sessionType: 'general' };
   }
-} 
+}

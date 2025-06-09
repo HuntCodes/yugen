@@ -2641,7 +2641,7 @@ You have the following tools available:
                 },
                 turn_detection: {
                     "type": "server_vad",
-                    "threshold": 0.8,
+                    "threshold": 0.7,
                     "prefix_padding_ms": 800,
                     "silence_duration_ms": 800,
                     "create_response": true,

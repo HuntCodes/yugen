@@ -25,7 +25,7 @@ export async function submitUserFeedback(userId: string, feedbackData: CreateFee
       .from('user_feedback')
       .insert({
         user_id: userId,
-        feedback_text: feedbackData.feedback_text
+        feedback_text: feedbackData.feedback_text,
       })
       .select()
       .single();
@@ -73,7 +73,7 @@ export async function updateUserFeedback(feedbackId: string, updateData: UpdateF
     const { data, error } = await supabase
       .from('user_feedback')
       .update({
-        feedback_text: updateData.feedback_text
+        feedback_text: updateData.feedback_text,
       })
       .eq('id', feedbackId)
       .select()
@@ -96,10 +96,7 @@ export async function updateUserFeedback(feedbackId: string, updateData: UpdateF
  */
 export async function deleteUserFeedback(feedbackId: string) {
   try {
-    const { error } = await supabase
-      .from('user_feedback')
-      .delete()
-      .eq('id', feedbackId);
+    const { error } = await supabase.from('user_feedback').delete().eq('id', feedbackId);
 
     if (error) {
       console.error('Error deleting feedback:', error);
@@ -111,4 +108,4 @@ export async function deleteUserFeedback(feedbackId: string) {
     console.error('Error in deleteUserFeedback:', error);
     return { error };
   }
-} 
+}

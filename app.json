@@ -2,7 +2,7 @@
   "expo": {
     "name": "Yugen",
     "slug": "yugen",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "scheme": "yugen",
     "web": {
       "bundler": "metro",
@@ -11,6 +11,7 @@
     },
     "plugins": [
       "expo-router",
+      "expo-dev-client",
       "@config-plugins/react-native-webrtc"
     ],
     "experiments": {
@@ -21,7 +22,6 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -31,10 +31,12 @@
     "ios": {
       "supportsTablet": true,
       "bitcode": false,
+      "buildNumber": "1",
       "bundleIdentifier": "com.hunt333.yugen",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "This app needs access to your microphone for the voice chat feature.",
         "NSCameraUsageDescription": "This app needs access to your camera.",
+        "NSLocationWhenInUseUsageDescription": "This app needs access to your location to provide weather information for your runs.",
         "UIBackgroundModes": ["audio"]
       }
     },
@@ -51,9 +53,18 @@
         "android.permission.RECORD_AUDIO",
         "android.permission.SYSTEM_ALERT_WINDOW",
         "android.permission.WAKE_LOCK",
-        "android.permission.BLUETOOTH"
+        "android.permission.BLUETOOTH",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
       ],
       "package": "com.hunt333.yugen"
+    },
+    "notification": {
+      "icon": "./assets/notification-icon.png",
+      "color": "#000000",
+      "iosDisplayInForeground": true,
+      "androidMode": "default",
+      "androidCollapsedTitle": "{{unread_count}} new messages from your coach"
     },
     "extra": {
       "OPENAI_API_KEY": "${EXPO_PUBLIC_OPENAI_API_KEY}",

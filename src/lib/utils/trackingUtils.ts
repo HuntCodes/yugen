@@ -1,11 +1,11 @@
-import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
 /**
  * Track a product view event
  */
 export const trackProductView = async (
-  productId: string, 
+  productId: string,
   userId: string,
   productName: string
 ): Promise<void> => {
@@ -53,7 +53,7 @@ const logEvent = async (eventName: string, eventData: any): Promise<void> => {
     // Get existing events
     const eventsJson = await AsyncStorage.getItem('analytics_events');
     const events = eventsJson ? JSON.parse(eventsJson) : [];
-    
+
     // Add new event with common data
     events.push({
       event_name: eventName,
@@ -61,10 +61,10 @@ const logEvent = async (eventName: string, eventData: any): Promise<void> => {
       device: Platform.OS,
       app_version: '1.0.0', // Replace with actual version
     });
-    
+
     // Save back to storage
     await AsyncStorage.setItem('analytics_events', JSON.stringify(events));
-    
+
     // If we had a server endpoint, we could also send it there
     // sendEventToServer(eventName, eventData);
   } catch (error) {
@@ -96,4 +96,4 @@ const sendEventToServer = async (eventName: string, eventData: any): Promise<voi
   } catch (error) {
     console.error('Error sending event to server:', error);
   }
-}; 
+};

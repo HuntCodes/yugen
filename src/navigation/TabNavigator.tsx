@@ -1,12 +1,13 @@
+import { Entypo, MaterialCommunityIcons, FontAwesome5, Ionicons } from '@expo/vector-icons';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import React from 'react';
 import { View, Text } from 'react-native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { ProfileNavigator } from './ProfileNavigator';
+import { GearScreen } from '../screens/main/GearScreen';
 import { HomeScreen } from '../screens/main/HomeScreen';
 import TrainingPlanScreen from '../screens/main/TrainingPlanScreen';
-import { GearScreen } from '../screens/main/GearScreen';
-import { ProfileNavigator } from './ProfileNavigator';
-import { Entypo, MaterialCommunityIcons, FontAwesome5, Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Icon components using Expo vector icons
 const HomeIcon = ({ focused }: { focused: boolean }) => (
@@ -44,9 +45,9 @@ const Tab = createBottomTabNavigator<TabParamList>();
 
 export function TabNavigator() {
   const insets = useSafeAreaInsets();
-  
+
   return (
-    <Tab.Navigator 
+    <Tab.Navigator
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
@@ -63,38 +64,37 @@ export function TabNavigator() {
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: '500',
-          marginTop: 2
-        }
-      }}
-    >
-      <Tab.Screen 
-        name="Home" 
-        component={HomeScreen} 
+          marginTop: 2,
+        },
+      }}>
+      <Tab.Screen
+        name="Home"
+        component={HomeScreen}
         options={{
           tabBarIcon: ({ focused }) => <HomeIcon focused={focused} />,
         }}
       />
-      <Tab.Screen 
-        name="Training" 
-        component={TrainingPlanScreen} 
+      <Tab.Screen
+        name="Training"
+        component={TrainingPlanScreen}
         options={{
           tabBarIcon: ({ focused }) => <TrainingIcon focused={focused} />,
         }}
       />
-      <Tab.Screen 
-        name="Gear" 
-        component={GearScreen} 
+      <Tab.Screen
+        name="Gear"
+        component={GearScreen}
         options={{
           tabBarIcon: ({ focused }) => <GearIcon focused={focused} />,
         }}
       />
-      <Tab.Screen 
-        name="Profile" 
-        component={ProfileNavigator} 
+      <Tab.Screen
+        name="Profile"
+        component={ProfileNavigator}
         options={{
           tabBarIcon: ({ focused }) => <ProfileIcon focused={focused} />,
         }}
       />
     </Tab.Navigator>
   );
-} 
+}

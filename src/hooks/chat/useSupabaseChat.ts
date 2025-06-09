@@ -1,13 +1,14 @@
 import { useState } from 'react';
-import { 
+
+import {
   ChatMessage,
-  fetchChatHistory as fetchChatHistoryService, 
+  fetchChatHistory as fetchChatHistoryService,
   saveMessage as saveMessageService,
   clearChatHistory as clearChatHistoryService,
-  subscribeToMessages as subscribeToMessagesService
+  subscribeToMessages as subscribeToMessagesService,
 } from '../../services/chat/chatService';
-import { fetchProfile } from '../../services/profile/profileService';
 import { fetchTrainingPlan } from '../../services/plan/planService';
+import { fetchProfile } from '../../services/profile/profileService';
 
 interface ChatHistoryOptions {
   userId: string;
@@ -25,7 +26,7 @@ export function useSupabaseChat() {
   const fetchChatHistory = async ({ userId, limit = 50 }: ChatHistoryOptions) => {
     setLoading(true);
     setError(null);
-    
+
     try {
       const formattedMessages = await fetchChatHistoryService(userId, limit);
       setMessages(formattedMessages);
@@ -57,7 +58,7 @@ export function useSupabaseChat() {
   const clearChatHistory = async (userId: string) => {
     setLoading(true);
     setError(null);
-    
+
     try {
       const success = await clearChatHistoryService(userId);
       if (success) {
@@ -79,12 +80,12 @@ export function useSupabaseChat() {
   const subscribeToMessages = (userId: string, callback: (messages: ChatMessage[]) => void) => {
     const unsubscribe = subscribeToMessagesService(userId, (newMessage) => {
       // Update our local state
-      setMessages(prev => [...prev, newMessage]);
-      
+      setMessages((prev) => [...prev, newMessage]);
+
       // Call the provided callback with updated messages array
       callback([...messages, newMessage]);
     });
-    
+
     return unsubscribe;
   };
 
@@ -121,6 +122,6 @@ export function useSupabaseChat() {
     clearChatHistory,
     subscribeToMessages,
     fetchUserProfile,
-    fetchUserTrainingPlan
+    fetchUserTrainingPlan,
   };
-} 
+}

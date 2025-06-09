@@ -14,10 +14,10 @@ export interface TextProps extends RNTextProps {
 export function Text({ className, style, ...props }: TextProps) {
   // Define default styles
   const defaultClassName = 'font-sans text-base text-black'; // Adjust default color/size as needed
-  
+
   // Merge default and incoming classNames
   // twMerge handles conflicts and redundancy gracefully
   const mergedClassName = twMerge(defaultClassName, className);
 
   return <RNText className={mergedClassName} style={style} {...props} />;
-} 
+}

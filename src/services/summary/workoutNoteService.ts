@@ -1,5 +1,6 @@
-import { supabase } from '../../lib/supabase';
 import Constants from 'expo-constants';
+
+import { supabase } from '../../lib/supabase';
 
 /**
  * Creates a summary for workout notes using AI
@@ -15,11 +16,12 @@ export async function createWorkoutNoteSummary(
 ): Promise<string | null> {
   try {
     // Get API key
-    const apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY ||
-                   Constants.expoConfig?.extra?.openaiApiKey ||
-                   Constants.expoConfig?.extra?.OPENAI_API_KEY ||
-                   (Constants.manifest as any)?.extra?.OPENAI_API_KEY;
-    
+    const apiKey =
+      process.env.EXPO_PUBLIC_OPENAI_API_KEY ||
+      Constants.expoConfig?.extra?.openaiApiKey ||
+      Constants.expoConfig?.extra?.OPENAI_API_KEY ||
+      (Constants.manifest as any)?.extra?.OPENAI_API_KEY;
+
     if (!apiKey) {
       console.error('📝 [createWorkoutNoteSummary] OpenAI API key not found');
       return null;
@@ -37,8 +39,9 @@ export async function createWorkoutNoteSummary(
     }
 
     // Create prompt with workout context if available
-    let systemPrompt = 'Create a concise summary (30-50 tokens) of these workout notes. Focus on key observations, feelings, and performance indicators.';
-    
+    let systemPrompt =
+      'Create a concise summary (30-50 tokens) of these workout notes. Focus on key observations, feelings, and performance indicators.';
+
     if (workoutData) {
       systemPrompt = `Create a concise summary (30-50 tokens) of these notes from a ${workoutData.session_type} workout (${workoutData.distance}km, ${workoutData.time} min). 
       Focus on key observations about performance, physical feelings, and mental state. Include anything about injuries or other issues.
@@ -50,16 +53,16 @@ export async function createWorkoutNoteSummary(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
         model: 'gpt-3.5-turbo',
         messages: [
-          { 
-            role: 'system', 
-            content: systemPrompt
+          {
+            role: 'system',
+            content: systemPrompt,
           },
-          { role: 'user', content: notes }
+          { role: 'user', content: notes },
         ],
         temperature: 0.7,
         max_tokens: 100,
@@ -67,7 +70,11 @@ export async function createWorkoutNoteSummary(
     });
 
     if (!response.ok) {
-      console.error('📝 [createWorkoutNoteSummary] OpenAI API error:', response.status, await response.text());
+      console.error(
+        '📝 [createWorkoutNoteSummary] OpenAI API error:',
+        response.status,
+        await response.text()
+      );
       throw new Error(`OpenAI API error: ${response.status}`);
     }
 
@@ -98,7 +105,7 @@ export async function processWorkoutNotes(
     if (!notes || notes.trim() === '') {
       return true;
     }
-    
+
     // Check if we already have a summary for this workout
     const { data: existingSummaries, error: fetchError } = await supabase
       .from('workout_note_summaries')
@@ -106,27 +113,27 @@ export async function processWorkoutNotes(
       .eq('workout_id', workoutId)
       .eq('user_id', userId)
       .limit(1);
-      
+
     if (fetchError) {
       console.error('📝 [processWorkoutNotes] Error checking existing summaries:', fetchError);
       return false;
     }
-    
+
     // Create a summary of the notes
     const summary = await createWorkoutNoteSummary(notes, userId, workoutId);
-    
+
     if (!summary) {
       console.error('📝 [processWorkoutNotes] Failed to create summary');
       return false;
     }
-    
+
     // If we have an existing summary, update it; otherwise create a new one
     if (existingSummaries && existingSummaries.length > 0) {
       const { error: updateError } = await supabase
         .from('workout_note_summaries')
-        .update({ summary: summary })
+        .update({ summary })
         .eq('id', existingSummaries[0].id);
-        
+
       if (updateError) {
         console.error('📝 [processWorkoutNotes] Error updating summary:', updateError);
         return false;
@@ -138,16 +145,16 @@ export async function processWorkoutNotes(
         .insert({
           user_id: userId,
           workout_id: workoutId,
-          summary: summary
+          summary,
         })
         .select();
-        
+
       if (insertError) {
         console.error('📝 [processWorkoutNotes] Error creating summary entry:', insertError);
         return false;
       }
     }
-    
+
     return true;
   } catch (error) {
     console.error('📝 [processWorkoutNotes] Error processing workout notes:', error);
@@ -173,19 +180,19 @@ export async function getWorkoutNoteSummary(
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(1);
-      
+
     if (error) {
       console.error('📝 [getWorkoutNoteSummary] Error fetching summary:', error);
       return null;
     }
-    
+
     if (data && data.length > 0 && data[0].summary) {
       return data[0].summary;
     }
-    
+
     return null;
   } catch (error) {
     console.error('📝 [getWorkoutNoteSummary] Error:', error);
     return null;
   }
-} 
+}

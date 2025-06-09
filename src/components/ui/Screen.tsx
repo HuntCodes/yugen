@@ -1,5 +1,13 @@
 import React from 'react';
-import { View, SafeAreaView, ScrollView, ViewStyle, StyleProp, Platform, KeyboardAvoidingView } from 'react-native';
+import {
+  View,
+  SafeAreaView,
+  ScrollView,
+  ViewStyle,
+  StyleProp,
+  Platform,
+  KeyboardAvoidingView,
+} from 'react-native';
 
 interface ScreenProps {
   children: React.ReactNode;
@@ -21,36 +29,32 @@ export function Screen({
   contentClassName = '',
   style = {},
   contentStyle = {},
-  keyboardVerticalOffset = 0
+  keyboardVerticalOffset = 0,
 }: ScreenProps) {
-
   const InnerComponent = scrollable ? ScrollView : View;
 
   return (
-    <SafeAreaView style={[{ flex: 1, backgroundColor: '#FFFFFF' }, style]} className={`relative ${className}`}>
-      <KeyboardAvoidingView 
+    <SafeAreaView
+      style={[{ flex: 1, backgroundColor: '#FFFFFF' }, style]}
+      className={`relative ${className}`}>
+      <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={keyboardVerticalOffset}
-      >
+        keyboardVerticalOffset={keyboardVerticalOffset}>
         {scrollable ? (
           <ScrollView
             style={[{ flex: 1 }, contentStyle]}
             className={`font-sans ${contentClassName}`}
             showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          >
+            keyboardShouldPersistTaps="handled">
             {children}
           </ScrollView>
         ) : (
-          <View 
-            style={[{ flex: 1 }, contentStyle]} 
-            className={`font-sans ${contentClassName}`}
-          >
+          <View style={[{ flex: 1 }, contentStyle]} className={`font-sans ${contentClassName}`}>
             {children}
           </View>
         )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
-} 
+}

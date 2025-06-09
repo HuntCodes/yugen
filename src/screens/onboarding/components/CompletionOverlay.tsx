@@ -10,22 +10,18 @@ interface CompletionOverlayProps {
   isProcessing?: boolean;
 }
 
-export function CompletionOverlay({ 
-  visible, 
-  coachName, 
-  coachAvatar, 
-  onContinue, 
-  isProcessing = false 
+export function CompletionOverlay({
+  visible,
+  coachName,
+  coachAvatar,
+  onContinue,
+  isProcessing = false,
 }: CompletionOverlayProps) {
   if (!visible) return null;
 
   return (
     <View style={styles.overlay}>
-      <Animatable.View 
-        animation="fadeInUp" 
-        duration={500} 
-        style={styles.content}
-      >
+      <Animatable.View animation="fadeInUp" duration={500} style={styles.content}>
         <View style={styles.coachSection}>
           <Image source={coachAvatar} style={styles.coachAvatar} />
           <Text style={styles.title}>Conversation Complete</Text>
@@ -33,13 +29,12 @@ export function CompletionOverlay({
             Great chat with {coachName}! Ready to create your personalized training plan?
           </Text>
         </View>
-        
-        <TouchableOpacity 
+
+        <TouchableOpacity
           style={[styles.continueButton, isProcessing && styles.continueButtonDisabled]}
           onPress={onContinue}
           disabled={isProcessing}
-          activeOpacity={0.7}
-        >
+          activeOpacity={0.7}>
           <Text style={styles.continueButtonText}>
             {isProcessing ? 'Creating Plan...' : 'Continue'}
           </Text>
@@ -120,4 +115,4 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
   },
-}); 
+});

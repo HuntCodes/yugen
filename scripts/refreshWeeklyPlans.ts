@@ -10,8 +10,8 @@
 async function main() {
   console.warn(
     'DEPRECATED SCRIPT: scripts/refreshWeeklyPlans.ts is running. \n' +
-    'This global plan refresh mechanism is being replaced by client-initiated updates. \n' +
-    'The main operational logic of this script has been commented out to prevent conflicts.'
+      'This global plan refresh mechanism is being replaced by client-initiated updates. \n' +
+      'The main operational logic of this script has been commented out to prevent conflicts.'
   );
 
   // try {
@@ -20,12 +20,12 @@ async function main() {
   //   // 1. Process feedback for all users first (e.g., summarize last week's chats and notes)
   //   // This step should ideally complete and store structured feedback before plan generation.
   //   console.log('[refreshWeeklyPlans Script] Step 1: Processing feedback for all users...');
-  //   const feedbackResult = await processAllUsersFeedback(); 
+  //   const feedbackResult = await processAllUsersFeedback();
   //   if (feedbackResult.success) {
   //     console.log(`[refreshWeeklyPlans Script] Feedback processing completed. Processed: ${feedbackResult.processed}, Errors: ${feedbackResult.errors}`);
   //   } else {
   //     console.error('[refreshWeeklyPlans Script] Feedback processing failed for some users or entirely. Check logs.');
-      // Decide if to continue to plan generation or halt. For now, we'll log and continue.
+  // Decide if to continue to plan generation or halt. For now, we'll log and continue.
   //   }
 
   //   // 2. Refresh training plans for all users
@@ -33,7 +33,7 @@ async function main() {
   //   // The `refreshAllUserPlans` in weeklyPlanService has also been deprecated and its internal
   //   // feedback call removed to avoid redundancy with the step above if this script were active.
   //   console.log('[refreshWeeklyPlans Script] Step 2: Refreshing training plans for all users...');
-  //   const planResult = await refreshAllUserPlans(); 
+  //   const planResult = await refreshAllUserPlans();
 
   //   if (planResult.success) {
   //     console.log(
@@ -55,7 +55,7 @@ async function main() {
 // Only run main if this script is executed directly
 if (require.main === module) {
   main().catch((e) => {
-    console.error("Unhandled error in refreshWeeklyPlans script:", e);
+    console.error('Unhandled error in refreshWeeklyPlans script:', e);
     process.exit(1);
   });
-} 
+}

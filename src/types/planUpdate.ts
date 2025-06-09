@@ -6,4 +6,5 @@ export interface PlanUpdate {
   new_distance?: number;
   new_time?: number;
   new_date?: string;
-} 
+  new_suggested_location?: string;
+}

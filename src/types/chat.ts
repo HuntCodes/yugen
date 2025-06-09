@@ -12,4 +12,4 @@ export interface ChatHistoryOptions {
 export interface ChatResponse {
   completion: string;
   error?: string;
-} 
+}

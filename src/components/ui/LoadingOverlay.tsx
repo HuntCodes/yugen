@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, ActivityIndicator, StyleSheet, Dimensions } from 'react-native';
+
 import { MinimalSpinner } from './MinimalSpinner';
 
 // Get screen dimensions
@@ -13,25 +14,25 @@ interface LoadingOverlayProps {
 
 export function LoadingOverlay({ visible, message, progress = 0 }: LoadingOverlayProps) {
   if (!visible) return null;
-  
+
   return (
     <View style={styles.container}>
       <View style={styles.card}>
         <MinimalSpinner size={48} color="#3B82F6" thickness={3} />
-        
+
         <View style={{ height: 16 }} />
-        
+
         <View style={styles.progressContainer}>
-          <View 
+          <View
             style={[
-              styles.progressBar, 
-              { width: `${Math.min(Math.max(progress * 100, 0), 100)}%` }
-            ]} 
+              styles.progressBar,
+              { width: `${Math.min(Math.max(progress * 100, 0), 100)}%` },
+            ]}
           />
         </View>
-        
+
         <View style={{ height: 12 }} />
-        
+
         <Text style={styles.message}>{message}</Text>
       </View>
     </View>
@@ -45,8 +46,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    width: width,
-    height: height,
+    width,
+    height,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -82,5 +83,5 @@ const styles = StyleSheet.create({
     color: '#4B5563',
     fontWeight: '500',
     textAlign: 'center',
-  }
-}); 
+  },
+});

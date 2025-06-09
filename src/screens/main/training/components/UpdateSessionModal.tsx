@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Modal, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
-import { Text } from '../../../../components/ui/StyledText';
+
 import { MinimalSpinner } from '../../../../components/ui/MinimalSpinner';
+import { Text } from '../../../../components/ui/StyledText';
 
 export interface UpdateSessionModalProps {
   isVisible: boolean;
@@ -10,45 +11,37 @@ export interface UpdateSessionModalProps {
   isUpdating: boolean;
 }
 
-export const UpdateSessionModal: React.FC<UpdateSessionModalProps> = ({ 
-  isVisible, 
-  onClose, 
-  onUpdateDates, 
-  isUpdating 
+export const UpdateSessionModal: React.FC<UpdateSessionModalProps> = ({
+  isVisible,
+  onClose,
+  onUpdateDates,
+  isUpdating,
 }) => {
   return (
-    <Modal
-      animationType="slide"
-      transparent={true}
-      visible={isVisible}
-      onRequestClose={onClose}
-    >
+    <Modal animationType="slide" transparent visible={isVisible} onRequestClose={onClose}>
       <View style={styles.centeredView}>
         <View style={styles.modalView}>
           <Text style={styles.modalTitle}>Outdated Training Plan</Text>
-      
+
           <Text style={styles.modalText}>
-            Your training plan contains dates from a previous year. Would you like to update all dates to the current year?
-      </Text>
-      
+            Your training plan contains dates from a previous year. Would you like to update all
+            dates to the current year?
+          </Text>
+
           <View style={styles.buttonContainer}>
             {isUpdating ? (
               <MinimalSpinner size={20} color="#007AFF" thickness={2} />
             ) : (
               <>
-        <TouchableOpacity
-                  style={[styles.button, styles.buttonCancel]}
-          onPress={onClose}
-        >
+                <TouchableOpacity style={[styles.button, styles.buttonCancel]} onPress={onClose}>
                   <Text style={styles.cancelButtonText}>Not Now</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
+                </TouchableOpacity>
+
+                <TouchableOpacity
                   style={[styles.button, styles.buttonUpdate]}
-          onPress={onUpdateDates}
-                >
+                  onPress={onUpdateDates}>
                   <Text style={styles.updateButtonText}>Update Dates</Text>
-        </TouchableOpacity>
+                </TouchableOpacity>
               </>
             )}
           </View>
@@ -122,4 +115,4 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     textAlign: 'center',
   },
-}); 
+});

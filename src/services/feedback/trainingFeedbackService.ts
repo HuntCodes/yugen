@@ -4,8 +4,8 @@
  * - For feedback storage: import from './feedbackStorage'
  * - For feedback processing: import from './feedbackProcessing'
  * - For types: import from './types'
- * 
+ *
  * Or use the barrel exports from the index file: import from './'
  */
 
-export * from './'; 
+export * from './';

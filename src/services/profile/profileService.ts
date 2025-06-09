@@ -11,12 +11,12 @@ export const fetchProfile = async (userId: string) => {
       .select('*')
       .eq('id', userId)
       .maybeSingle();
-      
+
     if (error) {
       console.error('Error fetching profile:', error.message);
       return null;
     }
-    
+
     return data;
   } catch (err) {
     console.error('Error in fetchProfile:', err);
@@ -34,16 +34,16 @@ export const checkProfileExists = async (userId: string) => {
       .select('id, coach_id')
       .eq('id', userId)
       .maybeSingle();
-      
+
     if (error) {
       console.error('Error checking profile:', error.message);
       return null;
     }
-    
+
     return {
       exists: !!data,
       hasCoach: data ? !!data.coach_id : false,
-      profile: data
+      profile: data,
     };
   } catch (err) {
     console.error('Error in checkProfileExists:', err);
@@ -56,20 +56,18 @@ export const checkProfileExists = async (userId: string) => {
  */
 export const createProfile = async (userId: string, email: string, coachId: string) => {
   try {
-    const { error } = await supabase
-      .from('profiles')
-      .insert({
-        id: userId,
-        email,
-        coach_id: coachId,
-        updated_at: new Date().toISOString(),
-      });
-      
+    const { error } = await supabase.from('profiles').insert({
+      id: userId,
+      email,
+      coach_id: coachId,
+      updated_at: new Date().toISOString(),
+    });
+
     if (error) {
       console.error('Error creating profile:', error.message);
       throw error;
     }
-    
+
     return true;
   } catch (err) {
     console.error('Error in createProfile:', err);
@@ -85,19 +83,16 @@ export const updateProfile = async (userId: string, updates: Record<string, any>
     // No special processing needed for string fields
     const updatedData = {
       ...updates,
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
     };
 
-    const { error } = await supabase
-      .from('profiles')
-      .update(updatedData)
-      .eq('id', userId);
-      
+    const { error } = await supabase.from('profiles').update(updatedData).eq('id', userId);
+
     if (error) {
       console.error('Error updating profile:', error.message);
       throw error;
     }
-    
+
     return true;
   } catch (err) {
     console.error('Error in updateProfile:', err);
@@ -112,17 +107,17 @@ export const updateCoachSelection = async (userId: string, coachId: string) => {
   try {
     const { error } = await supabase
       .from('profiles')
-      .update({ 
+      .update({
         coach_id: coachId,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       })
       .eq('id', userId);
-      
+
     if (error) {
       console.error('Error updating coach selection:', error.message);
       throw error;
     }
-    
+
     return true;
   } catch (err) {
     console.error('Error in updateCoachSelection:', err);
@@ -137,17 +132,17 @@ export const completeOnboarding = async (userId: string) => {
   try {
     const { error } = await supabase
       .from('profiles')
-      .update({ 
+      .update({
         onboarding_completed: true,
-        updated_at: new Date().toISOString() 
+        updated_at: new Date().toISOString(),
       })
       .eq('id', userId);
-      
+
     if (error) {
       console.error('Error completing onboarding:', error.message);
       throw error;
     }
-    
+
     return true;
   } catch (err) {
     console.error('Error in completeOnboarding:', err);
@@ -166,17 +161,17 @@ export const fetchCoach = async (userId: string) => {
       .select('coach_id')
       .eq('id', userId)
       .maybeSingle();
-      
+
     if (profileError || !profile) {
       console.error('Error fetching profile or no profile found:', profileError);
       return null;
     }
-    
+
     if (!profile.coach_id) {
       console.log('No coach_id found in user profile');
       return null;
     }
-    
+
     return profile.coach_id;
   } catch (err) {
     console.error('Error in fetchCoach:', err);
@@ -187,10 +182,14 @@ export const fetchCoach = async (userId: string) => {
 /**
  * Save onboarding answers to profile
  */
-export const saveOnboardingAnswers = async (userId: string, fields: string[], value: string | (string | null)[]) => {
+export const saveOnboardingAnswers = async (
+  userId: string,
+  fields: string[],
+  value: string | (string | null)[]
+) => {
   try {
     const updates: Record<string, any> = { id: userId };
-    
+
     if (Array.isArray(value)) {
       fields.forEach((field, i) => {
         // If this is a date field and the value is empty or null, set it to null
@@ -210,21 +209,19 @@ export const saveOnboardingAnswers = async (userId: string, fields: string[], va
         updates[fields[0]] = value;
       }
     }
-    
+
     updates.updated_at = new Date().toISOString();
-    
-    const { error } = await supabase
-      .from('profiles')
-      .upsert(updates);
-      
+
+    const { error } = await supabase.from('profiles').upsert(updates);
+
     if (error) {
       console.error('Error saving onboarding answers:', error.message);
       throw error;
     }
-    
+
     return true;
   } catch (err) {
     console.error('Error in saveOnboardingAnswers:', err);
     throw err;
   }
-}; 
+};

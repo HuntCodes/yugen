@@ -19,7 +19,7 @@ interface TypeIndicatorProps {
 
 /**
  * A reusable component that shows a typing indicator for chat messages.
- * 
+ *
  * @param senderName Optional name of the sender to display (used in minimal mode)
  * @param coachId Optional coach ID to display the avatar image (required for withAvatar mode)
  * @param coachName Optional coach name to display (used in withAvatar mode)
@@ -27,17 +27,17 @@ interface TypeIndicatorProps {
  * @param style Style variant to use ('minimal' or 'withAvatar')
  * @param customStyles Optional custom styles to override defaults
  */
-export function TypeIndicator({ 
-  senderName = 'Coach', 
+export function TypeIndicator({
+  senderName = 'Coach',
   coachId,
   coachName,
   imageMap,
   style = 'minimal',
-  customStyles = {}
+  customStyles = {},
 }: TypeIndicatorProps) {
   // If withAvatar style is used but no coach data provided, fall back to minimal
   const useMinimalStyle = style === 'minimal' || !coachId || !imageMap;
-  
+
   if (useMinimalStyle) {
     return (
       <View style={[styles.minimalContainer, customStyles.container]}>
@@ -93,7 +93,7 @@ const styles = StyleSheet.create({
   minimalText: {
     color: '#757575',
   },
-  
+
   // With avatar style (previously in screens/*/TypeIndicator)
   avatarContainer: {
     flexDirection: 'row',
@@ -107,7 +107,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
     backgroundColor: '#F5F5F5',
     borderWidth: 1,
-    borderColor: '#E0E5EB'
+    borderColor: '#E0E5EB',
   },
   nameText: {
     fontSize: 13,
@@ -135,4 +135,4 @@ const styles = StyleSheet.create({
     backgroundColor: '#757575',
     marginHorizontal: 2,
   },
-}); 
+});

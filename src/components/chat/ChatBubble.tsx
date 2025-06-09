@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, Image, StyleSheet } from 'react-native';
+
 import { ChatMessage } from '../../types/chat';
 
 interface ChatBubbleProps {
@@ -20,7 +21,7 @@ interface ChatBubbleProps {
 
 /**
  * A reusable chat bubble component that displays messages from the coach or user.
- * 
+ *
  * @param message The message object to display
  * @param coach Optional coach information (required when messages include coach sender)
  * @param imageMap Optional map of coach IDs to avatar images
@@ -40,10 +41,7 @@ export function ChatBubble({
   if (message.sender === 'coach') {
     // COACH MESSAGE
     return (
-      <View style={[
-        styles.coachContainer, 
-        customStyles.container
-      ]}>
+      <View style={[styles.coachContainer, customStyles.container]}>
         {/* Only show avatar in default style with valid coach info */}
         {style === 'default' && hasCoachInfo && (
           <Image
@@ -52,19 +50,15 @@ export function ChatBubble({
             resizeMode="cover"
           />
         )}
-        
+
         <View style={{ flex: 1 }}>
           {/* Only show name in default style */}
           {style === 'default' && (
-            <Text style={[styles.nameText, customStyles.nameText]}>
-              {coach?.name || 'Coach'}
-            </Text>
+            <Text style={[styles.nameText, customStyles.nameText]}>{coach?.name || 'Coach'}</Text>
           )}
-          
+
           <View style={[styles.coachBubble, customStyles.coachBubble]}>
-            <Text style={[styles.coachText, customStyles.coachText]}>
-              {message.message}
-            </Text>
+            <Text style={[styles.coachText, customStyles.coachText]}>{message.message}</Text>
           </View>
         </View>
       </View>
@@ -72,20 +66,9 @@ export function ChatBubble({
   } else {
     // USER MESSAGE
     return (
-      <View style={[
-        styles.userContainer, 
-        customStyles.container
-      ]}>
-        <View style={[
-          styles.userBubble, 
-          customStyles.userBubble
-        ]}>
-          <Text style={[
-            styles.userText, 
-            customStyles.userText
-          ]}>
-            {message.message}
-          </Text>
+      <View style={[styles.userContainer, customStyles.container]}>
+        <View style={[styles.userBubble, customStyles.userBubble]}>
+          <Text style={[styles.userText, customStyles.userText]}>{message.message}</Text>
         </View>
       </View>
     );
@@ -124,7 +107,7 @@ const styles = StyleSheet.create({
     color: '#000000',
     lineHeight: 20,
   },
-  
+
   // User message styles
   userContainer: {
     alignItems: 'flex-end',
@@ -141,4 +124,4 @@ const styles = StyleSheet.create({
     color: 'white',
     lineHeight: 20,
   },
-}); 
+});

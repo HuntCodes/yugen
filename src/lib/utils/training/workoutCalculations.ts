@@ -36,26 +36,26 @@ export function getTrainingDays(daysPerWeek: number): number[] {
  */
 export function parseDistance(text: string, defaultUnits: string): number {
   if (!text) return 0;
-  
+
   // Clean up the text
   const lowerText = text.toLowerCase().trim();
-  
+
   // Try to extract a number and unit
   const matches = lowerText.match(/(\d+(?:\.\d+)?)\s*(km|mi|mile|miles)?/);
   if (matches && matches[1]) {
     const value = parseFloat(matches[1]);
     const unit = matches[2] || defaultUnits;
-    
+
     // Convert to km or miles based on default unit
     if (defaultUnits === 'km' && (unit === 'mi' || unit === 'mile' || unit === 'miles')) {
       return value * 1.60934;
     } else if (defaultUnits === 'mi' && unit === 'km') {
       return value / 1.60934;
     }
-    
+
     return value;
   }
-  
+
   return 0;
 }
 
@@ -66,10 +66,10 @@ export function parseDistance(text: string, defaultUnits: string): number {
  */
 export function parseTime(text: string): number {
   if (!text) return 0;
-  
+
   // Clean up the text
   const lowerText = text.toLowerCase().trim();
-  
+
   // Format: HH:MM:SS or MM:SS
   const timeFormatMatch = lowerText.match(/(\d+):(\d+)(?::(\d+))?/);
   if (timeFormatMatch) {
@@ -86,27 +86,29 @@ export function parseTime(text: string): number {
       return minutes + seconds / 60;
     }
   }
-  
+
   // Format: X hours Y minutes
-  const hourMinMatch = lowerText.match(/(\d+)\s*(?:hour|hr|h)s?\s*(?:and\s*)?(?:(\d+)\s*(?:minute|min|m)s?)?/);
+  const hourMinMatch = lowerText.match(
+    /(\d+)\s*(?:hour|hr|h)s?\s*(?:and\s*)?(?:(\d+)\s*(?:minute|min|m)s?)?/
+  );
   if (hourMinMatch) {
     const hours = parseInt(hourMinMatch[1], 10);
     const minutes = hourMinMatch[2] ? parseInt(hourMinMatch[2], 10) : 0;
     return hours * 60 + minutes;
   }
-  
+
   // Format: X minutes
   const minutesMatch = lowerText.match(/(\d+)\s*(?:minute|min|m)s?/);
   if (minutesMatch) {
     return parseInt(minutesMatch[1], 10);
   }
-  
+
   // Just a number, assume minutes
   const numberMatch = lowerText.match(/^(\d+)$/);
   if (numberMatch) {
     return parseInt(numberMatch[1], 10);
   }
-  
+
   return 0;
 }
 
@@ -116,4 +118,4 @@ export function parseTime(text: string): number {
 export function extractValue(line: string): string {
   const parts = line.split(':');
   return parts.length > 1 ? parts.slice(1).join(':').trim() : '';
-} 
+}

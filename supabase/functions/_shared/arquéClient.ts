@@ -21,8 +21,8 @@ export const arqué = createClient(supabaseUrl, supabaseServiceRoleKey, {
     // The Edge Function will authenticate using the user's JWT passed in the Authorization header.
     autoRefreshToken: false,
     persistSession: false,
-    detectSessionInUrl: false
-  }
+    detectSessionInUrl: false,
+  },
 });
 
-console.log('[_shared/arquéClient.ts] Supabase client (arqué) initialized.'); 
+console.log('[_shared/arquéClient.ts] Supabase client (arqué) initialized.');

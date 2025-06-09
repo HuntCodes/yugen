@@ -1,1 +1,1 @@
-export { EntryScreen } from './EntryScreen'; 
+export { EntryScreen } from './EntryScreen';

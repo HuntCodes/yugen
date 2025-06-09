@@ -12,12 +12,12 @@ export const getGearRecommendations = async (userId: string): Promise<Product[]>
       .select('*')
       .eq('id', userId)
       .single();
-      
+
     if (profileError) {
       console.error('Error fetching user profile:', profileError);
       return getFallbackProducts();
     }
-    
+
     // Fetch recent training data to better understand user needs
     const { data: trainingData, error: trainingError } = await supabase
       .from('training_plans')
@@ -25,27 +25,27 @@ export const getGearRecommendations = async (userId: string): Promise<Product[]>
       .eq('user_id', userId)
       .order('date', { ascending: false })
       .limit(10);
-    
+
     if (trainingError) {
       console.error('Error fetching training data:', trainingError);
     }
-    
+
     // Determine if user is training for a specific race
     const hasRaceGoal = profile.race_date && profile.race_distance;
-    
+
     // Calculate total training volume to recommend appropriate gear
     let totalDistance = 0;
     let runCount = 0;
-    
+
     if (trainingData && trainingData.length > 0) {
-      trainingData.forEach(session => {
+      trainingData.forEach((session) => {
         totalDistance += session.distance || 0;
         runCount++;
       });
     }
-    
+
     const avgDistance = runCount > 0 ? totalDistance / runCount : 0;
-    
+
     // Determine user's training level for better recommendations
     let trainingLevel = 'beginner';
     if (avgDistance > 10) {
@@ -54,7 +54,7 @@ export const getGearRecommendations = async (userId: string): Promise<Product[]>
     if (avgDistance > 15 || profile.current_mileage > 50) {
       trainingLevel = 'advanced';
     }
-    
+
     // Enriched profile for better recommendations
     const enrichedProfile = {
       ...profile,
@@ -63,18 +63,18 @@ export const getGearRecommendations = async (userId: string): Promise<Product[]>
       trainingLevel,
       totalWeeklyVolume: profile.current_mileage,
     };
-    
+
     // Try to get personalized recommendations
     try {
       const recommendations = await fetchRecommendedProducts(enrichedProfile);
-      
+
       if (recommendations && recommendations.length > 0) {
         return recommendations;
       }
     } catch (apiError) {
       console.error('Error fetching recommendations from API:', apiError);
     }
-    
+
     // Fall back to local data if API fails
     return getFallbackProducts();
   } catch (error) {
@@ -97,35 +97,35 @@ export const getCategoryRecommendations = async (
       .select('*')
       .eq('id', userId)
       .maybeSingle();
-      
+
     if (error || !profile) {
       console.error('Error fetching user profile for category recommendations:', error);
-      return getFallbackProducts().filter(product => 
-        product.category.toLowerCase() === category.toLowerCase()
+      return getFallbackProducts().filter(
+        (product) => product.category.toLowerCase() === category.toLowerCase()
       );
     }
-    
+
     // Enrich profile with category preference
     const enrichedProfile = {
       ...profile,
       preferredCategory: category,
     };
-    
+
     // Fetch category-specific recommendations
     const recommendations = await fetchRecommendedProducts(enrichedProfile, 10, category);
-    
+
     if (recommendations && recommendations.length > 0) {
       return recommendations;
     }
-    
+
     // Fall back to filtered local data
-    return getFallbackProducts().filter(product => 
-      product.category.toLowerCase() === category.toLowerCase()
+    return getFallbackProducts().filter(
+      (product) => product.category.toLowerCase() === category.toLowerCase()
     );
   } catch (error) {
     console.error(`Error getting recommendations for category ${category}:`, error);
-    return getFallbackProducts().filter(product => 
-      product.category.toLowerCase() === category.toLowerCase()
+    return getFallbackProducts().filter(
+      (product) => product.category.toLowerCase() === category.toLowerCase()
     );
   }
 };
@@ -135,14 +135,12 @@ export const getCategoryRecommendations = async (
  */
 export const logProductView = async (userId: string, productId: string): Promise<void> => {
   try {
-    await supabase
-      .from('product_interactions')
-      .insert({
-        user_id: userId,
-        product_id: productId,
-        interaction_type: 'view',
-        created_at: new Date().toISOString(),
-      });
+    await supabase.from('product_interactions').insert({
+      user_id: userId,
+      product_id: productId,
+      interaction_type: 'view',
+      created_at: new Date().toISOString(),
+    });
   } catch (error) {
     console.error('Error logging product view:', error);
   }
@@ -153,4 +151,4 @@ export const logProductView = async (userId: string, productId: string): Promise
  */
 export const getProductCategories = (): string[] => {
   return ['Shoes', 'Apparel', 'Accessories'];
-}; 
+};

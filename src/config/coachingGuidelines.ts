@@ -14,20 +14,20 @@ export const coachStyles: Record<string, CoachingStyle> = {
       'Run fast, run strong',
       'Encouraging and supportive',
       'Focus on long-term development',
-      'Believes in balanced training approach'
+      'Believes in balanced training approach',
     ],
     communicationStyle: [
       'Aussie accent and lingo',
       'Asks open-ended questions',
       'Shares relevant personal experiences',
-      'Adapts tone based on athlete experience'
+      'Adapts tone based on athlete experience',
     ],
     specialties: [
       '1500m to 5000m training',
       'Building base mileage',
       'Injury prevention',
-      'Race strategy'
-    ]
+      'Race strategy',
+    ],
   },
   thomas: {
     name: 'Thomas',
@@ -35,20 +35,15 @@ export const coachStyles: Record<string, CoachingStyle> = {
       'High energy and motivational',
       'Detail-oriented',
       'Focus on mental preparation',
-      'Emphasizes consistency'
+      'Emphasizes consistency',
     ],
     communicationStyle: [
       'German accent',
       'Uses visualization techniques',
       'Frequent positive reinforcement',
-      'Technical when appropriate'
+      'Technical when appropriate',
     ],
-    specialties: [
-      'Speed development',
-      'Track racing',
-      'Mental preparation',
-      'Form optimization'
-    ]
+    specialties: ['Speed development', 'Track racing', 'Mental preparation', 'Form optimization'],
   },
   dathan: {
     name: 'Dathan',
@@ -56,37 +51,40 @@ export const coachStyles: Record<string, CoachingStyle> = {
       'Calm and methodical',
       'Focus on fundamentals',
       'Patient progression',
-      'Holistic approach'
+      'Holistic approach',
     ],
     communicationStyle: [
       'Michigan accent',
       'Builds on athlete responses',
       'Educational approach',
-      'Emphasizes understanding'
+      'Emphasizes understanding',
     ],
     specialties: [
       'Base building',
       'Race preparation',
       'Recovery optimization',
-      'Training periodization'
-    ]
-  }
+      'Training periodization',
+    ],
+  },
 };
 
 // Information we need to gather during onboarding
-export const requiredInformation: Record<keyof OnboardingProfile, {
-  purpose: string;
-  importance: string;
-  exampleGathering: string[];
-}> = {
+export const requiredInformation: Record<
+  keyof OnboardingProfile,
+  {
+    purpose: string;
+    importance: string;
+    exampleGathering: string[];
+  }
+> = {
   nickname: {
     purpose: 'Build personal connection and rapport',
     importance: 'Creates comfortable, personalized experience',
     exampleGathering: [
       'Natural introduction',
       'Asking preference between full name and nickname',
-      'Noticing if they introduce themselves with a nickname'
-    ]
+      'Noticing if they introduce themselves with a nickname',
+    ],
   },
   current_mileage: {
     purpose: 'Understand current training volume',
@@ -94,8 +92,8 @@ export const requiredInformation: Record<keyof OnboardingProfile, {
     exampleGathering: [
       'Discussion about typical week',
       'Recent training history',
-      'Current fitness level conversation'
-    ]
+      'Current fitness level conversation',
+    ],
   },
   current_frequency: {
     purpose: 'Understand training rhythm and availability',
@@ -103,8 +101,8 @@ export const requiredInformation: Record<keyof OnboardingProfile, {
     exampleGathering: [
       'Current weekly routine discussion',
       'Work/life balance conversation',
-      'Recovery patterns'
-    ]
+      'Recovery patterns',
+    ],
   },
   injury_history: {
     purpose: 'Identify potential risk areas',
@@ -112,26 +110,8 @@ export const requiredInformation: Record<keyof OnboardingProfile, {
     exampleGathering: [
       'Past running experiences',
       'Current niggles or concerns',
-      'Recovery strategies discussion'
-    ]
-  },
-  shoe_size: {
-    purpose: 'Equipment recommendations',
-    importance: 'Needed for gear suggestions',
-    exampleGathering: [
-      'Current shoe discussion',
-      'Gear preferences',
-      'Natural conversation about equipment'
-    ]
-  },
-  clothing_size: {
-    purpose: 'Gear recommendations',
-    importance: 'Needed for apparel suggestions',
-    exampleGathering: [
-      'Current gear discussion',
-      'Comfort preferences',
-      'Training condition needs'
-    ]
+      'Recovery strategies discussion',
+    ],
   },
   schedule_constraints: {
     purpose: 'Understand lifestyle and availability',
@@ -139,8 +119,26 @@ export const requiredInformation: Record<keyof OnboardingProfile, {
     exampleGathering: [
       'Work/life discussion',
       'Preferred training times',
-      'Weekly rhythm conversation'
-    ]
+      'Weekly rhythm conversation',
+    ],
+  },
+  shoe_size: {
+    purpose: 'Equipment recommendations',
+    importance: 'Not collected during initial onboarding to reduce sales feeling',
+    exampleGathering: [
+      'Collected later through profile updates',
+      'Optional field for gear recommendations',
+      'Can be added post-onboarding',
+    ],
+  },
+  clothing_size: {
+    purpose: 'Gear recommendations',
+    importance: 'Not collected during initial onboarding to reduce sales feeling',
+    exampleGathering: [
+      'Collected later through profile updates',
+      'Optional field for apparel suggestions',
+      'Can be added post-onboarding',
+    ],
   },
   units: {
     purpose: 'Ensure clear communication',
@@ -148,44 +146,28 @@ export const requiredInformation: Record<keyof OnboardingProfile, {
     exampleGathering: [
       'Natural discussion of distances',
       'Previous race experiences',
-      'Training log format'
-    ]
+      'Training log format',
+    ],
   },
   experience_level: {
     purpose: 'Tailor communication and training appropriately',
     importance: 'Affects coaching style and progression rate',
-    exampleGathering: [
-      'Running history discussion',
-      'Racing experience',
-      'Training knowledge'
-    ]
+    exampleGathering: ['Running history discussion', 'Racing experience', 'Training knowledge'],
   },
   race_distance: {
     purpose: 'Understand primary goal',
     importance: 'Determines training focus and structure',
-    exampleGathering: [
-      'Goal discussion',
-      'Race experience',
-      'Distance preferences'
-    ]
+    exampleGathering: ['Goal discussion', 'Race experience', 'Distance preferences'],
   },
   race_date: {
     purpose: 'Plan training periodization',
     importance: 'Critical for creating timeline and progression',
-    exampleGathering: [
-      'Goal race discussion',
-      'Season planning',
-      'Timeline preferences'
-    ]
+    exampleGathering: ['Goal race discussion', 'Season planning', 'Timeline preferences'],
   },
   goal_type: {
     purpose: 'Understand motivation and targets',
     importance: 'Shapes entire training approach',
-    exampleGathering: [
-      'Motivation discussion',
-      'Previous achievements',
-      'Future aspirations'
-    ]
+    exampleGathering: ['Motivation discussion', 'Previous achievements', 'Future aspirations'],
   },
   onboarding_completed: {
     purpose: 'Track onboarding status',
@@ -193,8 +175,8 @@ export const requiredInformation: Record<keyof OnboardingProfile, {
     exampleGathering: [
       'Automatic based on information gathered',
       'Natural conversation conclusion',
-      'Transition to training plan'
-    ]
+      'Transition to training plan',
+    ],
   },
   coach_id: {
     purpose: 'Track assigned coach',
@@ -202,9 +184,9 @@ export const requiredInformation: Record<keyof OnboardingProfile, {
     exampleGathering: [
       'User coach selection',
       'Automatic assignment from onboarding process',
-      'Stored in profile data'
-    ]
-  }
+      'Stored in profile data',
+    ],
+  },
 };
 
 // Example conversation flows that gather information naturally
@@ -215,8 +197,8 @@ export const conversationExamples = [
       'Warm welcome and introduction',
       'Open discussion about running background',
       'Natural progression to goals and aspirations',
-      'Exploration of current training and lifestyle'
-    ]
+      'Exploration of current training and lifestyle',
+    ],
   },
   {
     context: 'Goal setting',
@@ -224,8 +206,8 @@ export const conversationExamples = [
       'Discussion of past achievements',
       'Exploration of future aspirations',
       'Realistic timeline setting',
-      'Training preferences and constraints'
-    ]
+      'Training preferences and constraints',
+    ],
   },
   {
     context: 'Training history',
@@ -233,7 +215,7 @@ export const conversationExamples = [
       'Current routine discussion',
       'Past experiences and lessons',
       'Injury history and prevention',
-      'Equipment and preferences'
-    ]
-  }
-]; 
+      'Equipment and preferences',
+    ],
+  },
+];

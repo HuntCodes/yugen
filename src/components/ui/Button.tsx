@@ -1,5 +1,13 @@
 import React from 'react';
-import { TouchableOpacity, Text, ActivityIndicator, StyleProp, ViewStyle, TextStyle } from 'react-native';
+import {
+  TouchableOpacity,
+  Text,
+  ActivityIndicator,
+  StyleProp,
+  ViewStyle,
+  TextStyle,
+} from 'react-native';
+
 import { MinimalSpinner } from './MinimalSpinner';
 
 interface ButtonProps {
@@ -95,22 +103,20 @@ export function Button({
         disabled ? 'opacity-50' : 'opacity-100'
       } ${fullWidth ? 'w-full' : ''}`}
       accessibilityRole="button"
-      accessibilityState={{ disabled }}
-    >
+      accessibilityState={{ disabled }}>
       {loading ? (
-        <MinimalSpinner 
-          size={activityIndicatorSize === 'large' ? 36 : 20} 
-          color={textColor ? textColor : '#FFFFFF'} 
+        <MinimalSpinner
+          size={activityIndicatorSize === 'large' ? 36 : 20}
+          color={textColor ? textColor : '#FFFFFF'}
           thickness={2}
         />
       ) : (
         <Text
           style={textStyle}
-          className={`font-medium text-center ${getTextStyle()} ${getTextSizeStyle()}`}
-        >
+          className={`text-center font-medium ${getTextStyle()} ${getTextSizeStyle()}`}>
           {title}
         </Text>
       )}
     </TouchableOpacity>
   );
-} 
+}

@@ -29,6 +29,6 @@ export interface OnboardingResult {
 export interface ConversationResult {
   message: string;
   isComplete: boolean;
-  conversationHistory: {role: 'user' | 'coach'; content: string}[];
+  conversationHistory: { role: 'user' | 'coach'; content: string }[];
   toolCallArguments?: Partial<OnboardingProfile> | null;
-} 
+}

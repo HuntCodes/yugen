@@ -62,9 +62,9 @@ export const formatTranscript = (text: string): string => {
 export const processVoiceInput = (text: string): string => {
   // Remove fillers and hesitations
   let processed = text.replace(/uh |um |ah |er |like |you know /gi, '');
-  
+
   // Trim extra whitespace
   processed = processed.replace(/\s+/g, ' ').trim();
-  
+
   return formatTranscript(processed);
-}; 
+};

@@ -15,6 +15,7 @@ export interface TrainingSession {
   modified?: boolean;
   post_session_notes?: string;
   suggested_shoe?: string;
+  suggested_location?: string; // AI-suggested training location
   title?: string;
   description?: string;
   scheduled_date?: string;
@@ -30,7 +31,6 @@ export interface OnboardingData {
   trainingFrequency: string; // e.g., "3 days per week"
   units: 'km' | 'miles';
   nickname: string;
-  trainingPreferences?: string; // Free text for user preferences
   injury_history?: string;
   schedule_constraints?: string;
   shoe_size?: string;
@@ -46,4 +46,4 @@ export interface PlanUpdate {
   new_distance: number;
   new_time: number;
   new_date?: string;
-} 
+}

@@ -1,5 +1,5 @@
-import { coachStyles } from '../../config/coachingGuidelines';
 import { ConversationContext } from './types';
+import { coachStyles } from '../../config/coachingGuidelines';
 
 /**
  * Builds the system prompt for coach conversation
@@ -12,7 +12,7 @@ export function buildConversationPrompt(
   const coachStyle = coachStyles[coachId];
 
   // Determine if it's the initial greeting
-  const isInitialGreeting = userMessage === null || userMessage === "START_CONVERSATION";
+  const isInitialGreeting = userMessage === null || userMessage === 'START_CONVERSATION';
 
   let modeSpecificInstructions = '';
   if (isInitialGreeting) {
@@ -84,4 +84,4 @@ Pay close attention to how current_mileage is stated to infer the 'units'. For e
 CONVERSATION:
 ${formattedConversation}`;
 } 
-*/ 
+*/

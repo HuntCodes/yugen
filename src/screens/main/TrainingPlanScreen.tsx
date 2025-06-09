@@ -1,22 +1,45 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { View, ActivityIndicator, TouchableOpacity, Alert, ScrollView, LayoutChangeEvent, StyleSheet, Animated, Easing } from 'react-native';
-import { Text } from '../../components/ui/StyledText';
-import { supabase } from '../../lib/supabase';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { OnboardingData } from '../../lib/openai';
 import { useNavigation, useFocusEffect, useScrollToTop } from '@react-navigation/native';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
+import {
+  View,
+  ActivityIndicator,
+  TouchableOpacity,
+  Alert,
+  ScrollView,
+  LayoutChangeEvent,
+  StyleSheet,
+  Animated,
+  Easing,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
 import { Screen } from '../../components/ui/Screen';
-import { TrainingSession } from './training/components/types';
+import { Text } from '../../components/ui/StyledText';
+import { OnboardingData } from '../../lib/openai';
+import { supabase } from '../../lib/supabase';
 import { HeaderBar } from './training/components/HeaderBar';
-import { SessionList, SessionListProps } from './training/components/SessionList';
 import { SessionCard } from './training/components/SessionCard';
-import { UpdateSessionModal, UpdateSessionModalProps } from './training/components/UpdateSessionModal';
-import { fetchTrainingPlan, generateAndSavePlan, refreshWeeklyPlan, checkNeedsRefresh } from '../../services/plan';
-import { fetchProfile } from '../../services/profile/profileService';
+import { SessionList, SessionListProps } from './training/components/SessionList';
 import TrainingOutlookView from './training/components/TrainingOutlookView';
-import { formatDate as formatDateUtil, getDayOfWeek as getDayOfWeekUtil, getTodayYMD } from '../../lib/utils/dateUtils';
+import {
+  UpdateSessionModal,
+  UpdateSessionModalProps,
+} from './training/components/UpdateSessionModal';
+import { TrainingSession } from './training/components/types';
 import { MinimalSpinner } from '../../components/ui/MinimalSpinner';
+import {
+  formatDate as formatDateUtil,
+  getDayOfWeek as getDayOfWeekUtil,
+  getTodayYMD,
+} from '../../lib/utils/dateUtils';
 import { getSuggestedShoe } from '../../lib/utils/training/shoeRecommendations';
+import {
+  fetchTrainingPlan,
+  generateAndSavePlan,
+  refreshWeeklyPlan,
+  checkNeedsRefresh,
+} from '../../services/plan';
+import { fetchProfile } from '../../services/profile/profileService';
 
 // Add this type definition for layout storage
 type SessionLayout = { y: number; height: number };
@@ -83,7 +106,7 @@ export default function TrainingPlanScreen() {
       return date.toLocaleDateString('en-US', {
         month: 'short',
         day: 'numeric',
-        year: 'numeric'
+        year: 'numeric',
       });
     } catch (err) {
       console.error('Error formatting date:', dateString, err);
@@ -107,7 +130,10 @@ export default function TrainingPlanScreen() {
       return {
         id: session.id || `unknown-${Math.random().toString(36).substring(7)}`,
         week_number: typeof session.week_number === 'number' ? session.week_number : 1,
-        day_of_week: typeof session.day_of_week === 'number' ? session.day_of_week : new Date(session.date || Date.now()).getUTCDay() || 7,
+        day_of_week:
+          typeof session.day_of_week === 'number'
+            ? session.day_of_week
+            : new Date(session.date || Date.now()).getUTCDay() || 7,
         session_type: session.session_type || 'Workout',
         date: session.date || new Date().toISOString().split('T')[0],
         distance: typeof session.distance === 'number' ? session.distance : 0,
@@ -118,6 +144,7 @@ export default function TrainingPlanScreen() {
         post_session_notes: session.post_session_notes || '',
         modified: session.modified || false,
         user_id: session.user_id || currentUserId,
+        suggested_location: session.suggested_location || undefined,
       } as TrainingSession;
     } catch (err) {
       console.error('Error parsing session:', err, session);
@@ -132,7 +159,8 @@ export default function TrainingPlanScreen() {
         notes: 'Error loading session data',
         modified: false,
         status: 'not_completed',
-        post_session_notes: ''
+        post_session_notes: '',
+        suggested_location: undefined,
       };
     }
   };
@@ -140,7 +168,7 @@ export default function TrainingPlanScreen() {
   // Function to check if dates are outdated (from a past year)
   const checkForOutdatedDates = (sessions: TrainingSession[]) => {
     const currentYear = new Date().getFullYear();
-    const hasOutdated = sessions.some(session => {
+    const hasOutdated = sessions.some((session) => {
       try {
         const sessionDate = new Date(session.date);
         return sessionDate.getFullYear() < currentYear;
@@ -148,7 +176,7 @@ export default function TrainingPlanScreen() {
         return false;
       }
     });
-    
+
     setHasOldDates(hasOutdated);
     if (hasOutdated) {
       setShowUpdateModal(true);
@@ -160,7 +188,7 @@ export default function TrainingPlanScreen() {
   const calculateNextRefreshDate = () => {
     const today = new Date();
     const day = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
-    
+
     // If today is not Sunday, find next Sunday
     if (day !== 0) {
       const nextSunday = new Date(today);
@@ -171,7 +199,7 @@ export default function TrainingPlanScreen() {
       // If today is Sunday and it's before 7 AM, refresh is today
       // Otherwise, it's next Sunday
       const refreshToday = today.getHours() < 7;
-      
+
       if (refreshToday) {
         const todayRefresh = new Date(today);
         todayRefresh.setHours(7, 0, 0, 0);
@@ -209,24 +237,56 @@ export default function TrainingPlanScreen() {
         return;
       }
 
-      let processedSessions = planSessions.map(s => safeParseSession(s, user.id));
-      processedSessions = processedSessions.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      let processedSessions = planSessions.map((s) => safeParseSession(s, user.id));
+
+      // Sort sessions with improved time-of-day ordering
+      processedSessions = processedSessions.sort((a, b) => {
+        // First sort by date
+        const dateA = new Date(a.date).getTime();
+        const dateB = new Date(b.date).getTime();
+        if (dateA !== dateB) return dateA - dateB;
+
+        // If same date, check for time-of-day indicators
+        const hasTimeA =
+          a.session_type && (a.session_type.includes('(PM)') || a.session_type.includes('(AM)'));
+        const hasTimeB =
+          b.session_type && (b.session_type.includes('(PM)') || b.session_type.includes('(AM)'));
+        const isPMA = a.session_type && a.session_type.includes('(PM)');
+        const isPMB = b.session_type && b.session_type.includes('(PM)');
+
+        // Sessions without time indicators come first (morning implied)
+        if (!hasTimeA && hasTimeB) return -1;
+        if (hasTimeA && !hasTimeB) return 1;
+
+        // If both have time indicators, AM comes before PM
+        if (hasTimeA && hasTimeB) {
+          if (!isPMA && isPMB) return -1; // A is AM, B is PM
+          if (isPMA && !isPMB) return 1; // A is PM, B is AM
+        }
+
+        // Fallback to created_at or updated_at for stable ordering
+        const createdA = new Date((a as any).created_at || (a as any).updated_at || 0).getTime();
+        const createdB = new Date((b as any).created_at || (b as any).updated_at || 0).getTime();
+        return createdA - createdB;
+      });
 
       // Recalculate week numbers (assuming this logic is correct)
       if (processedSessions.length > 0) {
-          const firstSessionDate = new Date(processedSessions[0].date);
-          const firstSessionDay = firstSessionDate.getDay();
-          const daysToSubtract = firstSessionDay === 0 ? 6 : firstSessionDay - 1;
-          const firstWeekMonday = new Date(firstSessionDate);
-          firstWeekMonday.setDate(firstSessionDate.getDate() - daysToSubtract);
-          firstWeekMonday.setHours(0, 0, 0, 0);
+        const firstSessionDate = new Date(processedSessions[0].date);
+        const firstSessionDay = firstSessionDate.getDay();
+        const daysToSubtract = firstSessionDay === 0 ? 6 : firstSessionDay - 1;
+        const firstWeekMonday = new Date(firstSessionDate);
+        firstWeekMonday.setDate(firstSessionDate.getDate() - daysToSubtract);
+        firstWeekMonday.setHours(0, 0, 0, 0);
 
-          processedSessions = processedSessions.map(session => {
-            const sessionDate = new Date(session.date);
-            const daysDiff = Math.floor((sessionDate.getTime() - firstWeekMonday.getTime()) / (1000 * 60 * 60 * 24));
-            const weekNumber = Math.floor(daysDiff / 7) + 1;
-            return { ...session, week_number: weekNumber, day_of_week: sessionDate.getDay() || 7 }; // Ensure day_of_week is also correct
-          });
+        processedSessions = processedSessions.map((session) => {
+          const sessionDate = new Date(session.date);
+          const daysDiff = Math.floor(
+            (sessionDate.getTime() - firstWeekMonday.getTime()) / (1000 * 60 * 60 * 24)
+          );
+          const weekNumber = Math.floor(daysDiff / 7) + 1;
+          return { ...session, week_number: weekNumber, day_of_week: sessionDate.getDay() || 7 }; // Ensure day_of_week is also correct
+        });
       }
 
       setSessions(processedSessions);
@@ -234,13 +294,15 @@ export default function TrainingPlanScreen() {
       // --- Find Target Session for Scrolling ---
       const todayStr = getTodayYMD(); // Use timezone-aware date formatting with js-joda
       console.log(`[AutoScroll Debug] Today's date string (local timezone): ${todayStr}`);
-      console.log(`[AutoScroll Debug] Compare with UTC approach: ${new Date().toISOString().split('T')[0]}`);
+      console.log(
+        `[AutoScroll Debug] Compare with UTC approach: ${new Date().toISOString().split('T')[0]}`
+      );
 
       let targetSession: TrainingSession | null = null;
       let isFirst = false;
 
       // Try to find today's session
-      const todaySession = processedSessions.find(s => s.date.split('T')[0] === todayStr);
+      const todaySession = processedSessions.find((s) => s.date.split('T')[0] === todayStr);
 
       if (todaySession) {
         // console.log(`[AutoScroll Debug] Found session for today: ${todaySession.id}`);
@@ -248,10 +310,10 @@ export default function TrainingPlanScreen() {
       } else {
         // console.log("[AutoScroll Debug] No session found for today. Finding next upcoming session.");
         // Find the first session on or after today
-        const nextSession = processedSessions.find(s => s.date.split('T')[0] >= todayStr);
+        const nextSession = processedSessions.find((s) => s.date.split('T')[0] >= todayStr);
         if (nextSession) {
           // console.log(`[AutoScroll Debug] Found next upcoming session: ${nextSession.id} on ${nextSession.date}`);
-           targetSession = nextSession;
+          targetSession = nextSession;
         } else {
           // console.log("[AutoScroll Debug] No upcoming sessions found.");
         }
@@ -259,26 +321,25 @@ export default function TrainingPlanScreen() {
 
       // Determine if the target session is the first of its week
       if (targetSession) {
-          setTargetScrollSessionId(targetSession.id);
-          const weekNumber = targetSession.week_number;
-          // Find the first session explicitly listed for that week number
-          const firstSessionOfTargetWeek = processedSessions
-              .filter(s => s.week_number === weekNumber)
-              .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0];
+        setTargetScrollSessionId(targetSession.id);
+        const weekNumber = targetSession.week_number;
+        // Find the first session explicitly listed for that week number
+        const firstSessionOfTargetWeek = processedSessions
+          .filter((s) => s.week_number === weekNumber)
+          .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0];
 
-          if (firstSessionOfTargetWeek && firstSessionOfTargetWeek.id === targetSession.id) {
-              // console.log(`[AutoScroll Debug] Target session ${targetSession.id} is the first of week ${weekNumber}.`);
-              isFirst = true;
-          } else {
-              // console.log(`[AutoScroll Debug] Target session ${targetSession.id} is NOT the first of its week.`);
-          }
-          setIsTargetFirstOfWeek(isFirst);
-          setScrollToTargetNeeded(true);
+        if (firstSessionOfTargetWeek && firstSessionOfTargetWeek.id === targetSession.id) {
+          // console.log(`[AutoScroll Debug] Target session ${targetSession.id} is the first of week ${weekNumber}.`);
+          isFirst = true;
+        } else {
+          // console.log(`[AutoScroll Debug] Target session ${targetSession.id} is NOT the first of its week.`);
+        }
+        setIsTargetFirstOfWeek(isFirst);
+        setScrollToTargetNeeded(true);
       }
       // --- End Find Target Session ---
 
       checkForOutdatedDates(processedSessions);
-
     } catch (err: any) {
       console.error('Error fetching training plan:', err);
       setError(err.message);
@@ -305,8 +366,8 @@ export default function TrainingPlanScreen() {
         // Layout is available, scroll now
         let scrollY = layout.y - 10; // Base position (slightly above the card)
         if (isTargetFirstOfWeek) {
-            // console.log("[AutoScroll Debug] Adjusting scroll for week banner.");
-            scrollY -= 40; // Subtract extra offset for week banner (adjust value as needed)
+          // console.log("[AutoScroll Debug] Adjusting scroll for week banner.");
+          scrollY -= 40; // Subtract extra offset for week banner (adjust value as needed)
         }
         // console.log(`[AutoScroll Debug] Layout found for ${targetScrollSessionId} on attempt ${attemptCount + 1}. Scrolling to y=${scrollY}`, layout);
         scrollViewRef.current?.scrollTo({ y: Math.max(0, scrollY), animated: true }); // Ensure y isn't negative
@@ -326,11 +387,12 @@ export default function TrainingPlanScreen() {
     tryScroll(); // Check immediately
 
     if (scrollToTargetNeeded && attemptCount < maxAttempts) {
-       intervalId = setInterval(tryScroll, 150); // Check every 150ms
+      intervalId = setInterval(tryScroll, 150); // Check every 150ms
     }
 
-    return () => { if (intervalId) clearInterval(intervalId); };
-
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
   }, [targetScrollSessionId, scrollToTargetNeeded, isTargetFirstOfWeek]); // Added isTargetFirstOfWeek dependency
 
   useFocusEffect(
@@ -353,7 +415,9 @@ export default function TrainingPlanScreen() {
       let currentDaySessionY: number | null = null;
 
       // Sort sessions by date to ensure correct identification of current/upcoming
-      const sortedSessions = [...sessions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      const sortedSessions = [...sessions].sort(
+        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+      );
 
       for (const session of sortedSessions) {
         if (session.date === todayISO && sessionLayoutsRef.current[session.id]) {
@@ -362,7 +426,8 @@ export default function TrainingPlanScreen() {
           break; // Prioritize current day
         }
         if (session.date > todayISO && sessionLayoutsRef.current[session.id]) {
-          if (firstUpcomingSessionY === null) { // Find the first upcoming session
+          if (firstUpcomingSessionY === null) {
+            // Find the first upcoming session
             firstUpcomingSessionY = sessionLayoutsRef.current[session.id].y;
             if (!targetSessionId) targetSessionId = session.id; // Set if current day not found
           }
@@ -373,10 +438,12 @@ export default function TrainingPlanScreen() {
 
       if (targetY !== null) {
         // Check if the target session is already visible to prevent unnecessary scrolls
-        // This requires knowing the scroll view's current scroll position and height, 
+        // This requires knowing the scroll view's current scroll position and height,
         // which is more complex and might not be strictly necessary for a basic auto-scroll.
         // For simplicity, we'll scroll if a target is found.
-        console.log(`[TrainingPlanScreen] Auto-scrolling to session ${targetSessionId} at y: ${targetY}`);
+        console.log(
+          `[TrainingPlanScreen] Auto-scrolling to session ${targetSessionId} at y: ${targetY}`
+        );
         scrollViewRef.current.scrollTo({ y: targetY, animated: true });
       }
     }
@@ -388,8 +455,8 @@ export default function TrainingPlanScreen() {
   };
 
   const handleSessionUpdate = async (sessionId: string, updates: Partial<TrainingSession>) => {
-    setSessions(prevSessions =>
-      prevSessions.map(s => (s.id === sessionId ? { ...s, ...updates } : s))
+    setSessions((prevSessions) =>
+      prevSessions.map((s) => (s.id === sessionId ? { ...s, ...updates } : s))
     );
     try {
       const { error: updateError } = await supabase
@@ -400,13 +467,13 @@ export default function TrainingPlanScreen() {
     } catch (e: any) {
       console.error('Failed to update session:', e);
       Alert.alert('Error', 'Failed to update session. Please try again.');
-      await loadData(); 
+      await loadData();
     }
   };
 
   const handleGenerateFallback = async () => {
     if (!userId) {
-      Alert.alert("Error", "User ID not found.");
+      Alert.alert('Error', 'User ID not found.');
       return;
     }
     setLoading(true);
@@ -427,18 +494,22 @@ export default function TrainingPlanScreen() {
       };
       await generateAndSavePlan(userId, fallbackOnboardingData);
       await loadData();
-      Alert.alert("Fallback Plan Generated", "A sample training plan has been generated for you.");
+      Alert.alert('Fallback Plan Generated', 'A sample training plan has been generated for you.');
     } catch (err: any) {
       setError('Failed to generate fallback plan: ' + err.message);
-      Alert.alert("Error", "Could not generate fallback plan. " + err.message);
+      Alert.alert('Error', 'Could not generate fallback plan. ' + err.message);
     } finally {
       setLoading(false);
     }
   };
-  
+
   let content;
   if (loading && !retrying) {
-    content = <View style={styles.centeredMessageContainer}><MinimalSpinner size={48} thickness={3} /></View>;
+    content = (
+      <View style={styles.centeredMessageContainer}>
+        <MinimalSpinner size={48} thickness={3} />
+      </View>
+    );
   } else if (error && sessions.length === 0) {
     content = (
       <View style={styles.centeredMessageContainer}>
@@ -470,8 +541,7 @@ export default function TrainingPlanScreen() {
             formatDate={formatDateUtil}
             getDayOfWeek={getDayOfWeekUtil}
             sessionLayoutsRef={sessionLayoutsRef}
-            scrollViewRef={scrollViewRef}
-          >
+            scrollViewRef={scrollViewRef}>
             {(session, formattedDate, dayOfWeek, isModified) => (
               <SessionCard
                 session={session}
@@ -496,7 +566,7 @@ export default function TrainingPlanScreen() {
       Animated.spring(slideAnim, {
         toValue: targetValue,
         stiffness: 150, // Adjust for springiness
-        damping: 20,    // Adjust for springiness
+        damping: 20, // Adjust for springiness
         useNativeDriver: true, // translateX is supported
       }).start();
     }
@@ -506,13 +576,12 @@ export default function TrainingPlanScreen() {
     <Screen style={{ backgroundColor: '#FBF7F6' }}>
       <View style={styles.flexOne}>
         <CompactHeaderBar title="Training Plan" />
-        <View 
+        <View
           style={styles.tabBarContainer}
           onLayout={(event) => {
             const { width } = event.nativeEvent.layout;
             setTabContainerWidth(width);
-          }}
-        >
+          }}>
           {tabContainerWidth > 0 && (
             <Animated.View
               style={[
@@ -524,17 +593,27 @@ export default function TrainingPlanScreen() {
               ]}
             />
           )}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.tabButton} // Simplified style
-            onPress={() => setActiveTab('Schedule')}
-          >
-            <Text style={[styles.tabText, activeTab === 'Schedule' ? styles.activeTabText : styles.inactiveTabText]}>Schedule</Text>
+            onPress={() => setActiveTab('Schedule')}>
+            <Text
+              style={[
+                styles.tabText,
+                activeTab === 'Schedule' ? styles.activeTabText : styles.inactiveTabText,
+              ]}>
+              Schedule
+            </Text>
           </TouchableOpacity>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.tabButton} // Simplified style
-            onPress={() => setActiveTab('Outlook')}
-          >
-            <Text style={[styles.tabText, activeTab === 'Outlook' ? styles.activeTabText : styles.inactiveTabText]}>Outlook</Text>
+            onPress={() => setActiveTab('Outlook')}>
+            <Text
+              style={[
+                styles.tabText,
+                activeTab === 'Outlook' ? styles.activeTabText : styles.inactiveTabText,
+              ]}>
+              Outlook
+            </Text>
           </TouchableOpacity>
         </View>
         {content}
@@ -556,7 +635,7 @@ const styles = StyleSheet.create({
     position: 'relative', // For absolute positioning of the slider
     height: 44, // Define a fixed height for the container, e.g., py-1.5 + text. Adjust as needed.
   },
-  activeTabSlider: { 
+  activeTabSlider: {
     position: 'absolute',
     top: 4, // Corresponds to parent padding
     bottom: 4, // Corresponds to parent padding
@@ -569,17 +648,18 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
     shadowRadius: 1.5, // Slightly smaller shadow
-    elevation: 2,      // Slightly smaller elevation
+    elevation: 2, // Slightly smaller elevation
   },
   tabButton: {
-    flex: 1,             
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     // paddingVertical: 10, // Padding is now on the container and slider implicitly defines height
     borderRadius: 9999, // For touch ripple if any
     zIndex: 1, // Ensure buttons are clickable over the slider background (if it had no text)
   },
-  tabText: { // General style for tab text, color will be overridden
+  tabText: {
+    // General style for tab text, color will be overridden
     fontSize: 16,
     textAlign: 'center',
   },
@@ -599,18 +679,18 @@ const styles = StyleSheet.create({
   },
   errorText: {
     textAlign: 'center',
-    color: '#EF4444', 
+    color: '#EF4444',
     fontSize: 16,
     marginBottom: 16,
   },
   infoText: {
     textAlign: 'center',
-    color: '#6B7280', 
+    color: '#6B7280',
     fontSize: 16,
     marginBottom: 16,
   },
   button: {
-    backgroundColor: '#3B82F6', 
+    backgroundColor: '#3B82F6',
     paddingVertical: 10,
     paddingHorizontal: 20,
     borderRadius: 8,
@@ -620,4 +700,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-}); 
+});

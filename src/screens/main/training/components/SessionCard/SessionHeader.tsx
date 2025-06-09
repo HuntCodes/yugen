@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
+
 import { Text } from '../../../../../components/ui/StyledText';
 
 interface SessionHeaderProps {
@@ -18,7 +19,7 @@ export const SessionHeader: React.FC<SessionHeaderProps> = ({
   sessionType,
   isModified,
   typeColor,
-  formattedDate
+  formattedDate,
 }) => {
   return (
     <View style={styles.header}>
@@ -57,5 +58,5 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '600',
-  }
-}); 
+  },
+});

@@ -4,7 +4,7 @@ import {
   createChatSummary,
   saveChatSummary,
   getRelevantChatSummaries,
-  identifyChatContext
+  identifyChatContext,
 } from '../../services/summary/chatSummaryService';
 
 /**
@@ -19,8 +19,29 @@ export function useMessageStorage() {
     userId: string,
     onMessageResponse: (message: ChatMessage) => void
   ): Promise<void> => {
-    await saveMessage(message, userId);
-    onMessageResponse(message);
+    console.log('💾 [saveAndNotify] FUNCTION CALLED:', {
+      sender: message.sender,
+      messageLength: message.message?.length || 0,
+      messagePreview: message.message?.substring(0, 100) + (message.message?.length > 100 ? '...' : ''),
+      userId,
+      hasCallback: !!onMessageResponse
+    });
+    
+    try {
+      await saveMessage(message, userId);
+      console.log('💾 [saveAndNotify] MESSAGE SAVED TO DB - CALLING CALLBACK');
+      onMessageResponse(message);
+      console.log('💾 [saveAndNotify] CALLBACK EXECUTED SUCCESSFULLY');
+    } catch (error) {
+      console.error('💾 [saveAndNotify] ERROR saving message or calling callback:', error);
+      // Still call the callback even if save fails to ensure UI updates
+      try {
+        onMessageResponse(message);
+        console.log('💾 [saveAndNotify] CALLBACK EXECUTED (despite save error)');
+      } catch (callbackError) {
+        console.error('💾 [saveAndNotify] CALLBACK EXECUTION FAILED:', callbackError);
+      }
+    }
   };
 
   /**
@@ -33,20 +54,17 @@ export function useMessageStorage() {
   ): Promise<void> => {
     const errorResponse: ChatMessage = {
       sender: 'coach',
-      message: errorText
+      message: errorText,
+      timestamp: Date.now(),
     };
-    
+
     await saveAndNotify(errorResponse, userId, onMessageResponse);
   };
 
   /**
    * Get relevant chat summaries for the current context
    */
-  const getChatContext = async (
-    userId: string,
-    workoutId?: string,
-    topic?: string
-  ) => {
+  const getChatContext = async (userId: string, workoutId?: string, topic?: string) => {
     return getRelevantChatSummaries(userId, workoutId, topic);
   };
 
@@ -63,13 +81,10 @@ export function useMessageStorage() {
       if (messages.length < 10) {
         return false; // Not enough messages to summarize
       }
-      
+
       // Identify chat context
-      const { chatType, topic: identifiedTopic } = await identifyChatContext(
-        messages,
-        workoutId
-      );
-      
+      const { chatType, topic: identifiedTopic } = await identifyChatContext(messages, workoutId);
+
       // Generate summary
       const summary = await createChatSummary(
         messages,
@@ -77,11 +92,11 @@ export function useMessageStorage() {
         identifiedTopic || topic,
         workoutId
       );
-      
+
       if (!summary) {
         return false;
       }
-      
+
       // Save summary to Supabase
       await saveChatSummary({
         user_id: userId,
@@ -91,10 +106,10 @@ export function useMessageStorage() {
         summary,
         time_frame: {
           start: new Date(Date.now() - SESSION_TIME_WINDOW),
-          end: new Date()
-        }
+          end: new Date(),
+        },
       });
-      
+
       return true;
     } catch (error) {
       console.error('Error summarizing chat:', error);
@@ -106,6 +121,6 @@ export function useMessageStorage() {
     saveAndNotify,
     saveErrorMessage,
     getChatContext,
-    summarizeAndSaveChat
+    summarizeAndSaveChat,
   };
-} 
+}

@@ -1,4 +1,5 @@
 import Constants from 'expo-constants';
+
 import { PlanUpdate } from '../chat/types';
 
 export interface ParsedAdjustment {
@@ -12,46 +13,82 @@ export function useAdjustmentParser() {
    */
   const hasPlanFeedback = (message: string): boolean => {
     const messageLower = message.toLowerCase();
-    
+
     // Case 1: Explicit plan adjustment request with reason
     const adjustmentKeywords = [
-      'adjust plan', 'adjust the plan', 'adjust my plan',
-      'change plan', 'change the plan', 'change my plan', 
-      'modify plan', 'modify the plan', 'modify my plan',
-      'update plan', 'update the plan', 'update my plan'
+      'adjust plan',
+      'adjust the plan',
+      'adjust my plan',
+      'change plan',
+      'change the plan',
+      'change my plan',
+      'modify plan',
+      'modify the plan',
+      'modify my plan',
+      'update plan',
+      'update the plan',
+      'update my plan',
     ];
-    
+
     const reasonKeywords = [
-      'sore', 'pain', 'injured', 'injury', 'tired',
-      'difficult', 'hard', 'easier', 'too much'
+      'sore',
+      'pain',
+      'injured',
+      'injury',
+      'tired',
+      'difficult',
+      'hard',
+      'easier',
+      'too much',
     ];
-    
-    const hasExplicitRequest = adjustmentKeywords.some(term => messageLower.includes(term)) &&
-                               reasonKeywords.some(term => messageLower.includes(term));
-    
+
+    const hasExplicitRequest =
+      adjustmentKeywords.some((term) => messageLower.includes(term)) &&
+      reasonKeywords.some((term) => messageLower.includes(term));
+
     // Case 2: Reference to specific workout
     const workoutTypes = [
-      'run', 'running', 'workout', 'session', 
-      'tempo', 'interval', 'long run', 'easy run', 'recovery'
+      'run',
+      'running',
+      'workout',
+      'session',
+      'tempo',
+      'interval',
+      'long run',
+      'easy run',
+      'recovery',
     ];
-    
+
     const changeVerbs = [
-      'change', 'modify', 'adjust', 'update', 'reduce', 
-      'make shorter', 'make easier', 'skip'
+      'change',
+      'modify',
+      'adjust',
+      'update',
+      'reduce',
+      'make shorter',
+      'make easier',
+      'skip',
     ];
-    
-    const hasWorkoutReference = workoutTypes.some(workout => messageLower.includes(workout)) &&
-                                changeVerbs.some(verb => messageLower.includes(verb));
-    
+
+    const hasWorkoutReference =
+      workoutTypes.some((workout) => messageLower.includes(workout)) &&
+      changeVerbs.some((verb) => messageLower.includes(verb));
+
     // Case 3: Simple confirmations or change commands following a discussion about adjustments
     const simpleChangeCommands = [
-      'change it', 'modify it', 'adjust it', 'update it',
-      'make it shorter', 'make it easier', 'lets change', 
-      'yes change', 'please change'
+      'change it',
+      'modify it',
+      'adjust it',
+      'update it',
+      'make it shorter',
+      'make it easier',
+      'lets change',
+      'yes change',
+      'please change',
     ];
-    
-    const hasSimpleCommand = simpleChangeCommands.some(cmd => messageLower.includes(cmd));
-    
+
+    const hasSimpleCommand = simpleChangeCommands.some((cmd) => messageLower.includes(cmd));
+
     // Case 4: Date change requests
     const dateChangePatterns = [
       /move (\w+) to (\w+)/i,
@@ -59,25 +96,26 @@ export function useAdjustmentParser() {
       /change (\w+) to (\w+)/i,
       /reschedule (\w+) to (\w+)/i,
       /can('t| not) do (\w+) on (\w+)/i,
-      /have .+ on (\w+).* can we change/i
+      /have .+ on (\w+).* can we change/i,
     ];
-    
+
     const monthNamePatterns = [
       /january|february|march|april|may|june|july|august|september|october|november|december/i,
-      /jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec/i
+      /jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec/i,
     ];
-    
+
     const dayReferencePatterns = [
-      /today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday/i
+      /today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday/i,
     ];
-    
+
     // Check for date change request patterns
-    const hasDateChangeRequest = dateChangePatterns.some(pattern => pattern.test(messageLower)) ||
-                                (monthNamePatterns.some(pattern => pattern.test(messageLower)) && 
-                                 messageLower.includes('move')) ||
-                                (dayReferencePatterns.some(pattern => pattern.test(messageLower)) && 
-                                 (messageLower.includes('move') || messageLower.includes('change')));
-    
+    const hasDateChangeRequest =
+      dateChangePatterns.some((pattern) => pattern.test(messageLower)) ||
+      (monthNamePatterns.some((pattern) => pattern.test(messageLower)) &&
+        messageLower.includes('move')) ||
+      (dayReferencePatterns.some((pattern) => pattern.test(messageLower)) &&
+        (messageLower.includes('move') || messageLower.includes('change')));
+
     return hasExplicitRequest || hasWorkoutReference || hasSimpleCommand || hasDateChangeRequest;
   };
 
@@ -87,12 +125,23 @@ export function useAdjustmentParser() {
   const isConfirmingPlanUpdate = (message: string): boolean => {
     const messageLower = message.toLowerCase().trim();
     const confirmTerms = [
-      'yes', 'yeah', 'yep', 'yup', 'sure', 'ok', 'okay', 
-      'confirm', 'approved', 'sounds good', 'do it', 
-      'go ahead', 'make the change', 'update it'
+      'yes',
+      'yeah',
+      'yep',
+      'yup',
+      'sure',
+      'ok',
+      'okay',
+      'confirm',
+      'approved',
+      'sounds good',
+      'do it',
+      'go ahead',
+      'make the change',
+      'update it',
     ];
-    
-    return confirmTerms.some(term => messageLower.includes(term) || messageLower === term);
+
+    return confirmTerms.some((term) => messageLower.includes(term) || messageLower === term);
   };
 
   /**
@@ -101,12 +150,21 @@ export function useAdjustmentParser() {
   const isRejectingPlanUpdate = (message: string): boolean => {
     const messageLower = message.toLowerCase().trim();
     const rejectTerms = [
-      'no', 'nope', 'don\'t', 'dont', 'cancel', 'stop', 
-      'reject', 'negative', 'hold off', 'wait',
-      'don\'t change', 'dont change'
+      'no',
+      'nope',
+      "don't",
+      'dont',
+      'cancel',
+      'stop',
+      'reject',
+      'negative',
+      'hold off',
+      'wait',
+      "don't change",
+      'dont change',
     ];
-    
-    return rejectTerms.some(term => messageLower.includes(term) || messageLower === term);
+
+    return rejectTerms.some((term) => messageLower.includes(term) || messageLower === term);
   };
 
   /**
@@ -116,18 +174,18 @@ export function useAdjustmentParser() {
     if (isConfirmingPlanUpdate(message)) {
       return { type: 'confirm' };
     }
-    
+
     if (isRejectingPlanUpdate(message)) {
       return { type: 'reject' };
     }
-    
+
     if (hasPlanFeedback(message)) {
-      return { 
+      return {
         type: 'adjust',
-        details: message 
+        details: message,
       };
     }
-    
+
     return { type: 'none' };
   };
 
@@ -141,11 +199,12 @@ export function useAdjustmentParser() {
   ): Promise<PlanUpdate | null> => {
     try {
       // Get API key using all available methods for consistency
-      const apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY ||
-                     Constants.expoConfig?.extra?.openaiApiKey ||
-                     Constants.expoConfig?.extra?.OPENAI_API_KEY ||
-                     (Constants.manifest as any)?.extra?.OPENAI_API_KEY;
-      
+      const apiKey =
+        process.env.EXPO_PUBLIC_OPENAI_API_KEY ||
+        Constants.expoConfig?.extra?.openaiApiKey ||
+        Constants.expoConfig?.extra?.OPENAI_API_KEY ||
+        (Constants.manifest as any)?.extra?.OPENAI_API_KEY;
+
       if (!apiKey) {
         console.error('OpenAI API key is missing.');
         return null;
@@ -153,18 +212,20 @@ export function useAdjustmentParser() {
 
       // Format the current training plan for AI context
       let trainingPlanText = '';
-      
+
       if (trainingPlan && trainingPlan.length > 0) {
         // Sort by date
-        const sortedPlan = [...trainingPlan].sort((a, b) => 
-          new Date(a.date).getTime() - new Date(b.date).getTime()
+        const sortedPlan = [...trainingPlan].sort(
+          (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
         );
-        
+
         // Format to be more readable for AI
-        trainingPlanText = sortedPlan.map(workout => {
-          const date = new Date(workout.date);
-          return `Week ${workout.week_number}, ${date.toLocaleDateString('en-US', {weekday: 'long', month: 'short', day: 'numeric'})}: ${workout.session_type} - ${workout.distance}km, ${workout.time} minutes, Notes: ${workout.notes}`;
-        }).join('\n');
+        trainingPlanText = sortedPlan
+          .map((workout) => {
+            const date = new Date(workout.date);
+            return `Week ${workout.week_number}, ${date.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}: ${workout.session_type} - ${workout.distance}km, ${workout.time} minutes, Notes: ${workout.notes}`;
+          })
+          .join('\n');
       } else {
         return null; // No plan to adjust
       }
@@ -204,7 +265,7 @@ Format your response as JSON with the following fields:
           model: 'gpt-3.5-turbo',
           messages: [
             { role: 'system', content: systemPrompt },
-            { role: 'user', content: userMessage }
+            { role: 'user', content: userMessage },
           ],
           temperature: 0.7,
         }),
@@ -218,9 +279,9 @@ Format your response as JSON with the following fields:
 
       const data = await response.json();
       const aiResponse = data.choices[0].message.content;
-      
+
       console.log('AI suggestion for plan adjustment:', aiResponse);
-      
+
       return parseAIResponse(aiResponse);
     } catch (error) {
       console.error('Error in generatePlanAdjustment:', error);
@@ -239,17 +300,22 @@ Format your response as JSON with the following fields:
         console.error('Could not extract JSON from AI response');
         return null;
       }
-      
+
       const parsedResponse = JSON.parse(jsonMatch[0]);
-      
+
       // Validate the response has the required fields
-      if (!parsedResponse.week || !parsedResponse.date || !parsedResponse.session_type || 
-          !parsedResponse.new_notes || parsedResponse.new_distance === undefined || 
-          parsedResponse.new_time === undefined) {
+      if (
+        !parsedResponse.week ||
+        !parsedResponse.date ||
+        !parsedResponse.session_type ||
+        !parsedResponse.new_notes ||
+        parsedResponse.new_distance === undefined ||
+        parsedResponse.new_time === undefined
+      ) {
         console.error('AI response is missing required fields', parsedResponse);
         return null;
       }
-      
+
       return parsedResponse as PlanUpdate;
     } catch (parseError) {
       console.error('Error parsing AI response:', parseError);
@@ -263,13 +329,13 @@ Format your response as JSON with the following fields:
   const generateConfirmationMessage = (update: PlanUpdate): string => {
     // Format date for display
     const date = new Date(update.date);
-    const formattedDate = date.toLocaleDateString('en-US', { 
-      weekday: 'long', 
-      month: 'long', 
+    const formattedDate = date.toLocaleDateString('en-US', {
+      weekday: 'long',
+      month: 'long',
       day: 'numeric',
-      year: 'numeric'
+      year: 'numeric',
     });
-    
+
     // If this is a date change, create a different message
     if (update.new_date && update.new_date !== update.date) {
       const newDate = new Date(update.new_date);
@@ -277,9 +343,9 @@ Format your response as JSON with the following fields:
         weekday: 'long',
         month: 'long',
         day: 'numeric',
-        year: 'numeric'
+        year: 'numeric',
       });
-      
+
       return `I've moved your ${update.session_type} workout from ${formattedDate} to ${formattedNewDate}.
       
 Here's the updated workout:
@@ -289,7 +355,7 @@ Here's the updated workout:
 
 This change has been saved to your training plan. Let me know if you need any other adjustments.`;
     }
-    
+
     // Standard message for non-date changes
     return `I've adjusted your ${update.session_type} workout (from Week ${update.week}) to be more manageable. 
     
@@ -308,6 +374,6 @@ This change has been saved to your training plan. Let me know how it feels after
     parseAdjustmentMessage,
     generatePlanAdjustment,
     parseAIResponse,
-    generateConfirmationMessage
+    generateConfirmationMessage,
   };
-} 
+}

@@ -12,15 +12,15 @@ interface SegmentedControlProps {
   activeTextClassName?: string;
 }
 
-export function SegmentedControl({ 
-  segments, 
-  selectedIndex, 
-  onChange, 
+export function SegmentedControl({
+  segments,
+  selectedIndex,
+  onChange,
   containerClassName = '',
   segmentClassName = '',
   activeSegmentClassName = '',
   textClassName = '',
-  activeTextClassName = ''
+  activeTextClassName = '',
 }: SegmentedControlProps) {
   return (
     <View className={`flex-row ${containerClassName}`}>
@@ -28,14 +28,14 @@ export function SegmentedControl({
         <TouchableOpacity
           key={index}
           onPress={() => onChange(index)}
-          className={`flex-1 items-center justify-center py-2 px-4 ${segmentClassName} ${index === selectedIndex ? activeSegmentClassName : ''}`}
-          activeOpacity={0.7}
-        >
-          <Text className={`${textClassName} ${index === selectedIndex ? activeTextClassName : ''}`}>
+          className={`flex-1 items-center justify-center px-4 py-2 ${segmentClassName} ${index === selectedIndex ? activeSegmentClassName : ''}`}
+          activeOpacity={0.7}>
+          <Text
+            className={`${textClassName} ${index === selectedIndex ? activeTextClassName : ''}`}>
             {segment}
           </Text>
         </TouchableOpacity>
       ))}
     </View>
   );
-} 
+}

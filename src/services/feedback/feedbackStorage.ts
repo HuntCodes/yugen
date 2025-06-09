@@ -37,12 +37,12 @@ export async function getWeekChatMessages(
       .gte('timestamp', startDate)
       .lte('timestamp', endDate)
       .order('timestamp', { ascending: true });
-      
+
     if (error) {
       console.error('Error fetching chat messages:', error);
       return [];
     }
-    
+
     return data || [];
   } catch (error) {
     console.error('Error in getWeekChatMessages:', error);
@@ -72,12 +72,12 @@ export async function getWeekWorkoutNotes(
       .lte('date', endDate)
       .not('post_session_notes', 'is', null)
       .order('date', { ascending: true });
-      
+
     if (error) {
       console.error('Error fetching workout notes:', error);
       return [];
     }
-    
+
     return data || [];
   } catch (error) {
     console.error('Error in getWeekWorkoutNotes:', error);
@@ -106,12 +106,12 @@ export async function getWeekSkippedWorkouts(
       .gte('date', startDate)
       .lte('date', endDate)
       .order('date', { ascending: true });
-      
+
     if (error) {
       console.error('Error fetching skipped workouts:', error);
       return [];
     }
-    
+
     return data || [];
   } catch (error) {
     console.error('Error in getWeekSkippedWorkouts:', error);
@@ -133,19 +133,17 @@ export async function storeTrainingFeedback(feedback: TrainingFeedback): Promise
       feedback_summary: feedback.feedback_summary,
       raw_data: JSON.stringify(feedback.raw_data),
       created_at: feedback.created_at || new Date().toISOString(),
-      updated_at: feedback.updated_at || new Date().toISOString()
+      updated_at: feedback.updated_at || new Date().toISOString(),
     };
-    
+
     // Insert into Supabase
-    const { error } = await supabase
-      .from('user_training_feedback')
-      .insert(storageData);
-      
+    const { error } = await supabase.from('user_training_feedback').insert(storageData);
+
     if (error) {
       console.error('Error storing training feedback:', error);
       return false;
     }
-    
+
     return true;
   } catch (error) {
     console.error('Error in storeTrainingFeedback:', error);
@@ -164,28 +162,33 @@ export async function getLatestTrainingFeedback(userId: string): Promise<Trainin
       .eq('user_id', userId)
       .order('week_start_date', { ascending: false })
       .limit(1);
-      
+
     if (error) {
       console.error('Error fetching training feedback:', error);
       return null;
     }
-    
+
     if (!data || data.length === 0) {
       return null;
     }
-    
+
     // Format the data from the database
     const feedback = data[0];
     return {
       id: feedback.id,
       user_id: feedback.user_id,
       week_start_date: feedback.week_start_date,
-      prefers: typeof feedback.prefers === 'string' ? JSON.parse(feedback.prefers) : feedback.prefers,
-      struggling_with: typeof feedback.struggling_with === 'string' ? JSON.parse(feedback.struggling_with) : feedback.struggling_with,
+      prefers:
+        typeof feedback.prefers === 'string' ? JSON.parse(feedback.prefers) : feedback.prefers,
+      struggling_with:
+        typeof feedback.struggling_with === 'string'
+          ? JSON.parse(feedback.struggling_with)
+          : feedback.struggling_with,
       feedback_summary: feedback.feedback_summary,
-      raw_data: typeof feedback.raw_data === 'string' ? JSON.parse(feedback.raw_data) : feedback.raw_data,
+      raw_data:
+        typeof feedback.raw_data === 'string' ? JSON.parse(feedback.raw_data) : feedback.raw_data,
       created_at: feedback.created_at,
-      updated_at: feedback.updated_at
+      updated_at: feedback.updated_at,
     };
   } catch (error) {
     console.error('Error in getLatestTrainingFeedback:', error);
@@ -196,20 +199,18 @@ export async function getLatestTrainingFeedback(userId: string): Promise<Trainin
 /**
  * Get all users for feedback processing
  */
-export async function getAllUsers(): Promise<{id: string}[]> {
+export async function getAllUsers(): Promise<{ id: string }[]> {
   try {
-    const { data, error } = await supabase
-      .from('user_profiles')
-      .select('id');
-      
+    const { data, error } = await supabase.from('user_profiles').select('id');
+
     if (error) {
       console.error('Error fetching users for feedback processing:', error);
       return [];
     }
-    
+
     return data || [];
   } catch (error) {
     console.error('Error in getAllUsers:', error);
     return [];
   }
-} 
+}
