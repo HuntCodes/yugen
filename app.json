@@ -1,9 +1,9 @@
 {
   "expo": {
-    "name": "Yugen",
-    "slug": "yugen",
-    "version": "1.0.1",
-    "scheme": "yugen",
+    "name": "OAC",
+    "slug": "OAC",
+    "version": "1.0.3",
+    "scheme": "OAC",
     "web": {
       "bundler": "metro",
       "output": "static",
