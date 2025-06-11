@@ -73,6 +73,9 @@ const DEFAULT_COACH: Coach = {
   image: 'craig.jpg',
 };
 
+// Debounce window for re-checking whether a new weekly plan is needed
+const PLAN_CHECK_DEBOUNCE_MS = 15000; // 15 seconds
+
 export function HomeScreen() {
   const navigation = useNavigation<BottomTabNavigationProp<TabParamList>>();
   const { session } = useAuth();
@@ -268,7 +271,7 @@ export function HomeScreen() {
     // Debounce: if already checked recently, and no update is flagged or error shown, skip.
     if (
       lastPlanCheckTimestamp !== null &&
-      now - lastPlanCheckTimestamp < 60000 &&
+      now - lastPlanCheckTimestamp < PLAN_CHECK_DEBOUNCE_MS &&
       !planUpdateStatus.needsUpdate &&
       !(planUpdateStatus.message && planUpdateStatus.message.toLowerCase().includes('error'))
     ) {
