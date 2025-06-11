@@ -830,6 +830,16 @@ export function HomeScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#FBF7F6' }}>
+      {/* Loading overlay when generating a new weekly plan */}
+      {planUpdateStatus.isLoading && (
+        <View style={styles.planOverlay} pointerEvents="none">
+          <MinimalSpinner size={48} thickness={3} />
+          <Text className="mt-4 text-lg text-center text-gray-700">
+            {planUpdateStatus.message || 'Generating your new training plan...'}
+          </Text>
+        </View>
+      )}
+
       <ScrollView ref={scrollRef} contentContainerStyle={{ paddingBottom: 20 }}>
         {/* Header Section */}
         <View style={{ marginBottom: 16, marginTop: 16 }}>
@@ -923,13 +933,7 @@ export function HomeScreen() {
           )}
         </View>
 
-        {/* Plan Update UI */}
-        {planUpdateStatus.isLoading && (
-          <View style={styles.planUpdateContainer}>
-            <MinimalSpinner size={24} color="#BDBDBD" thickness={2} />
-            <Text style={styles.planUpdateText}>{planUpdateStatus.message}</Text>
-          </View>
-        )}
+        {/* Plan Update UI - retain non-loading messages */}
         {!planUpdateStatus.isLoading &&
           planUpdateStatus.message &&
           !planUpdateStatus.needsUpdate && (
@@ -1059,5 +1063,16 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: 'bold',
     fontSize: 14,
+  },
+  planOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255,255,255,0.8)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
   },
 });
