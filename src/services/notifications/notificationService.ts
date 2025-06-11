@@ -205,8 +205,13 @@ export const generateCoachMessage = async (
     }
   }
   
-  // Get weather message
-  const weatherMessage = await getWeatherMessage(latitude, longitude);
+  // Get weather message (skip run-centric language on rest days)
+  let weatherMessage = await getWeatherMessage(latitude, longitude);
+  const isRestDay = workout && (workout.sessionType || workout.session_type || '').toLowerCase().includes('rest');
+  if (isRestDay) {
+    // Replace enthusiastic run prompt with a rest-friendly note
+    weatherMessage = weatherMessage.replace(/perfect day for a run/i, 'a good day to recover');
+  }
   
   // Base greeting with coach personality and user's nickname
   let greeting = "Good morning";

@@ -16,6 +16,7 @@ import {
   AppState,
   AppStateStatus,
 } from 'react-native';
+import NetInfo from '@react-native-community/netinfo';
 
 import { ChatMini } from './components/ChatMini';
 import { MileageGraphCard } from './components/MileageGraphCard';
@@ -101,6 +102,7 @@ export function HomeScreen() {
     hasLocationPermission,
     requestPermission,
     refreshWeather,
+    location,
   } = useWeather();
 
   // Auto-setup notifications for new and existing users
@@ -116,6 +118,8 @@ export function HomeScreen() {
     message: '',
     targetDateForGeneration: null as string | null, // ADDED: Date string (YYYY-MM-DD) for the Monday of the week to generate
   });
+
+  // Track when the last plan check actually executed (for debounce inside the check function)
   const [lastPlanCheckTimestamp, setLastPlanCheckTimestamp] = useState<number | null>(null);
 
   // Function to determine the greeting based on time of day
@@ -184,9 +188,6 @@ export function HomeScreen() {
       const trainingPlan = await fetchTrainingPlan(session.user.id);
       console.log('fetchUserData: Training plan fetched with', trainingPlan.length, 'sessions');
       setUpcomingSessions(trainingPlan);
-
-      // Store timestamp when data was last checked
-      setLastPlanCheckTimestamp(Date.now());
     } catch (err: any) {
       console.error('fetchUserData: Error fetching user data:', err);
       setError(err.message || 'Failed to load user data');
@@ -255,7 +256,7 @@ export function HomeScreen() {
     if (profile && !loading) {
       checkIfPlanUpdateNeeded();
     }
-  }, [profile, loading]); // Removed upcomingSessions, check when profile is loaded and initial loading is done
+  }, [profile, loading, upcomingSessions]);
 
   const checkIfPlanUpdateNeeded = useCallback(async () => {
     if (!session?.user || !profile) {
@@ -266,7 +267,7 @@ export function HomeScreen() {
     const now = Date.now();
     // Debounce: if already checked recently, and no update is flagged or error shown, skip.
     if (
-      lastPlanCheckTimestamp &&
+      lastPlanCheckTimestamp !== null &&
       now - lastPlanCheckTimestamp < 60000 &&
       !planUpdateStatus.needsUpdate &&
       !(planUpdateStatus.message && planUpdateStatus.message.toLowerCase().includes('error'))
@@ -274,7 +275,10 @@ export function HomeScreen() {
       console.log('[checkIfPlanUpdateNeeded] Debounced.');
       return;
     }
+
+    // Record that we are performing a check now
     setLastPlanCheckTimestamp(now);
+
     console.log('[checkIfPlanUpdateNeeded] Running check...');
 
     try {
@@ -409,7 +413,7 @@ export function HomeScreen() {
     }
   }, [planUpdateStatus]); // Depends on the entire planUpdateStatus object
 
-  const handleRequestWeeklyPlanUpdate = async (targetMonday: string) => {
+  const handleRequestWeeklyPlanUpdate = async (targetMonday: string, attempt = 1) => {
     if (!session?.user) {
       Alert.alert('Error', 'You must be logged in to update the plan.');
       setPlanUpdateStatus({
@@ -421,22 +425,48 @@ export function HomeScreen() {
       return;
     }
 
-    console.log(
-      `[handleRequestWeeklyPlanUpdate] Requesting plan update for week starting: ${targetMonday}`
-    );
-    setPlanUpdateStatus({
-      isLoading: true,
-      needsUpdate: false,
-      message: `Generating plan for week of ${targetMonday}...`,
-      targetDateForGeneration: targetMonday,
-    });
+    // Connectivity check
+    const netState = await NetInfo.fetch();
+    if (!netState.isConnected) {
+      console.log('[handleRequestWeeklyPlanUpdate] No network connection. Will retry in 5s');
+      setPlanUpdateStatus({
+        isLoading: false,
+        needsUpdate: true,
+        message: 'Waiting for connection…',
+        targetDateForGeneration: targetMonday,
+      });
+      setTimeout(() => handleRequestWeeklyPlanUpdate(targetMonday, attempt), 5000);
+      return;
+    }
+
+    if (attempt === 1) {
+      console.log(
+        `[handleRequestWeeklyPlanUpdate] Requesting plan update for week starting: ${targetMonday}`
+      );
+      setPlanUpdateStatus({
+        isLoading: true,
+        needsUpdate: false,
+        message: `Generating plan for week of ${targetMonday}...`,
+        targetDateForGeneration: targetMonday,
+      });
+    } else {
+      console.log(`[handleRequestWeeklyPlanUpdate] Retry attempt ${attempt}`);
+    }
 
     try {
-      // Corrected: The body should be a stringified JSON object for this type of invocation.
+      // include location if available
+      const requestBody: Record<string, any> = {
+        clientLocalDateString: targetMonday,
+      };
+      if (location?.latitude !== undefined && location?.longitude !== undefined) {
+        requestBody.latitude = location.latitude;
+        requestBody.longitude = location.longitude;
+      }
+
       const { data, error: functionInvokeError } = await supabase.functions.invoke(
         'fn_request_weekly_plan_update',
         {
-          body: JSON.stringify({ clientLocalDateString: targetMonday }),
+          body: JSON.stringify(requestBody),
         }
       );
 
@@ -513,6 +543,24 @@ export function HomeScreen() {
       }, 3000);
     } catch (e: any) {
       console.error('Client-side error calling edge function:', e);
+
+      const isNetworkErr =
+        e instanceof TypeError &&
+        typeof e.message === 'string' &&
+        e.message.toLowerCase().includes('network request failed');
+
+      if (isNetworkErr && attempt < 3) {
+        console.log(`[handleRequestWeeklyPlanUpdate] Network error – retrying in ${attempt * 5}s`);
+        setPlanUpdateStatus({
+          isLoading: false,
+          needsUpdate: true,
+          message: 'Network unavailable… retrying',
+          targetDateForGeneration: targetMonday,
+        });
+        setTimeout(() => handleRequestWeeklyPlanUpdate(targetMonday, attempt + 1), attempt * 5000);
+        return;
+      }
+
       Alert.alert('Update Error', `An unexpected error occurred: ${e.message}`);
       setPlanUpdateStatus({
         isLoading: false,
@@ -738,6 +786,29 @@ export function HomeScreen() {
       if (timeout) clearTimeout(timeout);
     };
   }, [session?.user, profile?.coach_id]);
+
+  // NEW: Update coach and join date when profile data is loaded
+  useEffect(() => {
+    if (!profile) return;
+
+    // Update coach based on profile.coach_id
+    if (profile.coach_id) {
+      const selectedCoach = COACHES.find((c) => c.id === profile.coach_id);
+      if (selectedCoach) {
+        setCoach(selectedCoach);
+      } else {
+        // Fallback to default if something goes wrong
+        setCoach(DEFAULT_COACH);
+      }
+    }
+
+    // Update join date (use profile.created_at if available, otherwise fallback to session)
+    if (profile.created_at) {
+      setJoinDate(new Date(profile.created_at));
+    } else if (session?.user?.created_at) {
+      setJoinDate(new Date(session.user.created_at));
+    }
+  }, [profile?.coach_id, profile?.created_at]);
 
   if (loading) {
     return (
