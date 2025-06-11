@@ -404,14 +404,15 @@ export function HomeScreen() {
     if (
       planUpdateStatus.needsUpdate &&
       planUpdateStatus.targetDateForGeneration &&
-      !planUpdateStatus.isLoading
+      !planUpdateStatus.isLoading &&
+      hasLocationPermission !== null // wait until user responded to permission
     ) {
       // Immediately set isLoading to true to prevent multiple invocations from rapid state changes.
       // The message is already set by checkIfPlanUpdateNeeded.
       setPlanUpdateStatus((prev) => ({ ...prev, isLoading: true }));
       handleRequestWeeklyPlanUpdate(planUpdateStatus.targetDateForGeneration);
     }
-  }, [planUpdateStatus]); // Depends on the entire planUpdateStatus object
+  }, [planUpdateStatus, hasLocationPermission]); // Depends on the entire planUpdateStatus object and hasLocationPermission
 
   const handleRequestWeeklyPlanUpdate = async (targetMonday: string, attempt = 1) => {
     if (!session?.user) {
@@ -832,7 +833,7 @@ export function HomeScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: '#FBF7F6' }}>
       {/* Loading overlay when generating a new weekly plan */}
       {planUpdateStatus.isLoading && (
-        <View style={styles.planOverlay} pointerEvents="none">
+        <View style={styles.planOverlay} pointerEvents="auto">
           <MinimalSpinner size={48} thickness={3} />
           <Text className="mt-4 text-lg text-center text-gray-700">
             {planUpdateStatus.message || 'Generating your new training plan...'}

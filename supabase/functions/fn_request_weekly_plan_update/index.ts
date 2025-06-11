@@ -38,8 +38,11 @@ serve(async (req: Request) => {
           'Invalid or missing clientLocalDateString in request body. Expected YYYY-MM-DD.'
         );
       }
-      if (latitude === null || longitude === null) {
-        throw new Error('Missing or invalid latitude/longitude in request body.');
+      // latitude & longitude are optional. If one is provided ensure both numbers else set to null
+      if ((latitude !== null && longitude === null) || (latitude === null && longitude !== null)) {
+        console.warn('[fn_request_weekly_plan_update] Incomplete location provided; ignoring.');
+        latitude = null;
+        longitude = null;
       }
     } catch (e) {
       console.warn(
@@ -124,82 +127,3 @@ serve(async (req: Request) => {
     try {
       console.log(
         `[fn_request_weekly_plan_update] Calling processUserWeeklyFeedbackDeno for user: ${userId}`
-      );
-      type FeedbackResult = { summary?: string };
-      const processedFeedback = await processUserWeeklyFeedbackDeno(
-        arqué as unknown,
-        userId,
-        feedbackWeekStartDateUtc,
-        feedbackWeekEndDateUtc
-      ) as FeedbackResult;
-      if (processedFeedback && processedFeedback.summary) {
-        feedbackSummary = processedFeedback.summary;
-        if (feedbackSummary) {
-          console.log(
-            `[fn_request_weekly_plan_update] Feedback processed successfully. Summary length: ${feedbackSummary.length}`
-          );
-        }
-      } else {
-        console.warn(
-          `[fn_request_weekly_plan_update] Feedback processing did not return a summary for user: ${userId}.`
-        );
-      }
-    } catch (feedbackError: unknown) {
-      if (feedbackError instanceof Error) {
-        console.error(
-          `[fn_request_weekly_plan_update] Error during feedback processing for user ${userId}:`,
-          feedbackError.message
-        );
-      } else {
-        console.error(
-          `[fn_request_weekly_plan_update] Error during feedback processing for user ${userId}:`,
-          feedbackError
-        );
-      }
-      // Decide if this is fatal. For now, we'll try to generate a plan even if feedback fails.
-      // feedbackSummary will remain undefined, and plan generation will proceed without it.
-    }
-
-    // 4. Generate and Store New Weekly Plan for the CURRENT/UPCOMING week
-    console.log(
-      `[fn_request_weekly_plan_update] Calling generateAndStoreCurrentWeekPlanForUserDeno for user: ${userId}`
-    );
-    const planGenerated = await generateAndStoreCurrentWeekPlanForUserDeno(
-      arqué,
-      userId,
-      targetPlanMondayUtcDate,
-      feedbackSummary,
-      latitude,
-      longitude
-    );
-
-    if (!planGenerated) {
-      // This indicates a failure within the plan generation/storage logic itself.
-      throw new Error('Plan generation and storage failed for user: ' + userId);
-    }
-
-    console.log(
-      `[fn_request_weekly_plan_update] Weekly plan successfully generated/updated for user: ${userId}`
-    );
-
-    return new Response(
-      JSON.stringify({ success: true, message: 'Weekly plan update processed.' }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
-      }
-    );
-  } catch (error: unknown) {
-    console.error('[fn_request_weekly_plan_update] Critical error:', error instanceof Error ? error.message : error, error instanceof Error ? error.stack : undefined);
-    const errorMessage =
-      error instanceof Error
-        ? error.message
-        : typeof error === 'string'
-          ? error
-          : 'An unknown error occurred';
-    return new Response(JSON.stringify({ success: false, error: errorMessage }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 500,
-    });
-  }
-});
