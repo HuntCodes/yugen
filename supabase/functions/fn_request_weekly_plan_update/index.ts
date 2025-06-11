@@ -24,25 +24,34 @@ serve(async (req: Request) => {
   }
 
   try {
-    // 0. Parse request body for client's local date
+    // 0. Parse request body for client's local date and location
     let clientLocalDateString: string | null = null;
+    let latitude: number | null = null;
+    let longitude: number | null = null;
     try {
       const body = await req.json();
       clientLocalDateString = body.clientLocalDateString;
+      latitude = typeof body.latitude === 'number' ? body.latitude : null;
+      longitude = typeof body.longitude === 'number' ? body.longitude : null;
       if (!clientLocalDateString || !/^\d{4}-\d{2}-\d{2}$/.test(clientLocalDateString)) {
         throw new Error(
           'Invalid or missing clientLocalDateString in request body. Expected YYYY-MM-DD.'
         );
       }
+      if (latitude === null || longitude === null) {
+        throw new Error('Missing or invalid latitude/longitude in request body.');
+      }
     } catch (e) {
       console.warn(
         '[fn_request_weekly_plan_update] Could not parse JSON body or missing clientLocalDateString:',
-        e.message
+        e instanceof Error ? e.message : e
       );
       // Fallback: use server's current UTC date if client date not provided or invalid
       // This maintains functionality but might not align perfectly with user's local week start
       const now = new Date();
       clientLocalDateString = now.toISOString().split('T')[0];
+      latitude = null;
+      longitude = null;
       console.warn(
         `[fn_request_weekly_plan_update] Defaulting to server UTC date for plan calculations: ${clientLocalDateString}`
       );
@@ -50,6 +59,7 @@ serve(async (req: Request) => {
     console.log(
       `[fn_request_weekly_plan_update] Using client/server date for calculations: ${clientLocalDateString}`
     );
+    console.log('[fn_request_weekly_plan_update] Received location:', latitude, longitude);
 
     // 1. Authenticate user
     const authHeader = req.headers.get('Authorization');
@@ -115,27 +125,37 @@ serve(async (req: Request) => {
       console.log(
         `[fn_request_weekly_plan_update] Calling processUserWeeklyFeedbackDeno for user: ${userId}`
       );
+      type FeedbackResult = { summary?: string };
       const processedFeedback = await processUserWeeklyFeedbackDeno(
-        arqué,
+        arqué as unknown,
         userId,
         feedbackWeekStartDateUtc,
         feedbackWeekEndDateUtc
-      );
+      ) as FeedbackResult;
       if (processedFeedback && processedFeedback.summary) {
         feedbackSummary = processedFeedback.summary;
-        console.log(
-          `[fn_request_weekly_plan_update] Feedback processed successfully. Summary length: ${feedbackSummary.length}`
-        );
+        if (feedbackSummary) {
+          console.log(
+            `[fn_request_weekly_plan_update] Feedback processed successfully. Summary length: ${feedbackSummary.length}`
+          );
+        }
       } else {
         console.warn(
           `[fn_request_weekly_plan_update] Feedback processing did not return a summary for user: ${userId}.`
         );
       }
-    } catch (feedbackError) {
-      console.error(
-        `[fn_request_weekly_plan_update] Error during feedback processing for user ${userId}:`,
-        feedbackError.message
-      );
+    } catch (feedbackError: unknown) {
+      if (feedbackError instanceof Error) {
+        console.error(
+          `[fn_request_weekly_plan_update] Error during feedback processing for user ${userId}:`,
+          feedbackError.message
+        );
+      } else {
+        console.error(
+          `[fn_request_weekly_plan_update] Error during feedback processing for user ${userId}:`,
+          feedbackError
+        );
+      }
       // Decide if this is fatal. For now, we'll try to generate a plan even if feedback fails.
       // feedbackSummary will remain undefined, and plan generation will proceed without it.
     }
@@ -148,7 +168,9 @@ serve(async (req: Request) => {
       arqué,
       userId,
       targetPlanMondayUtcDate,
-      feedbackSummary
+      feedbackSummary,
+      latitude,
+      longitude
     );
 
     if (!planGenerated) {
@@ -167,8 +189,8 @@ serve(async (req: Request) => {
         status: 200,
       }
     );
-  } catch (error: any) {
-    console.error('[fn_request_weekly_plan_update] Critical error:', error.message, error.stack);
+  } catch (error: unknown) {
+    console.error('[fn_request_weekly_plan_update] Critical error:', error instanceof Error ? error.message : error, error instanceof Error ? error.stack : undefined);
     const errorMessage =
       error instanceof Error
         ? error.message
@@ -177,7 +199,7 @@ serve(async (req: Request) => {
           : 'An unknown error occurred';
     return new Response(JSON.stringify({ success: false, error: errorMessage }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: error.status || 500, // Use error.status if available (e.g. for auth errors)
+      status: 500,
     });
   }
 });

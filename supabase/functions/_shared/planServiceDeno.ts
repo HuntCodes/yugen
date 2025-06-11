@@ -10,6 +10,11 @@ import {
 import OpenAI from 'https://esm.sh/openai@4.29.2'; // New v4 import (example version, check esm.sh for latest v4)
 // Note: You might need to adjust the @js-joda/core version or import method based on your Deno setup.
 
+// Minimal interface for Supabase client to satisfy linter and provide basic type safety
+interface MinimalSupabaseClient {
+  from: (table: string) => unknown;
+}
+
 // Define proper type for Supabase client
 interface SupabaseQueryBuilder {
   eq: (column: string, value: string) => SupabaseQueryBuilder;
@@ -29,13 +34,14 @@ interface SupabaseDeleteResponse {
   error: { message?: string } | null;
 }
 
-interface SupabaseClient {
-  from: (table: string) => {
-    select: (columns: string) => SupabaseQueryBuilder;
-    insert: (data: TrainingSessionDeno[]) => Promise<{ error: { message?: string } | null }>;
-    delete: () => SupabaseDeleteBuilder;
-  };
-}
+// REMOVE or comment out this line:
+// interface SupabaseClient {
+//   from: (table: string) => {
+//     select: (columns: string) => SupabaseQueryBuilder;
+//     insert: (data: TrainingSessionDeno[]) => Promise<{ error: { message?: string } | null }>;
+//     delete: () => SupabaseDeleteBuilder;
+//   };
+// }
 
 interface ErrorWithResponse {
   response?: {
@@ -140,15 +146,20 @@ if (openAiApiKey) {
 
 // --- Helper: Fetch User Onboarding Data ---
 async function getUserOnboardingDataDeno(
-  arquéClient: SupabaseClient,
+  arquéClient: unknown,
   userId: string
 ): Promise<OnboardingDataInternal | null> {
   console.log(`[planServiceDeno] Fetching onboarding data for user ${userId} from profiles table.`);
-  const { data: profileData, error: profileError } = await arquéClient
-    .from('profiles')
-    .select(
-      'goal_type, race_date, race_distance, experience_level, current_frequency, current_mileage, units, nickname, injury_history, schedule_constraints, created_at'
-    ) // Fetch created_at
+  const client = arquéClient as MinimalSupabaseClient;
+  const { data: profileData, error: profileError } = await (client
+    .from('profiles') as {
+      select: (columns: string) => {
+        eq: (col: string, val: string) => {
+          single: () => Promise<{ data: unknown; error: { message?: string } | null }>;
+        };
+      };
+    })
+    .select('goal_type, race_date, race_distance, experience_level, current_frequency, current_mileage, units, nickname, injury_history, schedule_constraints, created_at')
     .eq('id', userId)
     .single();
 
@@ -185,7 +196,7 @@ async function getUserOnboardingDataDeno(
 // --- Helper: Remove Workouts (Conditional based on interaction) ---
 // Renamed and modified to delete only for a specific week
 async function deleteWorkoutsForSpecificWeekDeno(
-  arquéClient: SupabaseClient,
+  arquéClient: unknown,
   userId: string,
   weekStartUtcString: string,
   weekEndUtcString: string
@@ -193,12 +204,21 @@ async function deleteWorkoutsForSpecificWeekDeno(
   console.log(
     `[planServiceDeno] Removing workouts for user ${userId} for week ${weekStartUtcString} to ${weekEndUtcString}`
   );
-  const deleteResponse = await (arquéClient
-    .from('training_plans')
+  const client = arquéClient as MinimalSupabaseClient;
+  const deleteResponse = await ((client
+    .from('training_plans') as {
+      delete: () => {
+        eq: (col: string, val: string) => {
+          gte: (col: string, val: string) => {
+            lte: (col: string, val: string) => Promise<{ error: { message?: string } | null }>;
+          };
+        };
+      };
+    })
     .delete()
     .eq('user_id', userId)
     .gte('date', weekStartUtcString)
-    .lte('date', weekEndUtcString) as unknown as Promise<{ error: { message?: string } | null }>); // Type assertion for Supabase response
+    .lte('date', weekEndUtcString));
 
   const { error } = deleteResponse;
   if (error) {
@@ -227,20 +247,22 @@ function extractTrainingFrequencyDeno(frequencyString: string): number {
 
 // --- Helper: Get Persistent User Preferences (accumulate from ALL weeks) ---
 async function getPersistentUserPreferencesDeno(
-  arquéClient: SupabaseClient,
+  arquéClient: unknown,
   userId: string
 ): Promise<string> {
   console.log(`[planServiceDeno] Fetching persistent user preferences for user ${userId}`);
   
   try {
     // Get ALL user feedback records to accumulate persistent preferences
-    const feedbackQuery = await (arquéClient
-      .from('user_training_feedback')
+    const client = arquéClient as MinimalSupabaseClient;
+    const feedbackQuery = await ((client
+      .from('user_training_feedback') as {
+        select: (columns: string) => {
+          eq: (col: string, val: string) => Promise<{ data: UserTrainingFeedbackDeno[] | null; error: { message?: string } | null }>;
+        };
+      })
       .select('prefers, week_start_date')
-      .eq('user_id', userId) as unknown as Promise<{
-      data: UserTrainingFeedbackDeno[] | null;
-      error: { message?: string } | null;
-    }>);
+      .eq('user_id', userId));
 
     const allFeedback = feedbackQuery?.data;
     const error = feedbackQuery?.error;
@@ -296,14 +318,81 @@ async function getPersistentUserPreferencesDeno(
   }
 }
 
+/**
+ * Get user's current location and reverse geocode to get city/region info
+ * Used for training plan generation to suggest appropriate training locations
+ */
+async function getLocationForPlanGenerationDeno(latitude?: number, longitude?: number): Promise<LocationInfo | null> {
+  try {
+    if (typeof latitude !== 'number' || typeof longitude !== 'number') {
+      return null;
+    }
+    const coordinates = { latitude, longitude };
+    // Use Nominatim API (free) for reverse geocoding
+    const reverseGeoUrl = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${coordinates.latitude}&lon=${coordinates.longitude}&addressdetails=1`;
+    try {
+      const response = await fetch(reverseGeoUrl, {
+        headers: {
+          'User-Agent': 'Yugen-RunningApp/1.0', // Required by Nominatim
+        },
+      });
+      if (response.ok) {
+        const geoData = await response.json();
+        const address = geoData.address || {};
+        return {
+          ...coordinates,
+          city: address.city || address.town || address.village || null,
+          region: address.state || address.region || null,
+          country: address.country || null,
+        };
+      } else {
+        console.log('[planServiceDeno] Reverse geocoding failed, returning coordinates only');
+        return coordinates;
+      }
+    } catch (geoError) {
+      console.log('[planServiceDeno] Reverse geocoding error, returning coordinates only:', geoError);
+      return coordinates;
+    }
+  } catch (error) {
+    console.error('[planServiceDeno] Error getting location for plan generation:', error);
+    return null;
+  }
+}
+
+/**
+ * Format location info for AI prompt
+ * Returns a string describing the user's location for AI context
+ */
+function formatLocationForPromptDeno(locationInfo: LocationInfo | null): string {
+  if (!locationInfo) {
+    return '';
+  }
+
+  const { city, region, country } = locationInfo;
+
+  if (city && region && country) {
+    return `${city}, ${region}, ${country}`;
+  } else if (city && country) {
+    return `${city}, ${country}`;
+  } else if (region && country) {
+    return `${region}, ${country}`;
+  } else if (country) {
+    return country;
+  } else {
+    return 'Unknown location';
+  }
+}
+
 // --- Enhanced AI Plan Generation Logic (aligned with openai.ts) ---
 async function generateNewWeekPlanWithAI(
   onboardingData: OnboardingDataInternal,
-  currentPhase: string, // ADDED: current training phase
-  weeksSincePlanStart: number, // ADDED: for week_number in sessions
+  currentPhase: string,
+  weeksSincePlanStart: number,
   latestFeedbackSummary?: string,
-  persistentPreferences?: string, // ✅ NEW: Persistent user preferences (accumulated across all weeks)
-  targetMondayDate?: Date
+  persistentPreferences?: string,
+  targetMondayDate?: Date,
+  latitude?: number | null,
+  longitude?: number | null
 ): Promise<Omit<TrainingSessionDeno, 'user_id' | 'status' | 'created_at' | 'updated_at'>[]> {
   if (!openai) {
     console.warn('[planServiceDeno] OpenAI client not available. Cannot generate AI plan.');
@@ -311,7 +400,12 @@ async function generateNewWeekPlanWithAI(
   }
 
   // Get user location for training location suggestions
-  const locationString = getLocationForPlanGenerationDeno(''); // userId not needed for current implementation
+  let locationInfo: LocationInfo | null = null;
+  if (typeof latitude === 'number' && typeof longitude === 'number') {
+    locationInfo = await getLocationForPlanGenerationDeno(latitude, longitude);
+  }
+  const locationString = formatLocationForPromptDeno(locationInfo);
+
   console.log(
     '[planServiceDeno] User location for plan generation:',
     locationString || 'Location not available'
@@ -680,16 +774,19 @@ Remember to call 'save_weekly_training_plan' with the complete list of sessions 
 
 // --- Main Service Function ---
 export async function generateAndStoreCurrentWeekPlanForUserDeno(
-  arquéClient: SupabaseClient,
+  arquéClient: unknown,
   userId: string,
   targetMondayUtcDate: Date, // The specific Monday (UTC) for which to generate the plan
-  latestFeedbackSummary?: string // Optional: from feedbackService
+  latestFeedbackSummary?: string, // Optional: from feedbackService
+  latitude?: number | null,
+  longitude?: number | null
 ): Promise<boolean> {
   console.log(
     `[planServiceDeno] Starting plan generation for user ${userId}, target week starting ${targetMondayUtcDate.toISOString().split('T')[0]}`
   );
 
-  const onboardingData = await getUserOnboardingDataDeno(arquéClient, userId);
+  const client = arquéClient as MinimalSupabaseClient;
+  const onboardingData = await getUserOnboardingDataDeno(client, userId);
   if (!onboardingData) {
     console.error(
       `[planServiceDeno] Failed to get onboarding data for user ${userId}. Cannot generate plan.`
@@ -698,7 +795,7 @@ export async function generateAndStoreCurrentWeekPlanForUserDeno(
   }
 
   // ✅ NEW: Get persistent user preferences (accumulated across ALL weeks)
-  const persistentPreferences = await getPersistentUserPreferencesDeno(arquéClient, userId);
+  const persistentPreferences = await getPersistentUserPreferencesDeno(client, userId);
   console.log(`[planServiceDeno] Retrieved persistent preferences for user ${userId}:`, persistentPreferences ? 'Found preferences' : 'No preferences');
 
   // Calculate current training phase and weeksSincePlanStart
@@ -730,7 +827,7 @@ export async function generateAndStoreCurrentWeekPlanForUserDeno(
 
   // Delete existing workouts for the target week ONLY
   const deleteSuccess = await deleteWorkoutsForSpecificWeekDeno(
-    arquéClient,
+    client,
     userId,
     targetMondayString,
     targetSundayString
@@ -751,7 +848,9 @@ export async function generateAndStoreCurrentWeekPlanForUserDeno(
     weeksSincePlanStart, // Pass weeks since start
     latestFeedbackSummary,
     persistentPreferences, // ✅ NEW: Pass persistent preferences separately
-    targetMondayUtcDate
+    targetMondayUtcDate,
+    latitude,
+    longitude
   );
   if (!newRawSessions || newRawSessions.length === 0) {
     console.error(`[planServiceDeno] No new sessions generated by AI for user: ${userId}`);
@@ -825,9 +924,11 @@ export async function generateAndStoreCurrentWeekPlanForUserDeno(
     console.log(
       `[planServiceDeno] Attempting to insert ${sessionsToInsert.length} new plan sessions for user ${userId}`
     );
-    const { error: insertError } = await arquéClient
-      .from('training_plans')
-      .insert(sessionsToInsert);
+    const { error: insertError } = await ((client
+      .from('training_plans') as {
+        insert: (data: TrainingSessionDeno[]) => Promise<{ error: { message?: string } | null }>;
+      })
+      .insert(sessionsToInsert));
 
     if (insertError) {
       console.error(
@@ -968,19 +1069,4 @@ function getTrainingPhaseDeno(
   const cyclePositionForward = adjustedWeeksForCycle % 4;
   if (cyclePositionForward < 3) return 'Build';
   return 'Base';
-}
-
-/**
- * Get user's location for training location suggestions in Deno environment
- * This would typically be called differently in a server environment,
- * but for now we'll try to get it from user profile or default to null
- */
-function getLocationForPlanGenerationDeno(_userId: string): string | null {
-  // In a real implementation, you might:
-  // 1. Store user's last known location in the profiles table
-  // 2. Use a geolocation service
-  // 3. Get it from session data
-  // For now, return null (will result in no location suggestions)
-  console.log('[planServiceDeno] Location-based suggestions not available in server environment');
-  return null;
 }

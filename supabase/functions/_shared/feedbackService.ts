@@ -23,15 +23,16 @@ interface SupabaseInsertBuilder {
   single: () => Promise<{ data: unknown; error: { message?: string } | null }>;
 }
 
-interface SupabaseClient {
-  from: (table: string) => {
-    select: (
-      columns: string
-    ) => SupabaseQueryBuilder & Promise<{ data: unknown; error: { message?: string } | null }>;
-    insert: (data: unknown[]) => SupabaseInsertBuilder;
-    upsert: (data: unknown[], options?: { onConflict?: string }) => SupabaseUpsertBuilder;
-  };
-}
+// REMOVE or comment out this line:
+// interface SupabaseClient {
+//   from: (table: string) => {
+//     select: (
+//       columns: string
+//     ) => SupabaseQueryBuilder & Promise<{ data: unknown; error: { message?: string } | null }>;
+//     insert: (data: unknown[]) => SupabaseInsertBuilder;
+//     upsert: (data: unknown[], options?: { onConflict?: string }) => SupabaseUpsertBuilder;
+//   };
+// }
 
 interface TrainingPlanItem {
   date: string;
@@ -90,27 +91,40 @@ if (openAiApiKey) {
   );
 }
 
+// Minimal interface for Supabase client to satisfy linter and provide basic type safety
+interface MinimalSupabaseClient {
+  from: (table: string) => unknown;
+}
+
 // --- Feedback Fetching Logic ---
 // Fetches workout notes from training_plans table for a given week
 async function getWorkoutNotesForWeekDeno(
-  arquéClient: SupabaseClient,
+  arquéClient: unknown,
   userId: string,
   startDateString: string,
   endDateString: string
 ): Promise<WorkoutNoteForFeedback[]> {
+  const client = arquéClient as MinimalSupabaseClient;
   console.log(
     `[feedbackService] Fetching workout notes for user ${userId} from training_plans between ${startDateString} and ${endDateString}`
   );
-  const queryResult = await (arquéClient
-    .from('training_plans')
+  const queryResult = await ((client
+    .from('training_plans') as {
+      select: (columns: string) => {
+        eq: (col: string, val: string) => {
+          gte: (col: string, val: string) => {
+            lte: (col: string, val: string) => {
+              order: (col: string, options: { ascending: boolean }) => Promise<{ data: TrainingPlanItem[] | null; error: { message?: string } | null }>;
+            };
+          };
+        };
+      };
+    })
     .select('date, session_type, notes, post_session_notes, status')
     .eq('user_id', userId)
-    .gte('date', startDateString) // Assuming date is timestamptz, YYYY-MM-DD will work
-    .lte('date', endDateString) // Assuming date is timestamptz, YYYY-MM-DD will work for end of day
-    .order('date', { ascending: true }) as unknown as Promise<{
-    data: TrainingPlanItem[] | null;
-    error: { message?: string } | null;
-  }>);
+    .gte('date', startDateString)
+    .lte('date', endDateString)
+    .order('date', { ascending: true }));
 
   const { data, error } = queryResult;
   if (error) {
@@ -139,24 +153,32 @@ async function getWorkoutNotesForWeekDeno(
 }
 
 async function getChatMessagesForWeekDeno(
-  arquéClient: SupabaseClient,
+  arquéClient: unknown,
   userId: string,
   startDateISO: string,
   endDateISO: string
 ): Promise<ChatMessageForFeedback[]> {
+  const client = arquéClient as MinimalSupabaseClient;
   console.log(
     `[feedbackService] Fetching chat messages for user ${userId} from coach_messages between ${startDateISO} and ${endDateISO}`
   );
-  const queryResult = await (arquéClient
-    .from('coach_messages') // Changed from 'chat_messages' to 'coach_messages'
-    .select('created_at, message, sender') // Selected schema fields
+  const queryResult = await ((client
+    .from('coach_messages') as {
+      select: (columns: string) => {
+        eq: (col: string, val: string) => {
+          gte: (col: string, val: string) => {
+            lt: (col: string, val: string) => {
+              order: (col: string, options: { ascending: boolean }) => Promise<{ data: ChatMessage[] | null; error: { message?: string } | null }>;
+            };
+          };
+        };
+      };
+    })
+    .select('created_at, message, sender')
     .eq('user_id', userId)
     .gte('created_at', startDateISO)
     .lt('created_at', endDateISO)
-    .order('created_at', { ascending: true }) as unknown as Promise<{
-    data: ChatMessage[] | null;
-    error: { message?: string } | null;
-  }>);
+    .order('created_at', { ascending: true }));
 
   const { data, error } = queryResult;
   if (error) {
@@ -231,29 +253,38 @@ Summary:`;
 
 // --- Feedback Storage Logic ---
 async function storeProcessedFeedback(
-  arquéClient: SupabaseClient,
+  arquéClient: unknown,
   feedbackData: ProcessedFeedback
 ): Promise<ProcessedFeedback> {
+  const client = arquéClient as MinimalSupabaseClient;
   console.log(
     `[feedbackService] Storing processed feedback for user ${feedbackData.user_id} for week starting ${feedbackData.week_start_date}`
   );
   
   // First, check if there's existing manual feedback for this week
   console.log(`[feedbackService] Checking for existing feedback record...`);
-  const { data: existing, error: fetchError } = await (arquéClient
-    .from('user_training_feedback')
+  const { data: existing, error: fetchError } = await ((client
+    .from('user_training_feedback') as {
+      select: (columns: string) => {
+        eq: (col: string, val: string) => {
+          eq: (col: string, val: string) => {
+            maybeSingle: () => Promise<{
+              data: { 
+                prefers?: Record<string, unknown>; 
+                struggling_with?: Record<string, unknown>; 
+                feedback_summary?: string;
+                raw_data?: Record<string, unknown>;
+              } | null;
+              error: { message?: string } | null;
+            }>;
+          };
+        };
+      };
+    })
     .select('*')
     .eq('user_id', feedbackData.user_id)
     .eq('week_start_date', feedbackData.week_start_date)
-    .maybeSingle() as unknown as Promise<{
-    data: { 
-      prefers?: Record<string, unknown>; 
-      struggling_with?: Record<string, unknown>; 
-      feedback_summary?: string;
-      raw_data?: Record<string, unknown>;
-    } | null;
-    error: { message?: string } | null;
-  }>);
+    .maybeSingle());
 
   if (fetchError && fetchError.message && !fetchError.message.includes('PGRST116')) {
     console.error('[feedbackService] Error fetching existing feedback:', fetchError);
@@ -298,27 +329,33 @@ async function storeProcessedFeedback(
   });
 
   // Use upsert to merge with existing data
-  const { data, error } = await (arquéClient
-    .from('user_training_feedback')
+  const { data, error } = await ((client
+    .from('user_training_feedback') as {
+      upsert: (data: Record<string, unknown>[], options: { onConflict: string }) => {
+        select: () => {
+          single: () => Promise<{
+            data: {
+              user_id: string;
+              week_start_date: string;
+              feedback_summary: string;
+              raw_data: { 
+                weekly_summary: {
+                  chat_messages: ChatMessageForFeedback[];
+                  workout_notes: WorkoutNoteForFeedback[];
+                  generated_at: string;
+                };
+              };
+            } | null;
+            error: { message?: string } | null;
+          }>;
+        };
+      };
+    })
     .upsert([dataToUpsert], {
       onConflict: 'user_id,week_start_date'
     })
     .select()
-    .single() as unknown as Promise<{
-    data: {
-      user_id: string;
-      week_start_date: string;
-      feedback_summary: string;
-      raw_data: { 
-        weekly_summary: {
-          chat_messages: ChatMessageForFeedback[];
-          workout_notes: WorkoutNoteForFeedback[];
-          generated_at: string;
-        };
-      };
-    } | null;
-    error: { message?: string } | null;
-  }>);
+    .single());
 
   if (error) {
     console.error('[feedbackService] Error upserting processed feedback:', error);
@@ -345,11 +382,12 @@ async function storeProcessedFeedback(
 
 // --- Main Service Function ---
 export async function processUserWeeklyFeedbackDeno(
-  arquéClient: SupabaseClient,
+  arquéClient: unknown,
   userId: string,
   feedbackWeekStartDate: Date, // Monday of the week for which to process feedback
   feedbackWeekEndDate: Date // Sunday of the week (inclusive)
 ): Promise<ProcessedFeedback> {
+  const client = arquéClient as MinimalSupabaseClient;
   console.log(
     `[feedbackService] Starting feedback processing for user ${userId}, week: ${feedbackWeekStartDate.toISOString().split('T')[0]} to ${feedbackWeekEndDate.toISOString().split('T')[0]}`
   );
@@ -370,13 +408,13 @@ export async function processUserWeeklyFeedbackDeno(
   const chatMessagesEndISO = chatMessagesEndDate.toISOString();
 
   const workoutNotes = await getWorkoutNotesForWeekDeno(
-    arquéClient,
+    client,
     userId,
     feedbackWeekStartString,
     feedbackWeekEndString
   );
   const chatMessages = await getChatMessagesForWeekDeno(
-    arquéClient,
+    client,
     userId,
     feedbackWeekStartDate.toISOString(),
     chatMessagesEndISO
@@ -408,7 +446,7 @@ export async function processUserWeeklyFeedbackDeno(
     },
   };
 
-  const storedFeedback = await storeProcessedFeedback(arquéClient, processedFeedbackData);
+  const storedFeedback = await storeProcessedFeedback(client, processedFeedbackData);
   console.log(`[feedbackService] Feedback processing complete for user ${userId}`);
   return storedFeedback;
 }
