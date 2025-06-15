@@ -60,7 +60,7 @@ export async function handleOnboardingConversation(
         // 'OpenAI-Project': 'proj_hKaI3BQl7GIX7cECLqFM538H' // Consider if this is still needed/valid
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini', // Updated model
+        model: 'gpt-4o', // Updated model
         messages,
         tools: [updateOnboardingProfileTool],
         tool_choice: 'auto', // Let the model decide when to call the function

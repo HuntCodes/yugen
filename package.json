@@ -1,6 +1,6 @@
 {
   "name": "yugen",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "main": "index.js",
   "scripts": {
     "android": "expo run:android",
@@ -67,7 +67,8 @@
     "react-native-webrtc": "^124.0.5",
     "tailwind-merge": "^3.2.0",
     "uuid": "^11.1.0",
-    "victory-native": "^41.17.1"
+    "victory-native": "^41.17.1",
+    "@react-native-masked-view/masked-view": "0.3.2"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",

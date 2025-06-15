@@ -2,7 +2,6 @@ import * as Location from 'expo-location';
 import { useState, useEffect } from 'react';
 
 import {
-  requestNotificationPermissions,
   scheduleDynamicNotifications,
   cancelDailyNotifications,
   getNotificationStatus,
@@ -12,6 +11,7 @@ import {
 } from '../../services/notifications/notificationService';
 import { fetchProfile } from '../../services/profile/profileService';
 import { useAuth } from '../useAuth';
+import { useAppPermissions } from '../useAppPermissions';
 
 interface NotificationState {
   permissionsGranted: boolean;
@@ -23,6 +23,10 @@ interface NotificationState {
 
 export const useNotifications = () => {
   const { session } = useAuth();
+  const {
+    notifications: notificationStatus,
+    requestNotificationPermission,
+  } = useAppPermissions();
   const [state, setState] = useState<NotificationState>({
     permissionsGranted: false,
     isScheduled: false,
@@ -35,7 +39,7 @@ export const useNotifications = () => {
   useEffect(() => {
     checkNotificationStatus();
     checkNotificationReadiness();
-  }, [session?.user?.id]);
+  }, [session?.user?.id, notificationStatus]);
 
   const checkNotificationReadiness = async () => {
     if (!session?.user) {
@@ -57,7 +61,7 @@ export const useNotifications = () => {
       const status = await getNotificationStatus();
       setState((prev) => ({
         ...prev,
-        permissionsGranted: status.permissionsGranted,
+        permissionsGranted: notificationStatus === 'granted',
         isScheduled: status.scheduledCount > 0,
       }));
     } catch (error) {
@@ -106,7 +110,7 @@ export const useNotifications = () => {
       }
 
       // Request notification permissions
-      const permissionsGranted = await requestNotificationPermissions();
+      const permissionsGranted = await requestNotificationPermission();
       if (!permissionsGranted) {
         setState((prev) => ({
           ...prev,

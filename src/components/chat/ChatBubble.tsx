@@ -100,7 +100,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     backgroundColor: '#F5F5F5',
-    borderRadius: 6,
+    borderRadius: 16,
     maxWidth: '85%',
   },
   coachText: {
@@ -117,7 +117,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     backgroundColor: '#000000',
-    borderRadius: 6,
+    borderRadius: 16,
     maxWidth: '85%',
   },
   userText: {

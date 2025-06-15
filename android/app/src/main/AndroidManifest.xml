@@ -36,8 +36,8 @@
         <action android:name="android.intent.action.VIEW"/>
         <category android:name="android.intent.category.DEFAULT"/>
         <category android:name="android.intent.category.BROWSABLE"/>
-        <data android:scheme="yugen"/>
-        <data android:scheme="exp+yugen"/>
+        <data android:scheme="OAC"/>
+        <data android:scheme="exp+oac"/>
       </intent-filter>
     </activity>
   </application>

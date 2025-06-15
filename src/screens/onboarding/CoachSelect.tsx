@@ -137,7 +137,7 @@ export function CoachSelect() {
             marginBottom: 24,
             color: '#000000',
           }}>
-          Choose your coach
+          Choose your team
         </Text>
 
         <ScrollView style={{ marginBottom: 24 }} showsVerticalScrollIndicator={false}>
@@ -173,11 +173,25 @@ export function CoachSelect() {
                 }}
               />
               <View style={{ flex: 1 }}>
+                {/* Region label */}
                 <Text
                   style={{
                     fontSize: 18,
                     fontWeight: 'bold',
+                    color: '#5D5D5D',
                     marginBottom: 4,
+                  }}>
+                  {coach.id === 'craig'
+                    ? 'OAC Oceania'
+                    : coach.id === 'thomas'
+                    ? 'OAC Europe'
+                    : 'OAC Global'}
+                </Text>
+                <Text
+                  style={{
+                    fontSize: 14,
+                    fontWeight: '600',
+                    marginBottom: 2,
                     color: '#000000',
                   }}>
                   {coach.name}
@@ -209,7 +223,7 @@ export function CoachSelect() {
           style={{
             backgroundColor: '#000000',
             paddingVertical: 16,
-            borderRadius: 6,
+            borderRadius: 999,
             alignItems: 'center',
             opacity: selectedCoach ? 1 : 0.5,
           }}
@@ -219,7 +233,7 @@ export function CoachSelect() {
             <MinimalSpinner size={20} color="#FFFFFF" thickness={2} />
           ) : (
             <Text style={{ color: 'white', fontWeight: '500', fontSize: 16 }}>
-              Continue with Coach
+              Join the team
             </Text>
           )}
         </TouchableOpacity>

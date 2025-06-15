@@ -20,7 +20,7 @@ export function ContinueButton({ onContinue, isLoading = false }: ContinueButton
       <TouchableOpacity
         style={{
           backgroundColor: '#000',
-          borderRadius: 6,
+          borderRadius: 999,
           paddingVertical: 16,
           alignItems: 'center',
           flexDirection: 'row',

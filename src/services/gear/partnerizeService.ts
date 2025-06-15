@@ -177,7 +177,7 @@ export const getFallbackProducts = (): Product[] => {
       id: 'cloudmonster-1',
       name: 'Cloudmonster',
       description:
-        'Maximum cushioned running shoe for easy runs and long distances. Features CloudTec® with zero-gravity foam.',
+        'Max-cushioned running shoes meet monster-level bounce and energy return. For a fun, forward-rolling ride.',
       price: '$159.99',
       image: require('../../assets/cloudmonster.jpg'),
       category: 'Shoes',
@@ -189,7 +189,7 @@ export const getFallbackProducts = (): Product[] => {
       id: 'cloudboom-zone-1',
       name: 'Cloudboom Zone',
       description:
-        'Elite racing shoe with carbon fiber Speedboard® and LightSpray upper for maximum speed.',
+        'Fit for speed sessions and intervals on the track or road. Responsive, cushioned and offers control on tight turns.',
       price: '$269.99',
       image: require('../../assets/cloudboom-zone.jpg'),
       category: 'Shoes',
@@ -201,7 +201,7 @@ export const getFallbackProducts = (): Product[] => {
       id: 'cloudeclipse-1',
       name: 'Cloudeclipse',
       description:
-        'Premium daily trainer with dual-density CloudTec Phase® technology for unmatched comfort.',
+        'Our softest, max-cushioned running shoe is ready to hit the road. Featuring a double layer of CloudTec Phase® for a smooth, plush ride.',
       price: '$179.99',
       image: require('../../assets/cloudeclipse.jpg'),
       category: 'Shoes',
@@ -213,7 +213,7 @@ export const getFallbackProducts = (): Product[] => {
       id: 'cloudboom-strike-1',
       name: 'Cloudboom Strike',
       description:
-        'Versatile performance shoe with Speedboard® technology for training and racing.',
+        'Built for marathons. Race-day ready. This road runner is ultra-responsive and ultra-cushioned.',
       price: '$199.99',
       image: require('../../assets/cloudboom-strike.jpg'),
       category: 'Shoes',
@@ -225,7 +225,7 @@ export const getFallbackProducts = (): Product[] => {
       id: 'weather-jacket-1',
       name: 'Weather Jacket',
       description:
-        'Ultralight running jacket protecting you in all weather. Lightweight Japanese fabrics offer 360° ventilation with DWR coating for wind and water protection.',
+        'A running jacket for ultralight protection from the elements. Made with breathable, windproof fabrics, it’s ideal for changing weather.',
       price: '$240.00',
       image: require('../../assets/weather-jacket.jpg'),
       category: 'Apparel',
@@ -237,7 +237,7 @@ export const getFallbackProducts = (): Product[] => {
       id: 'core-tights-1',
       name: 'Core Tights',
       description:
-        'Versatile and lightweight tights made for everyday movement. A staple basic for a run worth remembering, featuring multiple pockets and comfortable waistband.',
+        'The versatile and lightweight tights made for everyday movement. A staple basic, for a run worth remembering.',
       price: '$100.00',
       image: require('../../assets/core-tights.jpg'),
       category: 'Apparel',

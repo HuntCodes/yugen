@@ -333,7 +333,7 @@ export const generateEveningCoachMessage = async (
   }
   
   // Recovery message
-  const recoveryMessage = "Quality sleep is your secret weapon for tomorrow's training";
+  const recoveryMessage = "Quality sleep is your secret weapon.";
   
   return `${greeting}! ${workoutCheckIn}. ${reminder}. ${recoveryMessage}.`;
 };
@@ -393,7 +393,7 @@ export const scheduleDynamicNotifications = async (
     
     const eveningId = await Notifications.scheduleNotificationAsync({
       content: {
-        title: `Evening Check-in from ${coach?.name || 'Your Coach'}`,
+        title: `Message from Coach`,
         body: 'Preparing your evening check-in...', // Fallback text (user shouldn't see this)
         data: {
           userId: data.userId,
@@ -546,8 +546,8 @@ export const generateFreshNotificationContent = async (
       );
       
       return {
-        title: `Evening Check-in from ${coach.name}`,
-        body: message
+        title: `Message from Coach`,
+        body: message.replace('?.', '?')
       };
     }
 
@@ -713,8 +713,8 @@ export const rescheduleAllNotificationsForNext14Days = async (userId: string, co
           try {
             const eveningId = await Notifications.scheduleNotificationAsync({
               content: {
-                title: `Evening Check-in from Coach`,
-                body: eveningContent,
+                title: `Message from Coach`,
+                body: eveningContent.replace('?.', '?'),
                 data: { userId, coachId, sessionId: workout.id, type: 'evening_checkin' },
                 sound: 'default',
               },

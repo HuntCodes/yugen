@@ -24,7 +24,7 @@ export function OnboardingHeader({ coachName, coachId, imageMap }: OnboardingHea
           color: '#000000',
           marginBottom: 8,
         }}>
-        Get to know your coach
+        Welcome Interview
       </Text>
       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
         <Image

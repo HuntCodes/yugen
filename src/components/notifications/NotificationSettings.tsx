@@ -5,17 +5,7 @@ import { View, TouchableOpacity, Alert } from 'react-native';
 import { useNotifications } from '../../hooks/notifications/useNotifications';
 import { colors } from '../../styles/colors';
 import { Text } from '../ui/StyledText';
-import {
-  requestNotificationPermissions,
-  scheduleDailyMorningNotification,
-  cancelDailyNotifications,
-  getNotificationStatus,
-  updateNotificationContent,
-  NotificationData,
-} from '../../services/notifications/notificationService';
 import { useAuth } from '../../context/AuthContext';
-import { fetchProfile } from '../../services/profile/profileService';
-import * as Location from 'expo-location';
 
 interface NotificationSettingsProps {
   showTitle?: boolean;

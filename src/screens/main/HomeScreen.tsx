@@ -17,6 +17,7 @@ import {
   AppStateStatus,
 } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { ChatMini } from './components/ChatMini';
 import { MileageGraphCard } from './components/MileageGraphCard';
@@ -76,6 +77,27 @@ const DEFAULT_COACH: Coach = {
 // Debounce window for re-checking whether a new weekly plan is needed
 const PLAN_CHECK_DEBOUNCE_MS = 15000; // 15 seconds
 
+// Cool-down between generation attempts to avoid duplicate calls when the app restarts
+const PLAN_GEN_COOLDOWN_MS = 5 * 60_000; // 5 minutes
+const LAST_PLAN_GEN_ATTEMPT_KEY = 'lastPlanGenAttempt';
+
+const getLastPlanGenAttempt = async (): Promise<number | null> => {
+  try {
+    const ts = await AsyncStorage.getItem(LAST_PLAN_GEN_ATTEMPT_KEY);
+    return ts ? Number(ts) : null;
+  } catch {
+    return null;
+  }
+};
+
+const recordPlanGenAttempt = async () => {
+  try {
+    await AsyncStorage.setItem(LAST_PLAN_GEN_ATTEMPT_KEY, Date.now().toString());
+  } catch {
+    /* ignore */
+  }
+};
+
 export function HomeScreen() {
   const navigation = useNavigation<BottomTabNavigationProp<TabParamList>>();
   const { session } = useAuth();
@@ -93,6 +115,7 @@ export function HomeScreen() {
   const [isDailyVoiceModeActive, setIsDailyVoiceModeActive] = useState(false);
   const [voiceStarting, setVoiceStarting] = useState(false);
   const graphFont = useFont(interMedium, 10);
+  const [planLoaded, setPlanLoaded] = useState(false);
 
   const { isTyping, error: chatError, processUserMessage } = useChatFlow();
   const weeklyMileage = useMileageData(upcomingSessions);
@@ -191,6 +214,7 @@ export function HomeScreen() {
       const trainingPlan = await fetchTrainingPlan(session.user.id);
       console.log('fetchUserData: Training plan fetched with', trainingPlan.length, 'sessions');
       setUpcomingSessions(trainingPlan);
+      setPlanLoaded(true);
     } catch (err: any) {
       console.error('fetchUserData: Error fetching user data:', err);
       setError(err.message || 'Failed to load user data');
@@ -256,10 +280,10 @@ export function HomeScreen() {
     // Only check if we have a profile and the initial load of sessions isn't pending (or has completed)
     // The original upcomingSessions.length > 0 might be too restrictive if a user has NO plan yet.
     // Let fetchUserData complete first.
-    if (profile && !loading) {
+    if (profile && planLoaded && !loading) {
       checkIfPlanUpdateNeeded();
     }
-  }, [profile, loading, upcomingSessions]);
+  }, [profile, loading, upcomingSessions, planLoaded]);
 
   const checkIfPlanUpdateNeeded = useCallback(async () => {
     if (!session?.user || !profile) {
@@ -309,10 +333,17 @@ export function HomeScreen() {
       // On SUNDAY: check for NEXT week if it's empty
       if (dayOfWeek === DayOfWeek.SUNDAY) {
         console.log('[checkIfPlanUpdateNeeded] Today is Sunday, checking for NEXT week.');
+        console.log(
+          `[checkIfPlanUpdateNeeded] Next-week window ${nextWeekMondayString} → ${nextWeekSundayString}`
+        );
         const sessionsInNextWeek = upcomingSessions.filter((s) => {
           const sessionDate = s.date;
           return sessionDate >= nextWeekMondayString && sessionDate <= nextWeekSundayString;
         });
+
+        console.log(
+          `[checkIfPlanUpdateNeeded] Found ${sessionsInNextWeek.length} workout(s) in next-week window.`
+        );
 
         if (sessionsInNextWeek.length < 1) {
           console.log(
@@ -330,10 +361,17 @@ export function HomeScreen() {
         console.log(
           '[checkIfPlanUpdateNeeded] Today is Mon-Sat, checking for CURRENT week (only if empty).'
         );
+        console.log(
+          `[checkIfPlanUpdateNeeded] Current-week window ${currentWeekMondayString} → ${currentWeekSundayString}`
+        );
         const sessionsInCurrentWeek = upcomingSessions.filter((s) => {
           const sessionDate = s.date;
           return sessionDate >= currentWeekMondayString && sessionDate <= currentWeekSundayString;
         });
+
+        console.log(
+          `[checkIfPlanUpdateNeeded] Found ${sessionsInCurrentWeek.length} workout(s) in current-week window.`
+        );
 
         if (sessionsInCurrentWeek.length < 1) {
           console.log(
@@ -351,6 +389,17 @@ export function HomeScreen() {
       }
 
       if (planNeedsGenerating && dateStringToPassToEdgeFunction) {
+        // Check cool-down: skip if we attempted recently
+        const lastAttemptTs = await getLastPlanGenAttempt();
+        if (lastAttemptTs && Date.now() - lastAttemptTs < PLAN_GEN_COOLDOWN_MS) {
+          console.log('[checkIfPlanUpdateNeeded] Skipping generation – recently attempted.');
+          return;
+        }
+
+        // No recent attempt – proceed and flag generation
+        await recordPlanGenAttempt();
+
+        console.log('[checkIfPlanUpdateNeeded] ✅ No workouts found for target week – will trigger generation.');
         console.log(
           `[checkIfPlanUpdateNeeded] Needs update for ${dateStringToPassToEdgeFunction}. Message: ${messageForUser}`
         );
@@ -444,6 +493,7 @@ export function HomeScreen() {
     }
 
     if (attempt === 1) {
+      await recordPlanGenAttempt();
       console.log(
         `[handleRequestWeeklyPlanUpdate] Requesting plan update for week starting: ${targetMonday}`
       );

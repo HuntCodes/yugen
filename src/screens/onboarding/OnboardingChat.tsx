@@ -199,18 +199,20 @@ export function OnboardingChat() {
       </View>
 
       <View className="pb-0">
-        <View className="flex-row items-center">
-          <View className="flex-1">
-            <OnboardingInput
-              value={input}
-              onChangeText={setInput}
-              onSend={handleSend}
-              disabled={isTyping || isProcessing || isHookProcessingComplete || isRestoringState}
-              isTyping={isTyping}
-              planLoading={isProcessing}
-            />
+        {!isHookProcessingComplete && (
+          <View className="flex-row items-center">
+            <View className="flex-1">
+              <OnboardingInput
+                value={input}
+                onChangeText={setInput}
+                onSend={handleSend}
+                disabled={isTyping || isProcessing || isRestoringState}
+                isTyping={isTyping}
+                planLoading={isProcessing}
+              />
+            </View>
           </View>
-        </View>
+        )}
 
         {voiceChatError && (
           <View className="mt-2 px-4">

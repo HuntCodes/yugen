@@ -1,42 +1,28 @@
 import { useState, useEffect, useCallback } from 'react';
 
-import {
-  getCurrentLocation,
-  requestLocationPermission,
-  checkLocationPermission,
-} from '../lib/location/locationUtils';
+import { getCurrentLocation } from '../lib/location/locationUtils';
 import { getWeatherData, WeatherForecast } from '../services/weather/weatherService';
+import { useAppPermissions } from './useAppPermissions';
 
 export function useWeather() {
   const [weatherData, setWeatherData] = useState<WeatherForecast | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [hasLocationPermission, setHasLocationPermission] = useState<boolean | null>(null);
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
 
-  // Check location permission on mount
-  useEffect(() => {
-    checkLocationPermission().then(setHasLocationPermission);
-  }, []);
+  const {
+    location: locationStatus,
+    requestLocationPermission,
+  } = useAppPermissions();
 
-  // Request location permission
-  const requestPermission = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const granted = await requestLocationPermission();
-      setHasLocationPermission(granted);
-      if (granted) {
-        await fetchWeatherData();
-      } else {
-        setError('Location permission is required for weather updates');
-      }
-    } catch (err) {
-      setError('Failed to request location permission');
-      console.error('Error requesting location permission:', err);
-    } finally {
-      setIsLoading(false);
+  const hasLocationPermission = locationStatus === 'granted';
+
+  // Effect: fetch weather immediately when permission becomes granted
+  useEffect(() => {
+    if (locationStatus === 'granted') {
+      fetchWeatherData();
     }
-  }, []);
+  }, [locationStatus]);
 
   // Fetch weather data
   const fetchWeatherData = useCallback(async () => {
@@ -72,12 +58,21 @@ export function useWeather() {
     }
   }, [hasLocationPermission]);
 
-  // Auto-fetch weather when permission is granted
-  useEffect(() => {
-    if (hasLocationPermission === true) {
-      fetchWeatherData();
+  // Request location permission
+  const requestPermission = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const granted = await requestLocationPermission();
+      if (!granted) {
+        setError('Location permission is required for weather updates');
+      }
+    } catch (err) {
+      setError('Failed to request location permission');
+      console.error('Error requesting location permission:', err);
+    } finally {
+      setIsLoading(false);
     }
-  }, [hasLocationPermission, fetchWeatherData]);
+  }, [requestLocationPermission]);
 
   // Refresh weather data
   const refreshWeather = useCallback(() => {

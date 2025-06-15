@@ -128,7 +128,7 @@ export function ProfileScreen() {
           {/* Purple Gradient Banner Wrapper */}
           <View className="mb-8 mt-4 overflow-hidden rounded-lg shadow-sm">
             <LinearGradient
-              colors={['#a587e4', '#38418D']}
+              colors={['#9B7BFF', '#4B2ED2']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}>
               <View className="p-6">

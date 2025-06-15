@@ -88,6 +88,14 @@ export function VoiceOnboarding() {
     avatar: coachAvatar, // This is now consistently from imageMap
   };
 
+  // Determine team region label for welcome header
+  const teamRegionLabel =
+    currentCoachId === 'craig'
+      ? 'OAC Oceania'
+      : currentCoachId === 'thomas'
+      ? 'OAC Europe'
+      : 'OAC Global';
+
   const { isVoiceChatAvailable, checkVoiceChatAvailability } = useVoiceChat();
 
   const {
@@ -422,6 +430,9 @@ export function VoiceOnboarding() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <View style={styles.welcomeContainer}>
+        <Text style={styles.welcomeHeader}>{`Welcome to ${teamRegionLabel}`}</Text>
+      </View>
       <View style={styles.content}>
         <View style={styles.header}>
           {voiceChatUIVisible ? (
@@ -589,6 +600,18 @@ const styles = StyleSheet.create({
     color: '#000000',
     marginTop: 16,
   },
+  welcomeHeader: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#000000',
+    alignSelf: 'center',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  welcomeContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 60,
+  },
   voiceChatContainer: {
     marginTop: 30,
     marginBottom: 20,
@@ -601,8 +624,8 @@ const styles = StyleSheet.create({
     // alignItems: 'center', // if you want buttons centered
   },
   talkButton: {
-    backgroundColor: '#000000',
-    borderRadius: 12,
+    backgroundColor: '#7C3AED',
+    borderRadius: 999,
     paddingVertical: 16,
     paddingHorizontal: 30,
     minWidth: 250,
@@ -617,8 +640,9 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   talkButtonDisabled: {
-    backgroundColor: '#888888',
+    backgroundColor: '#BDA3FF',
     opacity: 0.7,
+    borderRadius: 999,
   },
   micIcon: {
     marginRight: 10,
@@ -756,10 +780,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#4CAF50',
   },
   endChatButton: {
-    padding: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 32,
     alignItems: 'center',
-    backgroundColor: '#8B5CF6',
-    borderRadius: 6,
+    backgroundColor: '#E53935',
+    borderRadius: 999,
     marginTop: 16,
   },
   endChatButtonText: {

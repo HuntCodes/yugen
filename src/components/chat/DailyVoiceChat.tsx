@@ -876,7 +876,7 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
             Accept: 'application/json',
           },
           body: JSON.stringify({
-            model: 'gpt-4o-mini-realtime-preview',
+            model: 'gpt-4o-realtime-preview',
             voice: 'verse',
           }),
           signal: controller.signal,
@@ -1942,7 +1942,7 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
           // Send offer to OpenAI Realtime API - Updated to match VoiceChat.tsx implementation
           console.log('[DailyVoiceChat] Sending SDP offer to OpenAI...');
           const sdpResponse = await fetch(
-            `https://api.openai.com/v1/realtime?model=gpt-4o-mini-realtime-preview`,
+            `https://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview`,
             {
               method: 'POST',
               headers: {

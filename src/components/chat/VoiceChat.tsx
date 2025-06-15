@@ -396,7 +396,7 @@ const VoiceChat = ({
           Accept: 'application/json',
         },
         body: JSON.stringify({
-          model: 'gpt-4o-mini-realtime-preview',
+          model: 'gpt-4o-realtime-preview',
           voice: 'verse', // Updated from alloy to verse
         }),
         signal: controller.signal,
@@ -699,7 +699,7 @@ const VoiceChat = ({
       // Send the offer to OpenAI's realtime API
       AudioDebugLogger.log('Sending SDP offer to OpenAI...');
       const sdpResponse = await fetch(
-        `https://api.openai.com/v1/realtime?model=gpt-4o-mini-realtime-preview`,
+        `https://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview`,
         {
           method: 'POST',
           headers: {
@@ -1669,14 +1669,16 @@ Provide specific, actionable advice tailored to the athlete's needs.`;
     // Render inline without modal - with improved styling
     return (
       <View className="w-full bg-transparent">
-        {/* Close button for inline mode */}
-        <View className="mb-2 items-end">
-          <TouchableOpacity
-            onPress={handleCloseModal}
-            className="h-8 w-8 items-center justify-center rounded-full bg-gray-200">
-            <FontAwesome name="close" size={16} color="#000" />
-          </TouchableOpacity>
-        </View>
+        {/* Close button for inline mode - hidden during onboarding */}
+        {!onboardingMode && (
+          <View className="mb-2 items-end">
+            <TouchableOpacity
+              onPress={handleCloseModal}
+              className="h-8 w-8 items-center justify-center rounded-full bg-gray-200">
+              <FontAwesome name="close" size={16} color="#000" />
+            </TouchableOpacity>
+          </View>
+        )}
 
         {renderContent()}
       </View>

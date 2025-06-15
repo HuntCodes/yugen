@@ -6,7 +6,7 @@ export const COACHES: Coach[] = [
     id: 'craig',
     name: 'Craig Mottram',
     vibe: coachStyles.craig.communicationStyle[0],
-    philosophy: 'Run fast, rest hard. Recovery is key.',
+    philosophy: 'Run like you stole something.',
     personalityBlurb: coachStyles.craig.personality.join('. '),
     image: 'craig.jpg',
   },

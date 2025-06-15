@@ -201,7 +201,7 @@ export function useMessageAnalysis() {
         console.log(`🤖 [callOpenAI] ATTEMPT ${attempt + 1}/${retryConfig.maxRetries + 1}`);
 
         const requestBody: any = {
-          model: 'gpt-4o-mini',
+          model: 'gpt-4o',
           messages,
           temperature: 0.7,
         };
