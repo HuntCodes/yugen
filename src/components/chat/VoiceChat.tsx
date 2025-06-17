@@ -31,6 +31,7 @@ import { coachStyles } from '../../config/coachingGuidelines';
 import { useAuth } from '../../hooks/useAuth';
 import { voiceSessionManager } from '../../lib/voice/voiceSessionManager';
 import { checkMicrophonePermission, processVoiceInput } from '../../lib/voice/voiceUtils';
+import { supabaseConfig } from '../../lib/config';
 // Import the coach styles for the prompts
 
 // Import the saveMessage function
@@ -394,10 +395,12 @@ const VoiceChat = ({
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
+          apikey: supabaseConfig.anonKey,
+          Authorization: `Bearer ${supabaseConfig.anonKey}`,
         },
         body: JSON.stringify({
-          model: 'gpt-4o-realtime-preview',
-          voice: 'verse', // Updated from alloy to verse
+          model: 'gpt-4o-mini-realtime-preview',
+          voice: 'verse',
         }),
         signal: controller.signal,
       });
@@ -699,7 +702,7 @@ const VoiceChat = ({
       // Send the offer to OpenAI's realtime API
       AudioDebugLogger.log('Sending SDP offer to OpenAI...');
       const sdpResponse = await fetch(
-        `https://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview`,
+        `https://api.openai.com/v1/realtime?model=gpt-4o-mini-realtime-preview`,
         {
           method: 'POST',
           headers: {
@@ -802,7 +805,7 @@ Acknowledge their answer before asking the next question.
 Make sure to always complete your full thought or question - don't stop mid-sentence.
 Keep your responses friendly and encouraging but concise.
 
-When you have collected ALL required information, end with a short phraseby saying "Perfect! I've got all the information I need."
+When you have collected ALL required information, end with a short phrase by saying "Perfect! I've got all the information I need."
 Your final message MUST include the exact phrase "Perfect! I've got all the information I need." for the system to recognize completion.`;
       } else {
         instructions = `You are ${coachStyle.name}, a running coach chatting with an athlete.

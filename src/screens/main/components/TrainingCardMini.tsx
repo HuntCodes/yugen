@@ -293,7 +293,7 @@ export function TrainingCardMini({
         {/* Location suggestion */}
         {item.suggested_location && (
           <View className="mb-2">
-            <Text className="text-xs text-gray-600">
+            <Text className="text-xs text-gray-600" style={{ flexWrap: 'wrap' }}>
               Suggested Location: {item.suggested_location}
             </Text>
           </View>

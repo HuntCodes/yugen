@@ -386,6 +386,7 @@ const styles = StyleSheet.create({
   detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
     marginBottom: 4,
   },
   detailLabel: {
@@ -397,6 +398,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.text.primary,
     fontWeight: '600',
+    flexShrink: 1,
+    flexWrap: 'wrap',
+    textAlign: 'right',
   },
   description: {
     fontSize: 14,

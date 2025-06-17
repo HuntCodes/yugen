@@ -31,7 +31,7 @@ export function EntryScreen() {
             textAlign: 'center',
             marginBottom: 48,
           }}>
-          Project "Join the OAC": 1.0.3
+          Project: Join the OAC
         </Text>
 
         <TouchableOpacity

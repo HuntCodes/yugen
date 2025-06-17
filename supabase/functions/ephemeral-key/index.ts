@@ -17,14 +17,24 @@ serve(async (req) => {
     }
 
     // Get parameters from request if needed
-    let model = 'gpt-4o-realtime-preview';
+    let model = 'gpt-4o-mini-realtime-preview';
     let voice = 'verse';
 
     // Allow overriding parameters via request body
     if (req.method === 'POST') {
       try {
         const body = await req.json();
-        if (body.model) model = body.model;
+        if (body.model) {
+          // Map generic names to realtime preview counterparts expected by the Realtime API
+          const requested = String(body.model);
+          if (requested === 'gpt-4o') {
+            model = 'gpt-4o-mini-realtime-preview';
+          } else if (requested === 'gpt-4o-mini') {
+            model = 'gpt-4o-mini-realtime-preview';
+          } else {
+            model = requested;
+          }
+        }
         if (body.voice) voice = body.voice;
       } catch (error) {
         // Continue with defaults if JSON parsing fails
@@ -37,6 +47,7 @@ serve(async (req) => {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${OPENAI_API_KEY}`,
+        'OpenAI-Beta': 'realtime=v1',
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -60,11 +71,12 @@ serve(async (req) => {
       },
     });
   } catch (error) {
-    console.error('Error:', error.message);
+    const err = error instanceof Error ? error : new Error(String(error));
+    console.error('Error:', err.message);
 
     return new Response(
       JSON.stringify({
-        error: error.message,
+        error: err.message,
       }),
       {
         status: 500,

@@ -47,6 +47,7 @@ import { MinimalSpinner } from '../ui/MinimalSpinner';
 // Import the new hooks and types
 // Import voice session manager for conflict prevention
 import { voiceSessionManager } from '../../lib/voice/voiceSessionManager';
+import { supabaseConfig } from '../../lib/config';
 
 // Constants
 const SUPABASE_URL = environment.supabaseUrl; // Ensure this is correctly configured in your environment
@@ -874,6 +875,8 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
           headers: {
             'Content-Type': 'application/json',
             Accept: 'application/json',
+            apikey: supabaseConfig.anonKey,
+            Authorization: `Bearer ${supabaseConfig.anonKey}`,
           },
           body: JSON.stringify({
             model: 'gpt-4o-realtime-preview',
