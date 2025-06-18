@@ -15,15 +15,20 @@ import { CoachSelect } from '../screens/onboarding/CoachSelect';
 import { OnboardingChat } from '../screens/onboarding/OnboardingChat';
 import { VoiceOnboarding } from '../screens/onboarding/VoiceOnboarding';
 import { ChatMessage } from '../types/chat';
+import { OACInfoScreen } from '../screens/onboarding/OACInfoScreen';
 
 export type RootStackParamList = {
   Entry: undefined;
   Login: undefined;
   SignUp: undefined;
   ForgotPassword: undefined;
+  OACInfo: undefined;
   CoachSelect: undefined;
   Onboarding: { coachId?: string } | undefined;
   VoiceOnboarding: { coachId?: string } | undefined;
+  OACOceania: undefined;
+  OACEurope: undefined;
+  OACGlobal: undefined;
   MainApp: { onboardingMessages?: ChatMessage[] } | undefined;
 };
 
@@ -165,6 +170,7 @@ export function AppNavigator({ authLoading, session }: AppNavigatorProps) {
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="SignUp" component={SignUpScreen} />
       <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+      <Stack.Screen name="OACInfo" component={OACInfoScreen} />
       <Stack.Screen name="CoachSelect" component={CoachSelect} />
       <Stack.Screen
         name="VoiceOnboarding"
@@ -173,6 +179,23 @@ export function AppNavigator({ authLoading, session }: AppNavigatorProps) {
       />
       <Stack.Screen name="Onboarding" component={OnboardingChat} />
       <Stack.Screen name="MainApp" component={TabNavigator} />
+
+      {/* Modal screens for Learn More */}
+      <Stack.Screen
+        name="OACOceania"
+        component={require('../screens/onboarding/OACOceaniaScreen').OACOceaniaScreen}
+        options={{ presentation: 'modal', animation: 'slide_from_bottom', headerShown: false }}
+      />
+      <Stack.Screen
+        name="OACEurope"
+        component={require('../screens/onboarding/OACEuropeScreen').OACEuropeScreen}
+        options={{ presentation: 'modal', animation: 'slide_from_bottom', headerShown: false }}
+      />
+      <Stack.Screen
+        name="OACGlobal"
+        component={require('../screens/onboarding/OACGlobalScreen').OACGlobalScreen}
+        options={{ presentation: 'modal', animation: 'slide_from_bottom', headerShown: false }}
+      />
     </Stack.Navigator>
     // </NavigationContainer> // This line is removed
   );

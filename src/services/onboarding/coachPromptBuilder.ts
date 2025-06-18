@@ -16,7 +16,7 @@ export function buildConversationPrompt(
 
   let modeSpecificInstructions = '';
   if (isInitialGreeting) {
-    modeSpecificInstructions = `Start by welcoming the athlete. Ask for their preferred name or nickname. Also, ask if they prefer to use miles or kilometers for distances.`;
+    modeSpecificInstructions = `Start by welcoming the athlete to the team. Ask for their preferred name or nickname. Also, ask if they prefer to use miles or kilometers for distances.`;
   } else {
     modeSpecificInstructions = `Continue the conversation naturally. Your goal is to gather all the information needed to populate the fields for the 'update_onboarding_profile' function.`;
   }

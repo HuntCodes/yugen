@@ -195,7 +195,7 @@ export function LoginScreen() {
           style={{
             backgroundColor: '#000000',
             paddingVertical: 16,
-            borderRadius: 6,
+            borderRadius: 32,
             alignItems: 'center',
             marginBottom: 16,
           }}

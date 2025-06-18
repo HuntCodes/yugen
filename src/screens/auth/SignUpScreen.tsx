@@ -57,7 +57,8 @@ export function SignUpScreen() {
         // Don't fail the signup flow if permissions fail
       }
 
-      // Auth context will handle navigation after successful sign-up
+      // Navigate to OAC info screen before coach selection
+      navigation.navigate('OACInfo');
     } catch (error: any) {
       console.error('Sign up error:', error);
 
@@ -212,7 +213,7 @@ export function SignUpScreen() {
           style={{
             backgroundColor: '#000000',
             paddingVertical: 16,
-            borderRadius: 6,
+            borderRadius: 32,
             alignItems: 'center',
             marginBottom: 16,
           }}

@@ -129,11 +129,25 @@ export function CoachSelect() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: 'white' }}>
       <View style={{ flex: 1, padding: 16 }}>
+        {/* Back arrow */}
+        <TouchableOpacity
+          style={{ position: 'absolute', top: 8, left: 16, zIndex: 10 }}
+          onPress={() => {
+            if (navigation.canGoBack()) {
+              navigation.goBack();
+            } else {
+              navigation.navigate('OACInfo');
+            }
+          }}
+        >
+          <Text style={{ fontSize: 18, fontWeight: 'bold' }}>←</Text>
+        </TouchableOpacity>
+
         <Text
           style={{
             fontSize: 28,
             fontWeight: 'bold',
-            marginTop: 16,
+            marginTop: 30,
             marginBottom: 24,
             color: '#000000',
           }}>
@@ -142,69 +156,102 @@ export function CoachSelect() {
 
         <ScrollView style={{ marginBottom: 24 }} showsVerticalScrollIndicator={false}>
           {COACHES.map((coach) => (
-            <TouchableOpacity
+            <View
               key={coach.id}
               style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                padding: 16,
-                borderRadius: 6,
                 marginBottom: 16,
+                borderRadius: 6,
                 borderWidth: 1,
                 borderColor: selectedCoach === coach.id ? '#000000' : '#F5F5F5',
                 backgroundColor: selectedCoach === coach.id ? '#F5F5F5' : 'white',
+                padding: 16,
               }}
-              onPress={() => setSelectedCoach(coach.id)}>
-              <Image
-                source={
-                  coach.id === 'craig'
-                    ? require('../../assets/craig.jpg')
-                    : coach.id === 'thomas'
-                      ? require('../../assets/thomas.jpg')
-                      : require('../../assets/dathan.jpg')
-                }
-                style={{
-                  width: 60,
-                  height: 60,
-                  borderRadius: 30,
-                  marginRight: 16,
-                  borderWidth: 1,
-                  borderColor: '#F5F5F5',
-                }}
-              />
-              <View style={{ flex: 1 }}>
-                {/* Region label */}
-                <Text
+            >
+              {/* Card row (image + info) */}
+              <TouchableOpacity
+                style={{ flexDirection: 'row', alignItems: 'center' }}
+                onPress={() => setSelectedCoach(coach.id)}
+              >
+                <Image
+                  source={
+                    coach.id === 'craig'
+                      ? require('../../assets/craig.jpg')
+                      : coach.id === 'thomas'
+                        ? require('../../assets/thomas.jpg')
+                        : require('../../assets/dathan.jpg')
+                  }
                   style={{
-                    fontSize: 18,
-                    fontWeight: 'bold',
-                    color: '#5D5D5D',
-                    marginBottom: 4,
-                  }}>
-                  {coach.id === 'craig'
-                    ? 'OAC Oceania'
-                    : coach.id === 'thomas'
-                    ? 'OAC Europe'
-                    : 'OAC Global'}
-                </Text>
-                <Text
+                    width: 60,
+                    height: 60,
+                    borderRadius: 30,
+                    marginRight: 16,
+                    borderWidth: 1,
+                    borderColor: '#F5F5F5',
+                  }}
+                />
+                <View style={{ flex: 1 }}>
+                  {/* Region label */}
+                  <Text
+                    style={{
+                      fontSize: 18,
+                      fontWeight: 'bold',
+                      color: '#5D5D5D',
+                      marginBottom: 4,
+                    }}
+                  >
+                    {coach.id === 'craig'
+                      ? 'OAC Oceania'
+                      : coach.id === 'thomas'
+                        ? 'OAC Europe'
+                        : 'OAC Global'}
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      fontWeight: '600',
+                      marginBottom: 2,
+                      color: '#000000',
+                    }}
+                  >
+                    {coach.name}
+                  </Text>
+                  <Text
+                    style={{
+                      color: '#757575',
+                      lineHeight: 20,
+                    }}
+                  >
+                    {coach.personalityBlurb}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              {selectedCoach === coach.id && (
+                <TouchableOpacity
                   style={{
-                    fontSize: 14,
-                    fontWeight: '600',
-                    marginBottom: 2,
-                    color: '#000000',
-                  }}>
-                  {coach.name}
-                </Text>
-                <Text
-                  style={{
-                    color: '#757575',
-                    lineHeight: 20,
-                  }}>
-                  {coach.personalityBlurb}
-                </Text>
-              </View>
-            </TouchableOpacity>
+                    alignSelf: 'stretch',
+                    marginTop: 12,
+                    paddingVertical: 12,
+                    borderRadius: 32,
+                    borderWidth: 1,
+                    borderColor: '#000000',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                  onPress={() => {
+                    if (coach.id === 'craig') {
+                      navigation.navigate('OACOceania');
+                    } else if (coach.id === 'thomas') {
+                      navigation.navigate('OACEurope');
+                    } else {
+                      navigation.navigate('OACGlobal');
+                    }
+                  }}
+                >
+                  <Text style={{ color: '#000000', fontWeight: '500' }}>Learn More</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           ))}
         </ScrollView>
 
