@@ -145,7 +145,8 @@ export function AppNavigator({ authLoading, session }: AppNavigatorProps) {
   if (session) {
     if (hasCoach === null) {
     } else if (hasCoach === false) {
-      initialRouteName = 'CoachSelect';
+      // Ensure new users first see the OAC brand intro before selecting a coach
+      initialRouteName = 'OACInfo';
     } else if (onboardingComplete === false) {
       initialRouteName = 'VoiceOnboarding';
       if (currentCoachId) {

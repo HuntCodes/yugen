@@ -805,8 +805,7 @@ Acknowledge their answer before asking the next question.
 Make sure to always complete your full thought or question - don't stop mid-sentence.
 Keep your responses friendly and encouraging but concise.
 
-When you have collected ALL required information, end with a short phrase by saying "Perfect! I've got all the information I need."
-Your final message MUST include the exact phrase "Perfect! I've got all the information I need." for the system to recognize completion.`;
+When you have collected ALL required information, end with a short phrase by saying something like "Perfect! I've got all the information I need."`;
       } else {
         instructions = `You are ${coachStyle.name}, a running coach chatting with an athlete.
   
@@ -831,12 +830,7 @@ Provide specific, actionable advice tailored to the athlete's needs.`;
             type: 'near_field',
           },
           turn_detection: {
-            type: 'server_vad',
-            threshold: 0.7,
-            prefix_padding_ms: 800,
-            silence_duration_ms: 1200,
-            create_response: true,
-            interrupt_response: true,
+            type: 'semantic_vad'
           },
         },
       };
@@ -983,31 +977,7 @@ Provide specific, actionable advice tailored to the athlete's needs.`;
         onSpeakingStateChange(false);
       }
 
-      // Trigger coach response if in onboarding mode and conditions met
-      if (
-        onboardingMode &&
-        dataChannel &&
-        dataChannel.readyState === 'open' &&
-        !conversationComplete
-      ) {
-        // ⚡ REDUCED DELAY - Shorter delay for better responsiveness to short phrases
-        setTimeout(() => {
-          // 🎯 GRANULAR CHECKS - More precise conditions for triggering response
-          if (!isReceivingCoachMessage && !isCoachSpeakingTTS) {
-            console.log('[VOICE_CHAT] User turn complete. Sending response.create for coach.');
-            const responseCreateEvent = {
-              type: 'response.create',
-            };
-            dataChannel.send(JSON.stringify(responseCreateEvent));
-            setIsReceivingCoachMessage(true); // Coach is about to speak
-            setUserHasResponded(false); // Reset for the next user turn
-          } else {
-            console.log(
-              '[VOICE_CHAT] Skipping coach response - already receiving or coach speaking TTS'
-            );
-          }
-        }, 300); // ⚡ Reduced from 1000ms to 300ms for better short phrase handling
-      }
+      // Coach will respond automatically via create_response: true in turn_detection.
     } else {
       console.log(
         '[VOICE_CHAT] Received conversation.item.input_audio_transcription.completed but no transcript content.',

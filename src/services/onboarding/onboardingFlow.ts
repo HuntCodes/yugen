@@ -128,8 +128,10 @@ export async function handleOnboardingConversation(
       lowerCoachMessage.includes(phrase)
     );
 
-    // Onboarding is complete if the tool was called OR if the AI uses a completion phrase.
-    const isComplete = isCompleteByToolCall || isCompleteByPhrase;
+    // Onboarding is complete primarily when the profile update tool is called.
+    // We only treat a completion phrase as sufficient if it accompanies a tool call in the SAME response.
+    // This prevents early cut-offs when the model says the phrase but still has more to add.
+    const isComplete = isCompleteByToolCall || (isCompleteByPhrase && isCompleteByToolCall);
     if (isCompleteByToolCall && isCompleteByPhrase) {
       console.log(
         '[handleOnboardingConversation] Onboarding complete by BOTH tool call and completion phrase.'

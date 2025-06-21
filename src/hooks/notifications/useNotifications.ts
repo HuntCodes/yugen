@@ -1,13 +1,11 @@
-import * as Location from 'expo-location';
 import { useState, useEffect } from 'react';
 
 import {
-  scheduleDynamicNotifications,
+  rescheduleAllNotificationsForNext14Days,
   cancelDailyNotifications,
   getNotificationStatus,
   refreshNotificationContent,
   isReadyForNotifications,
-  NotificationData,
 } from '../../services/notifications/notificationService';
 import { fetchProfile } from '../../services/profile/profileService';
 import { useAuth } from '../useAuth';
@@ -59,11 +57,33 @@ export const useNotifications = () => {
   const checkNotificationStatus = async () => {
     try {
       const status = await getNotificationStatus();
+      const permissionsGranted = notificationStatus === 'granted';
+
       setState((prev) => ({
         ...prev,
-        permissionsGranted: notificationStatus === 'granted',
+        permissionsGranted,
         isScheduled: status.scheduledCount > 0,
       }));
+
+      // If the user has granted permissions but no notifications are scheduled (e.g., after app reinstall or OS cleanup), eagerly schedule them again
+      if (permissionsGranted && status.scheduledCount === 0) {
+        if (session?.user) {
+          try {
+            const profile = await fetchProfile(session.user.id);
+            if (profile?.coach_id) {
+              await rescheduleAllNotificationsForNext14Days(session.user.id, profile.coach_id);
+              // Re-fetch to update state
+              const statusAfter = await getNotificationStatus();
+              setState((prev) => ({
+                ...prev,
+                isScheduled: statusAfter.scheduledCount > 0,
+              }));
+            }
+          } catch (autoScheduleError) {
+            console.error('Error auto-rescheduling notifications:', autoScheduleError);
+          }
+        }
+      }
     } catch (error) {
       console.error('Error checking notification status:', error);
       setState((prev) => ({
@@ -120,45 +140,20 @@ export const useNotifications = () => {
         return false;
       }
 
-      // Get user location for weather data
-      let location = null;
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === 'granted') {
-          location = await Location.getCurrentPositionAsync({});
-        }
-      } catch (locationError) {
-        console.log('Could not get location for weather:', locationError);
-        // Continue without location - weather will use fallback message
-      }
+      // Eager scheduling: schedule the next 14 days immediately with full content
+      await rescheduleAllNotificationsForNext14Days(session.user.id, profile.coach_id);
 
-      // Schedule dynamic notifications
-      const notificationData: NotificationData = {
-        userId: session.user.id,
-        coachId: profile.coach_id,
-        latitude: location?.coords.latitude,
-        longitude: location?.coords.longitude,
-      };
+      // Verify scheduling succeeded by checking notification count
+      await checkNotificationStatus();
 
-      const result = await scheduleDynamicNotifications(notificationData);
-
-      if (result.morningId && result.eveningId) {
-        setState((prev) => ({
-          ...prev,
-          loading: false,
-          permissionsGranted: true,
-          isScheduled: true,
-          isReadyForSetup: true,
-        }));
-        return true;
-      } else {
-        setState((prev) => ({
-          ...prev,
-          loading: false,
-          error: 'Failed to schedule all notifications',
-        }));
-        return false;
-      }
+      setState((prev) => ({
+        ...prev,
+        loading: false,
+        permissionsGranted: true,
+        isScheduled: true,
+        isReadyForSetup: true,
+      }));
+      return true;
     } catch (error) {
       console.error('Error setting up notifications:', error);
       setState((prev) => ({

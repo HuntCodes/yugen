@@ -332,8 +332,8 @@ export const generateEveningCoachMessage = async (
     reminder = "Drop me a note if you want to talk about tomorrow's plan";
   }
   
-  // Recovery message
-  const recoveryMessage = "Quality sleep is your secret weapon.";
+  // Recovery message (avoid trailing period to prevent double punctuation)
+  const recoveryMessage = "Quality sleep is your secret weapon";
   
   return `${greeting}! ${workoutCheckIn}. ${reminder}. ${recoveryMessage}.`;
 };
@@ -431,24 +431,11 @@ export const refreshNotificationContent = async (userId: string): Promise<boolea
       return false;
     }
 
-    // Prepare notification data
-    const notificationData: NotificationData = {
-      userId: userId,
-      coachId: profile.coach_id,
-      latitude: profile.latitude,
-      longitude: profile.longitude,
-    };
+    // Use eager scheduling so that each notification already contains full content
+    await rescheduleAllNotificationsForNext14Days(userId, profile.coach_id);
 
-    // Reschedule notifications with fresh data
-    const result = await scheduleDynamicNotifications(notificationData);
-    
-    if (result.morningId && result.eveningId) {
-      console.log('[NotificationService] Successfully refreshed notification content');
-      return true;
-    } else {
-      console.warn('[NotificationService] Failed to refresh some notifications');
-      return false;
-    }
+    console.log('[NotificationService] Successfully refreshed notification content');
+    return true;
   } catch (error) {
     console.error('[NotificationService] Error refreshing notification content:', error);
     return false;
