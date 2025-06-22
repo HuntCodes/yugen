@@ -805,7 +805,7 @@ Acknowledge their answer before asking the next question.
 Make sure to always complete your full thought or question - don't stop mid-sentence.
 Keep your responses friendly and encouraging but concise.
 
-When you have collected ALL required information, end with a short phrase by saying something like "Perfect! I've got all the information I need."`;
+When you have collected ALL required information, end with a short phrase by saying "Perfect! I've got all the information I need." You MUST finish with this phrase.`;
       } else {
         instructions = `You are ${coachStyle.name}, a running coach chatting with an athlete.
   
