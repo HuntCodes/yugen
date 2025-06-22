@@ -13,16 +13,18 @@
     "test:notifications": "npx tsx src/services/notifications/testSimple.ts"
   },
   "dependencies": {
-    "@config-plugins/react-native-webrtc": "^10.0.0",
+    "@config-plugins/react-native-webrtc": "12.0.0",
     "@expo-google-fonts/inter": "^0.3.0",
     "@expo/vector-icons": "^14.0.0",
     "@js-joda/core": "^5.6.5",
     "@js-joda/locale_en-us": "^4.15.1",
     "@js-joda/timezone": "^2.22.0",
     "@js-temporal/polyfill": "^0.5.1",
+    "@mapbox/polyline": "^1.2.1",
     "@react-native-async-storage/async-storage": "^2.1.2",
     "@react-native-community/datetimepicker": "8.3.0",
     "@react-native-community/netinfo": "^11.4.1",
+    "@react-native-masked-view/masked-view": "0.3.2",
     "@react-navigation/bottom-tabs": "^7.3.10",
     "@react-navigation/native": "^7.1.6",
     "@react-navigation/native-stack": "^7.3.10",
@@ -58,6 +60,7 @@
     "react-native-gifted-charts": "^1.4.61",
     "react-native-incall-manager": "^4.2.1",
     "react-native-linear-gradient": "^2.8.3",
+    "react-native-maps": "^1.20.1",
     "react-native-reanimated": "~3.17.4",
     "react-native-safe-area-context": "5.4.0",
     "react-native-screens": "~4.11.1",
@@ -67,13 +70,13 @@
     "react-native-webrtc": "^124.0.5",
     "tailwind-merge": "^3.2.0",
     "uuid": "^11.1.0",
-    "victory-native": "^41.17.1",
-    "@react-native-masked-view/masked-view": "0.3.2"
+    "victory-native": "^41.17.1"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",
     "@babel/node": "^7.27.1",
     "@types/react": "~19.0.10",
+    "@types/react-native-maps": "^0.24.1",
     "@typescript-eslint/eslint-plugin": "^7.7.0",
     "@typescript-eslint/parser": "^7.7.0",
     "ajv": "^8.12.0",

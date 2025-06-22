@@ -5,6 +5,7 @@ import * as notificationService from './notifications';
 import * as onboardingService from './onboarding';
 import * as planService from './plan';
 import * as profileService from './profile';
+import * as runService from './run';
 
 export {
   authService,
@@ -13,4 +14,5 @@ export {
   profileService,
   onboardingService,
   notificationService,
+  runService,
 };

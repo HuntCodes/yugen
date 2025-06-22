@@ -16,6 +16,9 @@ import { OnboardingChat } from '../screens/onboarding/OnboardingChat';
 import { VoiceOnboarding } from '../screens/onboarding/VoiceOnboarding';
 import { ChatMessage } from '../types/chat';
 import { OACInfoScreen } from '../screens/onboarding/OACInfoScreen';
+import GuidedRunSetupScreen from '../screens/run/GuidedRunSetupScreen';
+import GuidedRunScreen from '../screens/run/GuidedRunScreen';
+import GuidedRunSummaryScreen from '../screens/run/GuidedRunSummaryScreen';
 
 export type RootStackParamList = {
   Entry: undefined;
@@ -30,6 +33,9 @@ export type RootStackParamList = {
   OACEurope: undefined;
   OACGlobal: undefined;
   MainApp: { onboardingMessages?: ChatMessage[] } | undefined;
+  GuidedRunSetup: { sessionId?: string } | undefined;
+  GuidedRun: { sessionId?: string } | undefined;
+  GuidedRunSummary: { sessionId?: string; runId?: string; distanceM: number; durationS: number; coords: import('../hooks/useRunTracking').Coord[] } | undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -197,6 +203,9 @@ export function AppNavigator({ authLoading, session }: AppNavigatorProps) {
         component={require('../screens/onboarding/OACGlobalScreen').OACGlobalScreen}
         options={{ presentation: 'modal', animation: 'slide_from_bottom', headerShown: false }}
       />
+      <Stack.Screen name="GuidedRunSetup" component={GuidedRunSetupScreen} />
+      <Stack.Screen name="GuidedRun" component={GuidedRunScreen} />
+      <Stack.Screen name="GuidedRunSummary" component={GuidedRunSummaryScreen} />
     </Stack.Navigator>
     // </NavigationContainer> // This line is removed
   );

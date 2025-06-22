@@ -23,6 +23,9 @@ import {
 import { TabParamList } from '../../../../navigation/TabNavigator';
 import { processWorkoutNotes } from '../../../../services/summary/workoutNoteService';
 import { colors } from '../../../../styles/colors';
+import { getGuidedRunForSession } from '../../../../services/run';
+import MapView, { Polyline } from 'react-native-maps';
+import polyline from '@mapbox/polyline';
 
 // Update SessionStatus type to match what's used in the app
 type AppSessionStatus = 'completed' | 'missed' | 'planned' | 'not_completed' | 'skipped';
@@ -61,6 +64,8 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   const [isUpdating, setIsUpdating] = useState(false);
   const [notes, setNotes] = useState(session.post_session_notes || '');
   const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const [guidedRun, setGuidedRun] = useState<any>(null);
+  const [loadingGuidedRun, setLoadingGuidedRun] = useState(true);
 
   // Helper function to get color for session type
   const getSessionTypeColor = (sessionType: string) => {
@@ -171,6 +176,13 @@ export const SessionCard: React.FC<SessionCardProps> = ({
     }
   };
 
+  // Additional: Launch guided run
+  const handleGuidedRun = () => {
+    // Navigate to setup screen with sessionId
+    // Using any to avoid TS type issues across nested navigators
+    (navigation as any).navigate('GuidedRunSetup', { sessionId: session.id });
+  };
+
   const sessionTypeColors = getSessionTypeColor(session.session_type);
   const statusInfo = getStatusInfo(status);
 
@@ -197,6 +209,30 @@ export const SessionCard: React.FC<SessionCardProps> = ({
         return 'Planned';
     }
   };
+
+  // Check for completed guided run
+  useEffect(() => {
+    const checkGuidedRun = async () => {
+      if (!userId || !session.id) return;
+      
+      setLoadingGuidedRun(true);
+      try {
+        const run = await getGuidedRunForSession(session.id, userId);
+        setGuidedRun(run);
+        // If guided run exists, ensure session shows as completed
+        if (run && onUpdateSession) {
+          await onUpdateSession(session.id, { status: 'completed' });
+          setStatus('completed');
+        }
+      } catch (error) {
+        console.error('[SessionCard] Error checking guided run:', error);
+      } finally {
+        setLoadingGuidedRun(false);
+      }
+    };
+
+    checkGuidedRun();
+  }, [session.id, userId]);
 
   return (
     <View style={styles.card} onLayout={onLayout}>
@@ -288,7 +324,75 @@ export const SessionCard: React.FC<SessionCardProps> = ({
       )}
 
       <View style={styles.footer}>
-        <Button title="Add Notes" onPress={handleOpenNotesModal} variant="secondary" size="small" />
+        {guidedRun ? (
+          <View>
+            <View style={styles.runMapContainer}>
+              {guidedRun.polyline_encoded && (
+                <MapView
+                  style={styles.runMap}
+                  initialRegion={(() => {
+                    const decoded = polyline.decode(guidedRun.polyline_encoded);
+                    if (!decoded || decoded.length === 0) {
+                      return { latitude: 0, longitude: 0, latitudeDelta: 0.01, longitudeDelta: 0.01 };
+                    }
+
+                    const lats = decoded.map((c: number[]) => c[0]);
+                    const lngs = decoded.map((c: number[]) => c[1]);
+                    const minLat = Math.min(...lats);
+                    const maxLat = Math.max(...lats);
+                    const minLng = Math.min(...lngs);
+                    const maxLng = Math.max(...lngs);
+
+                    const midLat = (minLat + maxLat) / 2;
+                    const midLng = (minLng + maxLng) / 2;
+
+                    // Add some padding so the path isn't flush to the edges
+                    const latDelta = Math.max((maxLat - minLat) * 1.2, 0.01);
+                    const lngDelta = Math.max((maxLng - minLng) * 1.2, 0.01);
+
+                    return {
+                      latitude: midLat,
+                      longitude: midLng,
+                      latitudeDelta: latDelta,
+                      longitudeDelta: lngDelta,
+                    };
+                  })()}
+                  scrollEnabled={false}
+                  zoomEnabled={false}
+                  pitchEnabled={false}
+                  rotateEnabled={false}
+                  pointerEvents="none"
+                >
+                  <Polyline
+                    coordinates={polyline.decode(guidedRun.polyline_encoded).map(
+                      ([lat, lng]: [number, number]) => ({ latitude: lat, longitude: lng })
+                    )}
+                    strokeWidth={3}
+                    strokeColor="#60A5FA"
+                  />
+                </MapView>
+              )}
+            </View>
+          </View>
+        ) : (
+          // Show run button if no guided run completed
+          <Button
+            title="Run with your teammate"
+            onPress={handleGuidedRun}
+            variant="secondary"
+            fullWidth
+            size="small"
+            style={{ paddingTop: 9, paddingBottom: 9 }}
+            textStyle={{ fontFamily: 'Inter_400Regular', fontSize: 14, fontWeight: '500' }}
+          />
+        )}
+        <Button
+          title="Add Notes"
+          onPress={handleOpenNotesModal}
+          variant="secondary"
+          size="small"
+          style={{ alignSelf: 'flex-start' }}
+        />
       </View>
 
       {/* Notes editing modal */}
@@ -409,7 +513,8 @@ const styles = StyleSheet.create({
   },
   statusButtons: {
     flexDirection: 'row',
-    marginVertical: 12,
+    marginTop: 12,
+    marginBottom: 8,
     gap: 8,
   },
   statusButton: {
@@ -461,9 +566,9 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
   footer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 8,
+    flexDirection: 'column',
+    gap: 12,
+    marginTop: 4,
   },
   modalContainer: {
     flex: 1,
@@ -526,5 +631,14 @@ const styles = StyleSheet.create({
   },
   clickableShoe: {
     color: colors.info,
+  },
+  runMapContainer: {
+    height: 140,
+    borderRadius: 8,
+    overflow: 'hidden',
+    marginBottom: 4,
+  },
+  runMap: {
+    flex: 1,
   },
 });
