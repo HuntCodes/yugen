@@ -19,8 +19,8 @@ export const colors = {
     dot: '#4CAF50',
   },
   interval: {
-    text: '#5E35B1',
-    dot: '#7E57C2',
+    text: '#A855F7',
+    dot: '#C084FC',
   },
   long: {
     text: '#0277BD',

@@ -67,7 +67,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 8,
     paddingHorizontal: 12,
-    borderRadius: 6,
+    borderRadius: 999,
     backgroundColor: '#F0ECEB',
     alignItems: 'center',
   },
@@ -86,7 +86,7 @@ const styles = StyleSheet.create({
   statusButtonText: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#374151',
+    color: colors.text.primary,
   },
   statusButtonTextActive: {
     color: '#FFFFFF',

@@ -9,3 +9,7 @@ declare module '*.otf' {
   const value: any;
   export default value;
 }
+
+declare module 'react-native-maps';
+
+declare module '@mapbox/polyline';
