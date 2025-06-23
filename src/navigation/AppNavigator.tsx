@@ -34,7 +34,7 @@ export type RootStackParamList = {
   OACGlobal: undefined;
   MainApp: { onboardingMessages?: ChatMessage[] } | undefined;
   GuidedRunSetup: { sessionId?: string } | undefined;
-  GuidedRun: { sessionId?: string } | undefined;
+  GuidedRun: { sessionId?: string; runDetails?: { distance?: number; time?: number; suggested_location?: string; notes?: string } } | undefined;
   GuidedRunSummary: { sessionId?: string; runId?: string; distanceM: number; durationS: number; coords: import('../hooks/useRunTracking').Coord[] } | undefined;
 };
 

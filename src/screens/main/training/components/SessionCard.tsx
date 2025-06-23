@@ -66,6 +66,8 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [guidedRun, setGuidedRun] = useState<any>(null);
   const [loadingGuidedRun, setLoadingGuidedRun] = useState(true);
+  // State to show loading spinner when launching guided run
+  const [isStartingRun, setIsStartingRun] = useState(false);
 
   // Helper function to get color for session type
   const getSessionTypeColor = (sessionType: string) => {
@@ -178,6 +180,9 @@ export const SessionCard: React.FC<SessionCardProps> = ({
 
   // Additional: Launch guided run
   const handleGuidedRun = () => {
+    // Show spinner while navigating to guided run setup
+    setIsStartingRun(true);
+
     // Navigate to setup screen with sessionId
     // Using any to avoid TS type issues across nested navigators
     (navigation as any).navigate('GuidedRunSetup', { sessionId: session.id });
@@ -373,25 +378,63 @@ export const SessionCard: React.FC<SessionCardProps> = ({
                 </MapView>
               )}
             </View>
+            {/* Overlay with distance and time */}
+            {guidedRun && (
+              (() => {
+                const distanceKm = (guidedRun.distance_m / 1000).toFixed(2);
+                const minutes = Math.floor(guidedRun.duration_s / 60)
+                  .toString()
+                  .padStart(2, '0');
+                const seconds = Math.floor(guidedRun.duration_s % 60)
+                  .toString()
+                  .padStart(2, '0');
+                return (
+                  <View
+                    style={{
+                      position: 'absolute',
+                      bottom: 8,
+                      left: 8,
+                      right: 8,
+                      backgroundColor: 'rgba(255,255,255,0.9)',
+                      borderRadius: 12,
+                      paddingVertical: 6,
+                      paddingHorizontal: 12,
+                      flexDirection: 'row',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Text style={{ fontWeight: '600', color: colors.text.primary }}>{distanceKm} km</Text>
+                    <Text style={{ fontWeight: '600', color: colors.text.primary }}>
+                      {minutes}:{seconds}
+                    </Text>
+                  </View>
+                );
+              })()
+            )}
           </View>
         ) : (
-          // Show run button if no guided run completed
-          <Button
-            title="Run with your teammate"
-            onPress={handleGuidedRun}
-            variant="secondary"
-            fullWidth
-            size="small"
-            style={{ paddingTop: 9, paddingBottom: 9 }}
-            textStyle={{ fontFamily: 'Inter_400Regular', fontSize: 14, fontWeight: '500' }}
-          />
+          // Show run button only if not a Rest session
+          !session.session_type.toLowerCase().includes('rest') && (
+            <Button
+              title="Run with your teammate"
+              onPress={handleGuidedRun}
+              variant="secondary" // Grey background (#F0ECEB) with black text
+              fullWidth
+              size="small"
+              style={{ borderRadius: 999, paddingTop: 9, paddingBottom: 9 }}
+              textStyle={{ fontFamily: 'Inter_400Regular', fontSize: 14, fontWeight: '500' }}
+              loading={isStartingRun}
+              textColor="#000000"
+            />
+          )
         )}
         <Button
           title="Add Notes"
           onPress={handleOpenNotesModal}
           variant="secondary"
           size="small"
-          style={{ alignSelf: 'flex-start' }}
+          style={{ alignSelf: 'flex-start', borderRadius: 999 }}
         />
       </View>
 
@@ -521,7 +564,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 8,
     paddingHorizontal: 12,
-    borderRadius: 6,
+    borderRadius: 999,
     backgroundColor: '#F0ECEB',
     alignItems: 'center',
   },
@@ -543,7 +586,7 @@ const styles = StyleSheet.create({
   statusButtonText: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#374151',
+    color: colors.text.primary,
   },
   statusButtonTextActive: {
     color: '#FFFFFF',

@@ -21,12 +21,20 @@ interface VoiceCoachingState {
   hasPlayedEndMessage: boolean;
 }
 
+interface RunDetails {
+  distance?: number;
+  time?: number;
+  suggested_location?: string;
+  notes?: string;
+}
+
 interface TeammateVoiceCoachProps {
   distanceKm: number;
   hasStarted: boolean;
   hasEnded: boolean;
   voiceState: VoiceCoachingState;
   onVoiceStateChange: (newState: VoiceCoachingState) => void;
+  runDetails?: RunDetails;
 }
 
 // WebRTC constants
@@ -65,6 +73,7 @@ const TeammateVoiceCoach: React.FC<TeammateVoiceCoachProps> = ({
   hasEnded,
   voiceState,
   onVoiceStateChange,
+  runDetails,
 }) => {
   // State for WebRTC connection
   const [isConnected, setIsConnected] = useState(false);
@@ -537,8 +546,25 @@ Respond naturally and authentically as Yared Nuguse would during a training run.
     if (!voiceState.hasPlayedStartMessage) {
       setTimeout(() => {
         if (hasStarted && !hasEnded) {
-          // Let the AI know the run has begun in the first-person voice of the runner.
-          sendMessage("Introduce yourself as Yared Nuguse and say hello to the user. Tell them you're wearing the cloudmonster's today, and that you'll be with them for the whole run. Let's do it!");
+          // Build dynamic introduction message with run details
+          let intro = "Introduce yourself as Yared Nuguse and say hello to the user. Tell them you're wearing the cloudmonster's today, and that you'll be with them for the whole run.";
+
+          if (runDetails?.distance) {
+            intro += ` We're running ${runDetails.distance} kilometers today.`;
+          }
+          if (runDetails?.time) {
+            intro += ` It should take about ${runDetails.time} minutes.`;
+          }
+          if (runDetails?.suggested_location) {
+            intro += ` We'll be in ${runDetails.suggested_location}.`;
+          }
+          if (runDetails?.notes) {
+            intro += ` Note: ${runDetails.notes}.`;
+          }
+
+          intro += " Be calm but excited.";
+
+          sendMessage(intro);
           onVoiceStateChange({
             ...voiceState,
             hasPlayedStartMessage: true,
@@ -561,7 +587,7 @@ Respond naturally and authentically as Yared Nuguse would during a training run.
     // End message
     if (hasEnded && !voiceState.hasPlayedEndMessage && isConnected) {
       setTimeout(() => {
-        sendMessage("I just finished my run!");
+        sendMessage("I just finished my run! Give me a single phrase to finish, just a few words.");
         onVoiceStateChange({
           ...voiceState,
           hasPlayedEndMessage: true,
@@ -571,36 +597,12 @@ Respond naturally and authentically as Yared Nuguse would during a training run.
         setTimeout(cleanup, 5000);
       }, 1000);
     }
-  }, [distanceKm, hasStarted, hasEnded, voiceState, isConnected, sendMessage, onVoiceStateChange, cleanup]);
+  }, [distanceKm, hasStarted, hasEnded, voiceState, isConnected, sendMessage, onVoiceStateChange, cleanup, runDetails]);
 
-  // Don't render anything if not connected or no activity
-  if (!isConnected && !isLoading && !isSpeaking) {
-    return null;
-  }
+  // Previously rendered a status bar overlay with speaking/connecting info.
+  // The UI overlay has been removed per design update, but audio/webRTC logic remains functional.
 
-  return (
-    <View className="absolute top-4 left-4 right-4 z-10">
-      <Animatable.View
-        animation={isSpeaking ? "pulse" : undefined}
-        iterationCount="infinite"
-        duration={1000}
-        className="bg-black/80 rounded-lg px-4 py-3 flex-row items-center"
-      >
-        <View className="w-3 h-3 bg-blue-500 rounded-full mr-3" />
-        <Text className="text-white font-medium">
-          {isLoading ? 'Connecting to Yared...' : 
-           isSpeaking ? 'Yared speaking...' : 
-           'Yared is with you'}
-        </Text>
-      </Animatable.View>
-      
-      {error && (
-        <View className="bg-red-500/90 rounded-lg px-4 py-2 mt-2">
-          <Text className="text-white text-sm">{error}</Text>
-        </View>
-      )}
-    </View>
-  );
+  return null;
 };
 
 export default TeammateVoiceCoach; 

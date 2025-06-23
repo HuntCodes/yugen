@@ -65,7 +65,16 @@ export default function GuidedRunSetupScreen({ navigation, route }: Props) {
   }, []);
 
   const handleStart = () => {
-    navigation.replace('GuidedRun', { sessionId });
+    const runDetails = session
+      ? {
+          distance: session.distance,
+          time: session.time,
+          suggested_location: session.suggested_location,
+          notes: session.notes,
+        }
+      : undefined;
+
+    navigation.replace('GuidedRun', { sessionId, runDetails });
   };
 
   const PlanItem = ({ label, value }: { label: string; value: string | number | undefined }) => {
@@ -153,7 +162,7 @@ export default function GuidedRunSetupScreen({ navigation, route }: Props) {
           <View style={{ height: 200, borderRadius: 12, overflow: 'hidden', marginBottom: 24 }}>
             <MapView
               style={{ flex: 1 }}
-              initialRegion={userRegion || {
+              region={userRegion || {
                 latitude: 37.7749,
                 longitude: -122.4194,
                 latitudeDelta: 0.05,

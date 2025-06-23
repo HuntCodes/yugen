@@ -70,8 +70,8 @@ export default function GuidedRunSummaryScreen({ navigation, route }: Props) {
     ? {
         latitude: coords[0].latitude,
         longitude: coords[0].longitude,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
+        latitudeDelta: 0.005,
+        longitudeDelta: 0.005,
       }
     : undefined;
 
@@ -90,13 +90,13 @@ export default function GuidedRunSummaryScreen({ navigation, route }: Props) {
       </MapView>
 
       <View className="p-6">
-        <Text className="text-xl font-bold mb-2">Run Summary</Text>
+        <Text className="text-2xl font-bold mb-4">Run Summary</Text>
         
         {/* Main stats */}
-        <View className="mb-4">
-          <Text className="mb-1 text-base">Distance: {distanceKm} km</Text>
-          <Text className="mb-1 text-base">Time: {durationStr}</Text>
-          <Text className="mb-1 text-base">Avg Pace: {formatPace(avgPace)}/km</Text>
+        <View className="mb-6">
+          <Text className="mb-2 text-lg font-semibold">Distance: <Text className="font-bold">{distanceKm} km</Text></Text>
+          <Text className="mb-2 text-lg font-semibold">Time: <Text className="font-bold">{durationStr}</Text></Text>
+          <Text className="mb-2 text-lg font-semibold">Avg Pace: <Text className="font-bold">{formatPace(avgPace)}/km</Text></Text>
         </View>
 
         {/* Splits section */}
@@ -120,16 +120,16 @@ export default function GuidedRunSummaryScreen({ navigation, route }: Props) {
         <View className="flex-row justify-between">
           <TouchableOpacity
             onPress={handleDiscard}
-            className="flex-1 mr-2 bg-gray-300 px-4 py-3 rounded-full items-center">
-            <Text className="font-semibold">Discard</Text>
+            className="flex-1 mr-2 bg-gray-300 px-6 py-4 rounded-full items-center">
+            <Text className="font-semibold text-lg">Discard</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             disabled={saving}
             onPress={handleSave}
-            className="flex-1 ml-2 bg-black px-4 py-3 rounded-full items-center flex-row justify-center">
-            {saving && <ActivityIndicator color="#ffffff" style={{ marginRight: 6 }} />}
-            <Text className="text-white font-semibold">
+            className="flex-1 ml-2 bg-black px-6 py-4 rounded-full items-center flex-row justify-center">
+            {saving && <ActivityIndicator color="#ffffff" style={{ marginRight: 8 }} />}
+            <Text className="text-white font-bold text-lg">
               {saving ? 'Saving...' : 'Save Run'}
             </Text>
           </TouchableOpacity>
