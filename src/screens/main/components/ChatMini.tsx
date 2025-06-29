@@ -301,12 +301,12 @@ export function ChatMini({
 
   return (
     <View className="flex h-[450px] flex-col rounded-lg bg-white p-4 shadow-sm">
-      <View className="mb-4 flex-row items-center">
+      <View className="mb-2 flex-row items-center">
         <View className="relative mr-3">
-          <Image source={imageMap[coachId]} className="h-10 w-10 rounded-full" />
-          <View className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white bg-green-500" />
+          <Image source={imageMap[coachId]} className="h-12 w-12 rounded-full" />
+          <View className="absolute bottom-0 right-0 h-4 w-4 rounded-full border-2 border-white bg-green-500" />
         </View>
-        <Text className="flex-1 font-semibold text-black">{coachName}</Text>
+                  <Text className="flex-1 font-semibold text-black">AI Coach {coachName.split(' ')[0]}</Text>
         {onVoiceActivate && (
           <TouchableOpacity
             className={`rounded-full border px-3 py-1.5 ${
@@ -345,7 +345,7 @@ export function ChatMini({
               key={`${msg.timestamp || Date.now()}-${index}`} // Use timestamp + index for better key stability
               className={`mb-2 flex-row items-end ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
               {msg.sender !== 'user' && (
-                <Image source={imageMap[coachId]} className="mr-2 h-6 w-6 rounded-full" />
+                <Image source={imageMap[coachId]} className="mr-2 h-8 w-8 rounded-full" />
               )}
               <View
                 className={`max-w-[80%] rounded-3xl px-4 py-3 ${msg.sender === 'user' ? 'bg-black' : 'bg-gray-200'}`}>
@@ -359,7 +359,7 @@ export function ChatMini({
 
         {isTyping && (
           <View className="mb-2 flex-row items-end justify-start">
-            <Image source={imageMap[coachId]} className="mr-2 h-6 w-6 rounded-full" />
+            <Image source={imageMap[coachId]} className="mr-2 h-8 w-8 rounded-full" />
             <View className="max-w-[80%] rounded-lg bg-gray-100 px-4 py-3">
               <Text>Typing...</Text>
             </View>

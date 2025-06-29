@@ -175,10 +175,10 @@ export function CoachSelect() {
                 <Image
                   source={
                     coach.id === 'craig'
-                      ? require('../../assets/craig.jpg')
-                      : coach.id === 'thomas'
-                        ? require('../../assets/thomas.jpg')
-                        : require('../../assets/dathan.jpg')
+                              ? require('../../assets/Craig_Avatar.png')
+        : coach.id === 'thomas'
+          ? require('../../assets/thomas.jpg')
+          : require('../../assets/Dathan_Avatar.png')
                   }
                   style={{
                     width: 60,

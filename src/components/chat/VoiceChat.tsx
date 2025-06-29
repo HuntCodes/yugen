@@ -905,45 +905,7 @@ Provide specific, actionable advice tailored to the athlete's needs.`;
 
       if (!userText) return;
 
-      // ENHANCED INTERRUPTION HANDLING: Cancel active coach response if user interrupts
-      if (isCoachSpeakingTTS || isReceivingCoachMessage) {
-        console.log('[VOICE_CHAT] User interrupted coach - canceling active response');
-        
-        // Cancel the active response to prevent "conversation_already_has_active_response" error
-        if (dataChannel && dataChannel.readyState === 'open') {
-          try {
-            const cancelEvent = {
-              type: 'response.cancel'
-            };
-            dataChannel.send(JSON.stringify(cancelEvent));
-            console.log('[VOICE_CHAT] Sent response.cancel to handle interruption');
-          } catch (err) {
-            console.log('[VOICE_CHAT] Failed to send response.cancel:', err);
-          }
-        }
-        
-        // Reset coach speaking states
-        setIsCoachSpeakingTTS(false);
-        setIsReceivingCoachMessage(false);
-        setIsSpeaking(false);
-        setCoachSpeechStartTime(null);
-        
-        // Clear any pending coach content
-        setPendingTranscript('');
-        
-        // Clear coach response timers
-        if (coachResponseCompleterTimerRef.current) {
-          clearTimeout(coachResponseCompleterTimerRef.current);
-          coachResponseCompleterTimerRef.current = null;
-        }
-        
-        if (responseTimeoutRef.current) {
-          clearTimeout(responseTimeoutRef.current);
-          responseTimeoutRef.current = null;
-        }
-        
-        console.log('[VOICE_CHAT] Coach response canceled, processing user input');
-      }
+
 
       // User has spoken. Set their final utterance.
       // The useEffect for finalUserUtterance will add it to history.
@@ -1594,12 +1556,7 @@ Provide specific, actionable advice tailored to the athlete's needs.`;
         ) : (
           <>
             <View className="my-2 items-center justify-center">
-              {isConnecting ? (
-                <>
-                  <MinimalSpinner size={48} color="#8B5CF6" thickness={3} />
-                  <Text className="mt-2 text-gray-600">Connecting to your coach...</Text>
-                </>
-              ) : isListening ? (
+              {isListening ? (
                 <>{/* Microphone icon removed when connected to coach */}</>
               ) : null}
             </View>

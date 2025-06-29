@@ -2,6 +2,7 @@ import { FontAwesome } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
+import { Video, ResizeMode } from 'expo-av';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
@@ -36,11 +37,28 @@ const glowAnimation = {
   1: { opacity: 0.3, borderWidth: 2 },
 };
 
+// Avatar videos by coach
+const COACH_AVATAR_VIDEOS = {
+  craig: {
+    listening: require('../../../assets/avatars/Craig_Listening_Loop_Final.mp4'),
+    talking: require('../../../assets/avatars/Craig_Talking_Loop_Final.mp4'),
+    waving: require('../../../assets/avatars/Craig_Wave_Loop_Final.mp4'),
+  },
+  dathan: {
+    listening: require('../../../assets/avatars/Dathan_Listening_Loop_Final.mp4'),
+    talking: require('../../../assets/avatars/Dathan_Talking_Loop_Final.mp4'),
+    waving: require('../../../assets/avatars/Dathan_Wave_Loop_Final.mp4'),
+  },
+};
+
+// Default to Dathan for backwards compatibility
+const DEFAULT_AVATAR_VIDEOS = COACH_AVATAR_VIDEOS.dathan;
+
 // Image mapping for coaches
 const imageMap: Record<string, any> = {
-  craig: require('../../assets/craig.jpg'),
+  craig: require('../../assets/Craig_Avatar.png'),
   thomas: require('../../assets/thomas.jpg'),
-  dathan: require('../../assets/dathan.jpg'),
+  dathan: require('../../assets/Dathan_Avatar.png'),
 };
 
 type VoiceOnboardingNavigationProp = NativeStackNavigationProp<
@@ -66,10 +84,27 @@ export function VoiceOnboarding() {
   >([]);
   const [isContinueClicked, setIsContinueClicked] = useState(false); // Track continue button click for immediate feedback
 
+  // Avatar video state - START WITH WAVING for initial greeting
+  const [currentAvatarState, setCurrentAvatarState] = useState<'listening' | 'talking' | 'waving'>('waving');
+  const [previousAvatarState, setPreviousAvatarState] = useState<'listening' | 'talking' | 'waving'>('listening');
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [shouldShowWavingOnLoad, setShouldShowWavingOnLoad] = useState(true); // New flag to control initial waving
+  const [wavingVideoLoaded, setWavingVideoLoaded] = useState(false); // Track if waving video is loaded for fade-in
+  const [showAnimatedCoachView, setShowAnimatedCoachView] = useState(false);
+
+  // Granular speaking state management (like DailyVoiceChat)
+  const [isCoachSpeakingTTS, setIsCoachSpeakingTTS] = useState(false);
+  const [isReceivingCoachMessage, setIsReceivingCoachMessage] = useState(false);
+
   const route = useRoute<VoiceOnboardingRouteProp>();
   const navigation = useNavigation<VoiceOnboardingNavigationProp>();
   const { session } = useAuth();
   const appState = useRef(AppState.currentState);
+
+  // Multiple video refs for seamless transitions
+  const listeningVideoRef = useRef<any>(null);
+  const talkingVideoRef = useRef<any>(null);
+  const wavingVideoRef = useRef<any>(null);
 
   const initialCoachId = route.params?.coachId || 'dathan';
   const [currentCoachId, setCurrentCoachId] = useState(initialCoachId);
@@ -87,6 +122,20 @@ export function VoiceOnboarding() {
     name: coachName,
     avatar: coachAvatar, // This is now consistently from imageMap
   };
+
+  // Available videos helper - select based on coach or use provided videos
+  const getAvailableVideos = () => {
+    // Get coach-specific videos based on coachId
+    const normalizedCoachId = currentCoachId.toLowerCase();
+    if (COACH_AVATAR_VIDEOS[normalizedCoachId as keyof typeof COACH_AVATAR_VIDEOS]) {
+      return COACH_AVATAR_VIDEOS[normalizedCoachId as keyof typeof COACH_AVATAR_VIDEOS];
+    }
+    
+    // Fallback to default (Dathan)
+    return DEFAULT_AVATAR_VIDEOS;
+  };
+  
+  const availableVideos = getAvailableVideos();
 
   // Determine team region label for welcome header
   const teamRegionLabel =
@@ -112,6 +161,58 @@ export function VoiceOnboarding() {
     console.log('[VOICE_ONBOARDING] Voice chat active:', voiceChatUIVisible);
   }, [voiceChatUIVisible]);
 
+  // --- EFFECT: Show/hide animated coach view based on state ---
+  useEffect(() => {
+    // Always show the coach when the component is visible and voice chat is active
+    const shouldShowCoach = voiceChatUIVisible;
+
+    console.log(
+      '[VoiceOnboarding] Setting coach visibility to:',
+      shouldShowCoach,
+      'voiceChatUIVisible:',
+      voiceChatUIVisible
+    );
+
+    setShowAnimatedCoachView(shouldShowCoach);
+  }, [voiceChatUIVisible]);
+
+  // --- EFFECT: Manage avatar video state based on conversation state ---
+  useEffect(() => {
+    if (!availableVideos) return;
+
+    let newState: 'listening' | 'talking' | 'waving' = 'listening';
+
+    // PRIORITY 1: Initial waving greeting (only when component first becomes visible)
+    if (shouldShowWavingOnLoad && voiceChatUIVisible) {
+      newState = 'waving';
+      console.log('[VoiceOnboarding] Setting avatar to waving for initial greeting');
+    }
+    // PRIORITY 2: Coach is speaking/responding - show talking video (using granular states like DailyVoiceChat)
+    else if (isCoachSpeakingTTS || isReceivingCoachMessage) {
+      newState = 'talking';
+      console.log('[VoiceOnboarding] Setting avatar to talking (coach speaking - TTS:', isCoachSpeakingTTS, 'Receiving:', isReceivingCoachMessage, ')');
+    }
+    // PRIORITY 3: Default to listening state when waiting
+    else {
+      newState = 'listening';
+      console.log('[VoiceOnboarding] Setting avatar to listening (default/waiting)');
+    }
+
+    // Only update if state actually changed to prevent unnecessary re-renders
+    if (currentAvatarState !== newState) {
+      console.log('[VoiceOnboarding] Avatar state changing from', currentAvatarState, 'to', newState);
+      setPreviousAvatarState(currentAvatarState);
+      setCurrentAvatarState(newState);
+    }
+  }, [
+    availableVideos,
+    shouldShowWavingOnLoad,
+    voiceChatUIVisible,
+    isCoachSpeakingTTS,
+    isReceivingCoachMessage,
+    currentAvatarState
+  ]);
+
   const handleSpeakingStateChange = useCallback(
     (speaking: boolean, speaker?: 'user' | 'coach') => {
       console.log(
@@ -120,7 +221,16 @@ export function VoiceOnboarding() {
         'Speaker:',
         speaker || 'unknown'
       );
-      setIsCoachSpeaking(speaking);
+
+      // Set granular speaking states like DailyVoiceChat
+      if (speaker === 'coach') {
+        setIsCoachSpeakingTTS(speaking);
+        setIsReceivingCoachMessage(speaking);
+        console.log('[VOICE_ONBOARDING] Coach TTS speaking state:', speaking);
+      }
+
+      // Keep the original simple state for backward compatibility
+      setIsCoachSpeaking(speaking && speaker === 'coach');
 
       // If conversation is complete and coach just finished speaking, show completion overlay immediately
       if (voiceConversationActuallyCompleted && !speaking && speaker === 'coach') {
@@ -170,6 +280,12 @@ export function VoiceOnboarding() {
     setVoiceChatManuallyClosed(true);
     setIsCoachSpeaking(false);
     setShowCompletionOverlay(false);
+    
+    // Reset granular speaking states
+    setIsCoachSpeakingTTS(false);
+    setIsReceivingCoachMessage(false);
+    setShouldShowWavingOnLoad(true); // Reset for next session
+    setWavingVideoLoaded(false); // Reset fade-in state for next session
   }, []);
 
   const handleVoiceChatError = useCallback(
@@ -250,6 +366,11 @@ export function VoiceOnboarding() {
     setVoiceChatUIVisible(false);
     setIsReconnecting(false);
     setIsCoachSpeaking(false);
+    
+    // Reset granular speaking states
+    setIsCoachSpeakingTTS(false);
+    setIsReceivingCoachMessage(false);
+    
     // Navigation to 'Onboarding' (which is OnboardingChat) is fine as it's in RootStackParamList
     navigation.navigate('Onboarding', { coachId: currentCoachId });
   };
@@ -388,6 +509,12 @@ export function VoiceOnboarding() {
         setVoiceConversationActuallyCompleted(false);
         setShowCompletionOverlay(false);
         setReconnectAttempts(0);
+        
+        // Reset granular speaking states
+        setIsCoachSpeakingTTS(false);
+        setIsReceivingCoachMessage(false);
+        setShouldShowWavingOnLoad(true);
+        setWavingVideoLoaded(false);
 
         // Reload the screen
         navigation.reset({
@@ -435,43 +562,92 @@ export function VoiceOnboarding() {
       </View>
       <View style={styles.content}>
         <View style={styles.header}>
-          {voiceChatUIVisible ? (
-            // Animated coach head during voice chat
+          {voiceChatUIVisible && showAnimatedCoachView ? (
+            // Avatar videos during voice chat
             <View style={styles.animatedCoachContainer}>
-              <View style={[styles.coachImageWrapper, styles.coachImageWrapperActive]}>
-                <Animatable.Image
-                  source={coach.avatar}
-                  animation="pulse"
-                  iterationCount="infinite"
-                  duration={1000}
-                  easing="ease-in-out"
-                  style={styles.coachImage}
-                  resizeMode="cover"
-                />
-
-                <Animatable.View
-                  animation="pulse"
-                  iterationCount="infinite"
-                  duration={1500}
-                  style={styles.animatedBorder}
-                />
-
-                <Animatable.View
-                  animation={glowAnimation}
-                  iterationCount="infinite"
-                  duration={1200}
-                  style={styles.glowOverlay}
-                />
-
-                {isCoachSpeaking && (
-                  <View style={styles.speakingIndicator}>
-                    <Animatable.View
-                      animation="pulse"
-                      iterationCount="infinite"
-                      duration={1000}
-                      style={styles.speakingDot}
+              <View style={styles.coachWrapper}>
+                {availableVideos ? (
+                  <View style={styles.videoContainer}>
+                    {/* Listening Video */}
+                    <Video
+                      ref={listeningVideoRef}
+                      style={[
+                        styles.coachVideo,
+                        { opacity: currentAvatarState === 'listening' ? 1 : 0 }
+                      ]}
+                      source={availableVideos.listening}
+                      resizeMode={ResizeMode.COVER}
+                      shouldPlay={currentAvatarState === 'listening'}
+                      isLooping={true}
+                      isMuted={true}
+                      useNativeControls={false}
+                      onLoad={() => {
+                        console.log('[VoiceOnboarding] Listening video loaded and ready');
+                      }}
                     />
+                    
+                    {/* Talking Video */}
+                    <Video
+                      ref={talkingVideoRef}
+                      style={[
+                        styles.coachVideo,
+                        styles.overlayVideo,
+                        { opacity: currentAvatarState === 'talking' ? 1 : 0 }
+                      ]}
+                      source={availableVideos.talking}
+                      resizeMode={ResizeMode.COVER}
+                      shouldPlay={currentAvatarState === 'talking'}
+                      isLooping={true}
+                      isMuted={true}
+                      useNativeControls={false}
+                    />
+                    
+                    {/* Waving Video */}
+                    <Animatable.View
+                      animation={currentAvatarState === 'waving' ? 'fadeIn' : undefined}
+                      duration={800}
+                      style={[
+                        styles.coachVideo,
+                        styles.overlayVideo,
+                        { 
+                          opacity: currentAvatarState === 'waving' ? 1 : 0
+                        }
+                      ]}
+                    >
+                      <Video
+                        ref={wavingVideoRef}
+                        style={styles.coachVideo}
+                        source={availableVideos.waving}
+                        resizeMode={ResizeMode.COVER}
+                        shouldPlay={currentAvatarState === 'waving'}
+                        isLooping={false}
+                        isMuted={true}
+                        useNativeControls={false}
+                        onLoad={() => {
+                          console.log('[VoiceOnboarding] Waving video loaded and ready');
+                          setWavingVideoLoaded(true);
+                        }}
+                        onPlaybackStatusUpdate={(status) => {
+                          // Log key status changes for debugging
+                          if (status.isLoaded && !status.isPlaying && status.didJustFinish && currentAvatarState === 'waving') {
+                            console.log('[VoiceOnboarding] Waving video completed, transitioning to listening');
+                            
+                            // Disable the waving flag so it won't play again
+                            setShouldShowWavingOnLoad(false);
+                            
+                            // The avatar state effect will handle the transition to listening
+                            // due to shouldShowWavingOnLoad becoming false
+                          }
+                        }}
+                      />
+                    </Animatable.View>
                   </View>
+                ) : (
+                  <Image
+                    source={coach.avatar}
+                    style={styles.coachImage}
+                    resizeMode="cover"
+                  />
                 )}
               </View>
             </View>
@@ -479,7 +655,7 @@ export function VoiceOnboarding() {
             // Static coach image when not in voice chat
             <Image source={coach.avatar} style={styles.coachImage} />
           )}
-          <Text style={styles.coachName}>{coach.name}</Text>
+          <Text style={styles.coachName}>AI Coach {coach.name.split(' ')[0]}</Text>
         </View>
 
         {/* Always render VoiceChat to allow proper cleanup via isVisible prop */}
@@ -791,5 +967,30 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  coachWrapper: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+    overflow: 'hidden', // Ensure videos stay within rounded corners
+  },
+  videoContainer: {
+    position: 'relative',
+    width: 216,
+    height: 288,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#ffffff', // White background for smooth fade-in
+  },
+  coachVideo: {
+    width: 216,
+    height: 288,
+    borderRadius: 12,
+  },
+  overlayVideo: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
   },
 });

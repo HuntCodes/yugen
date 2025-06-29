@@ -58,11 +58,11 @@ import { useWeather } from '../../hooks/useWeather';
 import { rescheduleAllNotificationsForNext14Days } from '../../services/notifications/notificationService';
 
 // Map of coach IDs to images
-const coachImages = {
-  craig: require('../../assets/craig.jpg'),
-  thomas: require('../../assets/thomas.jpg'),
-  dathan: require('../../assets/dathan.jpg'),
-};
+  const coachImages = {
+    craig: require('../../assets/Craig_Avatar.png'),
+    thomas: require('../../assets/thomas.jpg'),
+    dathan: require('../../assets/Dathan_Avatar.png'),
+  };
 
 // Default coach if none is selected
 const DEFAULT_COACH: Coach = {
@@ -71,7 +71,7 @@ const DEFAULT_COACH: Coach = {
   vibe: 'Motivational and high energy',
   philosophy: 'Run fast, rest hard. Recovery is key.',
   personalityBlurb: 'Aussie legend. Straight talker. Big on consistency.',
-  image: 'craig.jpg',
+  image: 'Craig_Avatar.png',
 };
 
 // Debounce window for re-checking whether a new weekly plan is needed
@@ -500,7 +500,7 @@ export function HomeScreen() {
       setPlanUpdateStatus({
         isLoading: true,
         needsUpdate: false,
-        message: `Generating plan for week of ${targetMonday}...`,
+        message: `Generating plan for the week...`,
         targetDateForGeneration: targetMonday,
       });
     } else {

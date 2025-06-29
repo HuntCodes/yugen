@@ -1,6 +1,6 @@
 import { Feather, FontAwesome } from '@expo/vector-icons';
 import { encode as encodeBase64 } from 'base-64'; // For ArrayBuffer to base64
-import { Audio } from 'expo-av';
+import { Audio, Video, ResizeMode } from 'expo-av';
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
@@ -49,6 +49,23 @@ import { MinimalSpinner } from '../ui/MinimalSpinner';
 import { voiceSessionManager } from '../../lib/voice/voiceSessionManager';
 import { supabaseConfig } from '../../lib/config';
 
+// Avatar videos by coach
+const COACH_AVATAR_VIDEOS = {
+  craig: {
+    listening: require('../../../assets/avatars/Craig_Listening_Loop_Final.mp4'),
+    talking: require('../../../assets/avatars/Craig_Talking_Loop_Final.mp4'),
+    waving: require('../../../assets/avatars/Craig_Wave_Loop_Final.mp4'),
+  },
+  dathan: {
+  listening: require('../../../assets/avatars/Dathan_Listening_Loop_Final.mp4'),
+  talking: require('../../../assets/avatars/Dathan_Talking_Loop_Final.mp4'),
+  waving: require('../../../assets/avatars/Dathan_Wave_Loop_Final.mp4'),
+  },
+};
+
+// Default to Dathan for backwards compatibility
+const DEFAULT_AVATAR_VIDEOS = COACH_AVATAR_VIDEOS.dathan;
+
 // Constants
 const SUPABASE_URL = environment.supabaseUrl; // Ensure this is correctly configured in your environment
 const EPHEMERAL_KEY_ENDPOINT = `${SUPABASE_URL}/functions/v1/ephemeral-key`;
@@ -72,6 +89,11 @@ interface DailyVoiceChatProps {
   coachId: string;
   coachName: string;
   coachAvatar: any;
+  coachAvatarVideos?: {
+    listening?: any;
+    talking?: any;
+    waving?: any;
+  };
   coachVibe?: string;
   coachPhilosophy?: string;
   coachPersonalityBlurb?: string;
@@ -113,6 +135,7 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
   coachId,
   coachName,
   coachAvatar,
+  coachAvatarVideos,
   coachVibe,
   coachPhilosophy,
   coachPersonalityBlurb,
@@ -153,6 +176,13 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
 
   // NEW: State for previous chat history (same as ChatMini)
   const [previousChatHistory, setPreviousChatHistory] = useState<CoreChatMessage[]>([]);
+
+  // Avatar video state - START WITH WAVING for initial greeting
+  const [currentAvatarState, setCurrentAvatarState] = useState<'listening' | 'talking' | 'waving'>('waving');
+  const [previousAvatarState, setPreviousAvatarState] = useState<'listening' | 'talking' | 'waving'>('listening');
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [shouldShowWavingOnLoad, setShouldShowWavingOnLoad] = useState(true); // New flag to control initial waving
+  const [wavingVideoLoaded, setWavingVideoLoaded] = useState(false); // Track if waving video is loaded for fade-in
 
   // NEW: State for remote audio stream
   const [remoteAudioStream, setRemoteAudioStream] = useState<MediaStream | null>(null);
@@ -198,6 +228,29 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
   const speechStartTimesRef = useRef<{ [responseId: string]: number }>({});
   const currentResponseIdRef = useRef<string | null>(null);
 
+  // Multiple video refs for seamless transitions
+  const listeningVideoRef = useRef<any>(null);
+  const talkingVideoRef = useRef<any>(null);
+  const wavingVideoRef = useRef<any>(null);
+
+  // Available videos helper - select based on coach or use provided videos
+  const getAvailableVideos = () => {
+    if (coachAvatarVideos) {
+      return coachAvatarVideos;
+    }
+    
+    // Get coach-specific videos based on coachId
+    const normalizedCoachId = coachId.toLowerCase();
+    if (COACH_AVATAR_VIDEOS[normalizedCoachId as keyof typeof COACH_AVATAR_VIDEOS]) {
+      return COACH_AVATAR_VIDEOS[normalizedCoachId as keyof typeof COACH_AVATAR_VIDEOS];
+    }
+    
+    // Fallback to default (Dathan)
+    return DEFAULT_AVATAR_VIDEOS;
+  };
+  
+  const availableVideos = getAvailableVideos();
+
   // NEW: Store user speech start times by item ID to avoid race conditions
   const userSpeechStartTimesRef = useRef<{ [itemId: string]: number }>({});
 
@@ -205,6 +258,7 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
   const functionCallTimeouts = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
   // --- HOOKS ---
+  const navigation = useNavigation();
   const {
     buildSystemPrompt,
     getToolsDefinitionForRealtimeAPI,
@@ -214,40 +268,26 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
 
   // --- EFFECT: Show/hide animated coach view based on state ---
   useEffect(() => {
-    const pc = peerConnectionRef.current;
-    const isConnected = pc?.connectionState === 'connected';
-
-    // Show the animated coach view if:
-    // 1. Connection is established OR
-    // 2. Not loading and not connecting and no errors and has permission and is visible OR
-    // 3. The coach is speaking/responding
-    const shouldShowCoach =
-      isConnected ||
-      (!isLoading && !isConnecting && !error && hasPermission && isVisible) ||
-      isCoachSpeakingTTS ||
-      isReceivingCoachMessage;
+    // Always show the coach when the component is visible
+    // This decouples the avatar from the connection state for better UX
+    const shouldShowCoach = isVisible && !error && !fallbackMode;
 
     console.log(
       '[DailyVoiceChat] Setting coach visibility to:',
       shouldShowCoach,
-      'connection state:',
-      pc?.connectionState || 'no connection'
+      'isVisible:',
+      isVisible,
+      'hasError:',
+      !!error,
+      'fallbackMode:',
+      fallbackMode
     );
 
     setShowAnimatedCoachView(shouldShowCoach);
-
-    // If showAnimatedCoachView is being enabled, also ensure loading is set to false
-    if (shouldShowCoach && isLoading) {
-      setIsLoading(false);
-    }
   }, [
-    isLoading,
-    isConnecting,
-    error,
-    hasPermission,
     isVisible,
-    isCoachSpeakingTTS,
-    isReceivingCoachMessage,
+    error,
+    fallbackMode,
   ]);
 
   // --- EFFECT: Fetch user feedback when component initializes ---
@@ -300,6 +340,52 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
       loadChatHistory();
     }
   }, [userId, isVisible]);
+
+  // --- EFFECT: Manage avatar video state based on conversation state ---
+  useEffect(() => {
+    // Use available videos determined by coach selection
+    
+    if (!availableVideos) return;
+
+    let newState: 'listening' | 'talking' | 'waving' = 'listening';
+
+    // PRIORITY 1: Initial waving greeting (only when component first becomes visible)
+    if (shouldShowWavingOnLoad && isVisible) {
+      newState = 'waving';
+      console.log('[DailyVoiceChat] Setting avatar to waving for initial greeting');
+    }
+    // PRIORITY 2: Coach is speaking/responding - show talking video
+    else if (isCoachSpeakingTTS || isReceivingCoachMessage) {
+      newState = 'talking';
+      console.log('[DailyVoiceChat] Setting avatar to talking (coach speaking)');
+    }
+    // PRIORITY 3: User is speaking - show listening video
+    else if (isListening || userIsActuallySpeaking) {
+      newState = 'listening';
+      console.log('[DailyVoiceChat] Setting avatar to listening (user speaking)');
+    }
+    // PRIORITY 4: Default to listening state when waiting
+    else {
+      newState = 'listening';
+      console.log('[DailyVoiceChat] Setting avatar to listening (default/waiting)');
+    }
+
+    // Only update if state actually changed to prevent unnecessary re-renders
+    if (currentAvatarState !== newState) {
+      console.log('[DailyVoiceChat] Avatar state changing from', currentAvatarState, 'to', newState);
+      setPreviousAvatarState(currentAvatarState);
+      setCurrentAvatarState(newState);
+    }
+  }, [
+    coachAvatarVideos,
+    shouldShowWavingOnLoad,
+    isVisible,
+    isCoachSpeakingTTS,
+    isReceivingCoachMessage,
+    isListening,
+    userIsActuallySpeaking,
+    currentAvatarState
+  ]);
 
   // --- HANDLERS & UTILITY FUNCTIONS ---
   const handleError = useCallback(
@@ -409,6 +495,8 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
     setPendingCoachResponse('');
     setErrorState(null);
     setIsInitializedThisSession(false);
+    setShouldShowWavingOnLoad(true); // Reset waving flag for next session
+    setWavingVideoLoaded(false); // Reset fade-in state for next session
 
     // Clear session timeout
     setSessionStartTime(null);
@@ -479,6 +567,8 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
     // Reset state
     setFallbackMode(false);
     setIsInitializedThisSession(false);
+    setShouldShowWavingOnLoad(true); // Reset waving flag
+    setWavingVideoLoaded(false); // Reset fade-in state
 
     // Clean up TTS if active
     if (ttsPlayerRef.current) {
@@ -2244,7 +2334,6 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
   ]);
 
   // --- EFFECT: Navigation and App State Cleanup ---
-  const navigation = useNavigation();
   
   // Handle navigation away from screen
   useFocusEffect(
@@ -2508,6 +2597,8 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
     setUserIsActuallySpeaking(false);
     setIsCoachSpeakingTTS(false);
     setFallbackMode(false);
+    setShouldShowWavingOnLoad(true); // Reset waving flag for reconnect
+    setWavingVideoLoaded(false); // Reset fade-in state for reconnect
     ephemeralKeyRef.current = null;
     retryCountRef.current = 0;
 
@@ -3055,19 +3146,6 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
               )}
             </View>
           </View>
-        ) : isLoading || isConnecting ? (
-          /* Loading State */
-          <View className="flex-1 items-center justify-center py-8">
-            <MinimalSpinner size={48} color="#8B5CF6" thickness={3} />
-            <Text className="mt-4 text-center text-gray-600">
-              {isConnecting ? 'Connecting to coach...' : 'Setting up voice chat...'}
-            </Text>
-
-            {/* Cancel button during loading */}
-            <TouchableOpacity className="mt-4 rounded-lg bg-gray-300 px-4 py-2" onPress={onClose}>
-              <Text className="font-semibold text-gray-800">Cancel</Text>
-            </TouchableOpacity>
-          </View>
         ) : fallbackMode ? (
           /* Fallback Mode */
           <View className="flex-1 items-center justify-center py-8">
@@ -3088,7 +3166,7 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
             </View>
           </View>
         ) : (
-          /* Connected/Ready State - Coach Animation */
+          /* Coach Animation - Always show when visible */
           renderConnectedState()
         )}
       </View>
@@ -3096,56 +3174,111 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
   };
 
   /* Connected/Ready State - Coach Animation */
-  const renderConnectedState = () => (
-    <View className="flex-1 items-center justify-center px-4">
-      {showAnimatedCoachView && (
-        <View className="mb-4 flex-1 items-center justify-center">
-          <View style={styles.animatedCoachContainer}>
-            <View
-              style={[
-                styles.coachImageWrapper,
-                styles.coachImageWrapperActive, // Always use active style during conversation
-              ]}>
-              <Animatable.Image
-                source={coachAvatar}
-                animation="pulse"
-                iterationCount="infinite"
-                duration={1000}
-                easing="ease-in-out"
-                style={styles.coachImage}
-                resizeMode="cover"
-              />
-
-              <Animatable.View
-                animation="pulse"
-                iterationCount="infinite"
-                duration={1500}
-                style={styles.animatedBorder}
-              />
-
-              <Animatable.View
-                animation={glowAnimation}
-                iterationCount="infinite"
-                duration={1200}
-                style={styles.glowOverlay}
-              />
-
-              {isCoachSpeakingTTS && (
-                <View style={styles.speakingIndicator}>
-                  <Animatable.View
-                    animation="pulse"
-                    iterationCount="infinite"
-                    duration={1000}
-                    style={styles.speakingDot}
+  const renderConnectedState = () => {
+    // Use available videos already determined by coach selection
+    
+    return (
+      <View className="flex-1 items-center justify-center px-4">
+        {showAnimatedCoachView && (
+          <View className="mb-4 flex-1 items-center justify-center">
+            <View style={styles.animatedCoachContainer}>
+              <View style={styles.coachWrapper}>
+                {availableVideos ? (
+                  <View style={styles.videoContainer}>
+                    {/* Listening Video */}
+                    <Video
+                      ref={listeningVideoRef}
+                      style={[
+                        styles.coachVideo,
+                        { opacity: currentAvatarState === 'listening' ? 1 : 0 }
+                      ]}
+                      source={availableVideos.listening}
+                      resizeMode={ResizeMode.COVER}
+                      shouldPlay={currentAvatarState === 'listening'}
+                      isLooping={true}
+                      isMuted={true}
+                      useNativeControls={false}
+                      onLoad={() => {
+                        console.log('[DailyVoiceChat] Listening video loaded and ready');
+                      }}
+                    />
+                    
+                    {/* Talking Video */}
+                    <Video
+                      ref={talkingVideoRef}
+                      style={[
+                        styles.coachVideo,
+                        styles.overlayVideo,
+                        { opacity: currentAvatarState === 'talking' ? 1 : 0 }
+                      ]}
+                      source={availableVideos.talking}
+                      resizeMode={ResizeMode.COVER}
+                      shouldPlay={currentAvatarState === 'talking'}
+                      isLooping={true}
+                      isMuted={true}
+                      useNativeControls={false}
+                    />
+                    
+                    {/* Waving Video */}
+                    <Animatable.View
+                      animation={wavingVideoLoaded && currentAvatarState === 'waving' ? 'fadeIn' : undefined}
+                      duration={800}
+                      style={[
+                        styles.coachVideo,
+                        styles.overlayVideo,
+                        { 
+                          opacity: currentAvatarState === 'waving' && wavingVideoLoaded ? 1 : 0
+                        }
+                      ]}
+                    >
+                      <Video
+                        ref={wavingVideoRef}
+                        style={styles.coachVideo}
+                      source={availableVideos.waving}
+                      resizeMode={ResizeMode.COVER}
+                        shouldPlay={currentAvatarState === 'waving' && wavingVideoLoaded}
+                      isLooping={false}
+                      isMuted={true}
+                      useNativeControls={false}
+                        onLoad={() => {
+                          console.log('[DailyVoiceChat] Waving video loaded and ready - triggering fade-in');
+                          setWavingVideoLoaded(true);
+                        }}
+                      onPlaybackStatusUpdate={(status) => {
+                          // Log key status changes for debugging
+                          if (status.isLoaded && !status.isPlaying && status.didJustFinish && currentAvatarState === 'waving') {
+                            console.log('[DailyVoiceChat] Waving video completed, transitioning to listening');
+                            
+                            // Disable the waving flag so it won't play again
+                            setShouldShowWavingOnLoad(false);
+                            
+                            // Mark session as initialized
+                          setIsInitializedThisSession(true);
+                            
+                            // The avatar state effect will handle the transition to listening
+                            // due to shouldShowWavingOnLoad becoming false
+                        }
+                      }}
+                    />
+                    </Animatable.View>
+                  </View>
+                ) : (
+                  <Image
+                    source={coachAvatar}
+                    style={styles.coachImage}
+                    resizeMode="cover"
                   />
-                </View>
-              )}
+                )}
+
+
+              </View>
             </View>
-          </View>
 
           <Text style={styles.coachNameText}>{coachName}</Text>
         </View>
       )}
+
+
 
       {/* Tool Execution Indicator */}
       {isExecutingTool && (
@@ -3162,7 +3295,8 @@ const DailyVoiceChat: React.FC<DailyVoiceChatProps> = ({
         </TouchableOpacity>
       </View>
     </View>
-  );
+    );
+  };
 
   return renderContent();
 };
@@ -3227,75 +3361,44 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: '100%',
   },
-  coachImageWrapper: {
+  coachWrapper: {
     position: 'relative',
-    width: 120,
-    height: 120,
-    borderRadius: 60,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#F5F5F5',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.2,
-        shadowRadius: 2,
-      },
-      android: {
-        elevation: 4,
-      },
-    }),
-  },
-  coachImageWrapperActive: {
-    borderWidth: 3,
-    borderColor: '#8B5CF6',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.7,
-        shadowRadius: 15,
-      },
-      android: {
-        elevation: 8,
-      },
-    }),
+    borderRadius: 12,
+    overflow: 'hidden', // Ensure videos stay within rounded corners
   },
   coachImage: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
+    width: 216,
+    height: 288,
+    borderRadius: 12,
   },
-  animatedBorder: {
+  videoContainer: {
+    position: 'relative',
+    width: 216,
+    height: 288,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#ffffff', // White background for smooth fade-in
+  },
+  coachVideo: {
+    width: 216,
+    height: 288,
+    borderRadius: 12,
+  },
+  overlayVideo: {
     position: 'absolute',
-    top: -4,
-    left: -4,
-    right: -4,
-    bottom: -4,
-    borderRadius: 70,
-    borderWidth: 2,
-    borderColor: '#8B5CF6',
+    top: 0,
+    left: 0,
   },
-  glowOverlay: {
-    position: 'absolute',
-    top: -6,
-    left: -6,
-    right: -6,
-    bottom: -6,
-    borderRadius: 70,
-    backgroundColor: 'transparent',
-    borderWidth: 3,
-    borderColor: 'rgba(139, 92, 246, 0.5)',
-  },
+
   speakingIndicator: {
     position: 'absolute',
-    bottom: 5,
-    right: 5,
+    bottom: 15,
+    right: 15,
     backgroundColor: 'white',
     borderRadius: 12,
-    padding: 3,
+    padding: 5,
     borderWidth: 1,
     borderColor: '#8B5CF6',
     shadowColor: '#000',
@@ -3345,6 +3448,18 @@ const styles = StyleSheet.create({
     marginLeft: 10,
     fontSize: 14,
     color: '#555',
+  },
+  backgroundLoadingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+    opacity: 0.6,
+  },
+  backgroundLoadingText: {
+    marginLeft: 8,
+    fontSize: 12,
+    color: '#666',
   },
 });
 

@@ -23,11 +23,11 @@ import { Coach } from '../../types/coach';
 function getCoachImage(coachId: string) {
   switch (coachId) {
     case 'craig':
-      return require('../../assets/coaches/craig.jpg');
+      return require('../../assets/Craig_Avatar.png');
     case 'thomas':
       return require('../../assets/coaches/thomas.jpg');
     case 'dathan':
-      return require('../../assets/coaches/dathan.jpg');
+      return require('../../assets/Dathan_Avatar.png');
     default:
       return require('../../assets/placeholder.png'); // Provide a default placeholder
   }

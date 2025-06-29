@@ -21,9 +21,9 @@ import { ChatMessage } from '../../types/chat';
 
 // Image mapping for coaches
 const imageMap: Record<string, any> = {
-  craig: require('../../assets/craig.jpg'),
+  craig: require('../../assets/Craig_Avatar.png'),
   thomas: require('../../assets/thomas.jpg'),
-  dathan: require('../../assets/dathan.jpg'),
+  dathan: require('../../assets/Dathan_Avatar.png'),
 };
 
 export function OnboardingChat() {

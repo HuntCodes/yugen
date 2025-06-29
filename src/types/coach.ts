@@ -5,6 +5,11 @@ export interface Coach {
   philosophy: string;
   personalityBlurb: string;
   image: string;
+  avatarVideos?: {
+    listening?: any;
+    talking?: any;
+    waving?: any;
+  };
 }
 
 export interface CoachProps {
